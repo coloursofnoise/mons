@@ -28,7 +28,7 @@ INSTALLS_FILE = f'{USER_FOLDER}/installs.ini'
 CACHE_FILE = f'{USER_FOLDER}/cache.ini'
 PLUGIN_FOLDER = './bin'
 
-VanillaHashes = {
+VANILLA_HASH = {
     'f1c4967fa8f1f113858327590e274b69': '1.4.0.0',
 }
 
@@ -181,13 +181,19 @@ def downloadBuild(build: int):
 #endregion
 
 #region COMMANDS
-@command
-def help(args):
-    print('Commands:')
+@command(makeGlobal=True)
+def help(args, flags):
+    print('''
+usage: mons [--version] [--help]
+            <command> [<args>]
+'''.lstrip())
+    print('Available commands:')
     pprint(Commands.keys())
 
-@command
-def add(args):
+@command(desc='''usage: add <name> <pathspec>...
+
+    --set-primary   set as default install for commands''')
+def add(args, flags):
     path = os.path.abspath(args[1])
     installPath = ''
     if os.path.isfile(path) and os.path.splitext(path)[1] == '.exe':
@@ -203,27 +209,29 @@ def add(args):
     else:
         print(f'Could not find Celeste.exe {installPath}')
 
-@command
-def rename(args):
+@command(desc='''usage: mons rename <old> <new>''')
+def rename(args, flags):
     if Installs.has_section(args[0]):
         Installs[args[1]] = Installs.pop(args[0])
 
-@command
-def set_path(args):
+@command(desc='''usage: mons set-path <name> <pathSpec>
+
+    --relative  resolve path relative to existing''')
+def set_path(args, flags):
     # use add command stuff for this
     Installs[args[0]]['Path'] = resolvePath(args[1])
 
 @command
-def set_branch(args):
+def set_branch(args, flags):
     Installs[args[0]]['preferredBranch'] = args[1]
 
 @command
-def list(args):
+def list(args, flags):
     print('Current Installs:')
     pprint(Installs.sections())
 
 @command
-def info(args):
+def info(args, flags):
     path = Installs[args[0]]['Path']
     
     peHash = getMD5Hash(path)
@@ -232,7 +240,7 @@ def info(args):
         print('Hash: ' + peHash)
         print('Everest' if Cache[args[0]].getboolean('Everest') else 'Vanilla')
         return
-    elif (version := VanillaHashes.get(peHash, '')) != '':
+    elif (version := VANILLA_HASH.get(peHash, '')) != '':
         print('Vanilla match')
         print('Hash: ' + peHash)
         Cache[args[0]] = {
@@ -267,7 +275,7 @@ def info(args):
     Cache[args[0]] = infoCache
 
 @command
-def install(args):
+def install(args, flags):
     path = Installs[args[0]]['Path']
     success = False
     
@@ -301,7 +309,7 @@ def install(args):
             })
 
 @command
-def launch(args):
+def launch(args, flags):
     if os.path.exists(Installs[args[0]]['Path']):
         args[0] = Installs[args[0]]['Path']
         subprocess.Popen(args)
@@ -310,7 +318,7 @@ def launch(args):
 #region MAIN
 def main():
     if (len(sys.argv) < 2):
-        Commands['help']()
+        Commands['help'](sys.argv[2:])
         return
     
     Commands[sys.argv[1]](sys.argv[2:])
