@@ -36,6 +36,19 @@ VanillaHashes = {
 
 #region UTILITIES
 Commands = {}
+class Command:
+    def __init__(self, func, desc, flagSpec):
+        self.f = func
+        self.desc = desc
+        self.flagSpec = flagSpec
+
+    def __call__(self, args):
+        args, flags, res = splitFlags(args, self.flagSpec)
+        if res == 'help':
+            print(self.desc)
+        elif res:
+            return self.f(args, flags)
+
 Installs = {}
 Installs_DEFAULT = {
     'PreferredBranch': 'stable',
@@ -47,14 +60,38 @@ Cache_DEFAULT = {
     'Hash': 'f1c4967fa8f1f113858327590e274b69',
 }
 
-def command(func):
-    command = func.__name__.replace('_', '-')
-    if command in Commands:
-        raise ValueError(f'Duplicate command: {command}')
-    Commands[command] = func
+def command(func=None, makeGlobal=False, desc:str='', flagSpec={}):
+    def add_command(func):
+        command = func.__name__.replace('_', '-')
+        if command in Commands:
+            raise ValueError(f'Duplicate command: {command}')
+        flagSpec['help'] = None
+        Commands[command] = Command(func, desc or command, flagSpec)
+        if (makeGlobal):
+            return func
 
-def splitFlags(args) -> Tuple[List[str], Dict[str, str]]:
-    pass
+    return add_command(func) if callable(func) else add_command
+
+def splitFlags(args, flagSpec):
+    positional = []
+    flags = {}
+
+    i = 0
+    while i < len(args):
+        if args[i].startswith('--'):
+            flag = args[i][2:]
+            if flag == 'help':
+                return None, None, 'help'
+            if flag not in flagSpec:
+                raise ValueError(f'unknown flag `{flag}`')
+            if flagSpec[flag] is None:
+                flags[flag] = None
+            elif flagSpec[flag] is str:
+                i += 1
+                flags[flag] = args[i]
+        i += 1
+    return positional, flags, True
+
 
 def loadInstalls():
     global Installs
