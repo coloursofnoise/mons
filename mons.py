@@ -16,7 +16,7 @@ import json
 import dnfile # https://github.com/malwarefrank/dnfile
 from pefile import DIRECTORY_ENTRY # https://github.com/erocarrera/pefile
 
-from typing import Tuple, List, Dict
+from typing import Union, Tuple, List, Dict, Any
 from pprint import pprint
 #endregion
 
@@ -173,11 +173,11 @@ def parseExeInfo(path):
 
     return hasEverest, everestBuild, framework
 
-def getInstallInfo(install):
+def getInstallInfo(install) -> Union[Dict[str, Any], configparser.SectionProxy]:
     path = Installs[install]['Path']
     mainHash = getMD5Hash(path)
     if Cache.has_section(install) and Cache[install].get('Hash', '') == mainHash:
-        return dict(Cache[install])
+        return Cache[install]
 
     if mainHash in VANILLA_HASH:
         version, framework = VANILLA_HASH[mainHash]
@@ -185,16 +185,16 @@ def getInstallInfo(install):
             'Everest': False,
             'CelesteVersion': version,
             'Framework': framework,
-            # EverestVersion: None
+            # EverestBuild: None
         }
     else:
-        hasEverest, everestVersion, framework = parseExeInfo(path)
+        hasEverest, everestBuild, framework = parseExeInfo(path)
         info = {}
         if hasEverest:
             info['Everest'] = True
-            if everestVersion:
-                info['EverestVersion'] = everestVersion
-            
+            if everestBuild:
+                info['EverestBuild'] = everestBuild
+
             origHash = getMD5Hash(os.path.join(os.path.dirname(path), 'orig', 'Celeste.exe'))
             if origHash in VANILLA_HASH:
                 info['CelesteVersion'] = VANILLA_HASH[origHash]
@@ -204,8 +204,18 @@ def getInstallInfo(install):
         info['Framework'] = framework
 
     info['Hash'] = mainHash
-    Cache[install] = info
+    Cache[install] = info.copy() # otherwise it makes all keys in info lowercase
     return info
+
+def buildVersionString(installInfo: Dict[str, Any]) -> str:
+    versionStr = installInfo.get('CelesteVersion', 'unknown')
+    if framework := installInfo.get('Framework', None):
+        versionStr += f'-{framework.lower()}'
+    if everestBuild := installInfo.get('EverestBuild', None):
+        versionStr += f' + 1.{everestBuild}.0'
+    elif hasEverest := installInfo.get('Everest', None):
+        versionStr += f' + Everest(unknown version)'
+    return versionStr
 
 def updateCache(install):
     path = Installs[install]['Path']
@@ -284,7 +294,12 @@ def add(args, flags):
 @command(desc='''usage: mons rename <old> <new>''')
 def rename(args, flags):
     if Installs.has_section(args[0]):
-        Installs[args[1]] = Installs.pop(args[0])
+        if not Installs.has_section(args[1]):
+            Installs[args[1]] = Installs.pop(args[0])
+        else:
+            print(f'error: install `{args[1]}` already exists.')
+    else:
+        print(f'error: install `{args[0]}` does not exist.')
 
 @command(desc='''usage: mons set-path <name> <pathSpec>
 
@@ -302,19 +317,26 @@ def list(args, flags):
     print('Current Installs:')
     pprint(Installs.sections())
 
-@command
+@command(
+    desc='''usage: mons info <name> [--verbose]''',
+    flagSpec={ 'verbose': None }
+)
 def info(args, flags):
-    pprint(getInstallInfo(args[0]))
+    info = getInstallInfo(args[0])
+    if 'verbose' in flags:
+        print("\n".join("{}:\t{}".format(k, v) for k, v in info.items()))
+    else:
+        print(buildVersionString(info))
 
 @command
 def install(args, flags):
     path = Installs[args[0]]['Path']
     success = False
-    
+
     build = parseVersionSpec(args[1])
     if build:
         response = downloadBuild(build)
-    
+
     if response and response:
         artifactPath = os.path.join(os.path.dirname(path), 'olympus-build.zip')
         print(f'Downloading to file: {artifactPath}...')
