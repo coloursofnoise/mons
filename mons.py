@@ -24,9 +24,21 @@ from pprint import pprint
 PLUGIN_MODULE = 'bin'
 
 USER_FOLDER = './usr'
+CONFIG_FILE = f'{USER_FOLDER}/config.ini'
 INSTALLS_FILE = f'{USER_FOLDER}/installs.ini'
 CACHE_FILE = f'{USER_FOLDER}/cache.ini'
 PLUGIN_FOLDER = './bin'
+
+#Config, Installs, Cache
+Config_DEFAULT = {}
+Installs_DEFAULT = {
+    'PreferredBranch': 'stable',
+}
+Cache_DEFAULT = {
+    'CelesteVersion': '1.4.0.0',
+    'Everest': False,
+    'Hash': 'f1c4967fa8f1f113858327590e274b69',
+}
 
 VANILLA_HASH = {
     'f1c4967fa8f1f113858327590e274b69': '1.4.0.0',
@@ -48,17 +60,6 @@ class Command:
             print(self.desc)
         elif res:
             return self.f(args, flags)
-
-Installs = {}
-Installs_DEFAULT = {
-    'PreferredBranch': 'stable',
-}
-Cache = {}
-Cache_DEFAULT = {
-    'CelesteVersion': '1.4.0.0',
-    'Everest': False,
-    'Hash': 'f1c4967fa8f1f113858327590e274b69',
-}
 
 def command(func=None, makeGlobal=False, desc:str='', flagSpec={}):
     def add_command(func):
@@ -94,36 +95,17 @@ def splitFlags(args, flagSpec):
         i += 1
     return positional, flags, True
 
-
-def loadInstalls():
-    global Installs
-    Installs, exists = loadConfig(INSTALLS_FILE, Installs_DEFAULT)
-    return exists
-
-def saveInstalls():
-    saveConfig(Installs, INSTALLS_FILE)
-
-def loadCache() -> bool: 
-    global Cache
-    Cache, exists = loadConfig(CACHE_FILE, Cache_DEFAULT)
-    return exists
-
-def saveCache():
-    saveConfig(Cache, CACHE_FILE)
-
-def loadConfig(file, default) -> Tuple[configparser.ConfigParser, bool]:
+def loadConfig(file, default) -> configparser.ConfigParser:
     config = configparser.ConfigParser()
     file = resolvePath(file)
     if os.path.isfile(file):
         config.read(file)
-        exists = True
     else:
         config['DEFAULT'] = default
         os.makedirs(resolvePath(USER_FOLDER), exist_ok=True)
         with open(file, 'x') as f:
             config.write(f)
-        exists = False
-    return config, exists
+    return config
 
 def saveConfig(config, file) -> bool:
     with open(resolvePath(file), 'w') as f:
@@ -157,7 +139,7 @@ def getCelesteVersion(path, hash=None):
     hash = hash or getMD5Hash(path)
     if (version := VANILLA_HASH.get(hash, '')):
         return version, True
-    
+
     orig_path = os.path.join(os.path.dirname(path), 'orig', 'Celeste.exe')
     if os.path.isfile(orig_path):
         hash = getMD5Hash(orig_path)
@@ -170,11 +152,11 @@ def parseExeInfo(path):
     pe = dnfile.dnPE(path, fast_load=True)
     pe.parse_data_directories(directories=DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR'])
     stringHeap: dnfile.stream.StringsHeap = pe.net.metadata.streams_list[1]
-    
+
     #heapSize = stringHeap.sizeof()
     hasEverest = False
     everestBuild = None
-    
+
     i = 0
     while i < len(stringHeap.__data__):
         string = stringHeap.get(i)
@@ -234,7 +216,7 @@ def updateCache(install):
         'Hash': newHash,
         'Everest': not vanilla,
     }
-    
+
     if celesteversion:
         Cache[install]['CelesteVersion'] = celesteversion
     pass
@@ -248,7 +230,7 @@ def parseVersionSpec(string: str) -> int:
         buildnumber = getLatestBuild(string)
 
     return buildnumber
-    
+
 def getLatestBuild(branch: str) -> int:
     builds = json.loads(urllib.request.urlopen('https://dev.azure.com/EverestAPI/Everest/_apis/build/builds?api-version=6.0').read())['value']
     for build in builds:
@@ -358,7 +340,7 @@ def install(args, flags):
                 'Everest': str(True),
             })
 
-@command
+@command(desc='''usage: mons launch <name> <flags>''')
 def launch(args, flags):
     if os.path.exists(Installs[args[0]]['Path']):
         args[0] = Installs[args[0]]['Path']
@@ -367,18 +349,28 @@ def launch(args, flags):
 
 #region MAIN
 def main():
-    if (len(sys.argv) < 2):
+    if (len(sys.argv) < 2 or sys.argv[1] == '--help'):
         Commands['help'](sys.argv[2:])
         return
-    
-    Commands[sys.argv[1]](sys.argv[2:])
+
+    command = sys.argv[1]
+    if command in Commands:
+        Commands[command](sys.argv[2:])
+    else:
+        print(f'mons: `{command}` is not a mons command. See `mons --help`.')
 
 
 if __name__ == '__main__':
-    loadInstalls()
-    loadCache()
+    global Config, Installs, Cache
+    Config = loadConfig(CONFIG_FILE, Config_DEFAULT)
+    Installs = loadConfig(INSTALLS_FILE, Installs_DEFAULT)
+    Cache = loadConfig(CACHE_FILE, Cache_DEFAULT)
+
     loadPlugins()
+
     main()
-    saveInstalls()
-    saveCache()
+
+    saveConfig(Config, CONFIG_FILE)
+    saveConfig(Installs, INSTALLS_FILE)
+    saveConfig(Cache, CACHE_FILE)
 #endregion
