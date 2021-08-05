@@ -60,13 +60,14 @@ class Command:
             print(self.desc)
         elif res:
             return self.f(args, flags)
+        elif res == None:
+            return self.f(args)
 
 def command(func=None, makeGlobal=False, desc:str='', flagSpec={}):
     def add_command(func):
         command = func.__name__.replace('_', '-')
         if command in Commands:
             raise ValueError(f'Duplicate command: {command}')
-        flagSpec['help'] = None
         Commands[command] = Command(func, desc or command, flagSpec)
         if (makeGlobal):
             return func
@@ -74,6 +75,9 @@ def command(func=None, makeGlobal=False, desc:str='', flagSpec={}):
     return add_command(func) if callable(func) else add_command
 
 def splitFlags(args, flagSpec):
+    if not flagSpec:
+        return args, None, None
+
     positional = []
     flags = {}
 
@@ -362,8 +366,8 @@ def install(args, flags):
                 'Everest': str(True),
             })
 
-@command(desc='''usage: mons launch <name> <flags>''')
-def launch(args, flags):
+@command(desc='''usage: mons launch <name> <flags>''', flagSpec=None)
+def launch(args):
     if os.path.exists(Installs[args[0]]['Path']):
         args[0] = Installs[args[0]]['Path']
         subprocess.Popen(args)
