@@ -89,6 +89,8 @@ def splitFlags(args, flagSpec):
             elif flagSpec[flag] is str:
                 i += 1
                 flags[flag] = args[i]
+        else:
+            positional.append(args[i])
         i += 1
     return positional, flags, True
 
@@ -151,6 +153,92 @@ def getMD5Hash(path: str) -> str:
             file_hash.update(chunk)
     return file_hash.hexdigest()
 
+def getCelesteVersion(path, hash=None):
+    hash = hash or getMD5Hash(path)
+    if (version := VANILLA_HASH.get(hash, '')):
+        return version, True
+    
+    orig_path = os.path.join(os.path.dirname(path), 'orig', 'Celeste.exe')
+    if os.path.isfile(orig_path):
+        hash = getMD5Hash(orig_path)
+        if (version := VANILLA_HASH.get(hash, '')):
+            return version, False
+
+    return None, False
+
+def parseExeInfo(path):
+    pe = dnfile.dnPE(path, fast_load=True)
+    pe.parse_data_directories(directories=DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR'])
+    stringHeap: dnfile.stream.StringsHeap = pe.net.metadata.streams_list[1]
+    
+    #heapSize = stringHeap.sizeof()
+    hasEverest = False
+    everestBuild = None
+    
+    i = 0
+    while i < len(stringHeap.__data__):
+        string = stringHeap.get(i)
+        if string == 'EverestModule':
+            hasEverest = True
+        if string.startswith('EverestBuild'):
+            everestBuild = string[len('EverestBuild'):]
+            hasEverest = True
+            break
+        i += max(len(string), 1)
+
+    assemRef = pe.net.mdtables.AssemblyRef
+    framework = 'FNA' if any(row.Name == 'FNA' for row in assemRef.rows) else 'XNA'
+
+    return hasEverest, everestBuild, framework
+
+def getInstallInfo(install):
+    path = Installs[install]['Path']
+    mainHash = getMD5Hash(path)
+    if Cache.has_section(install) and Cache[install].get('Hash', '') == mainHash:
+        return dict(Cache[install])
+
+    if mainHash in VANILLA_HASH:
+        version, framework = VANILLA_HASH[mainHash]
+        info = {
+            'Everest': False,
+            'CelesteVersion': version,
+            'Framework': framework,
+            # EverestVersion: None
+        }
+    else:
+        hasEverest, everestVersion, framework = parseExeInfo(path)
+        info = {}
+        if hasEverest:
+            info['Everest'] = True
+            if everestVersion:
+                info['EverestVersion'] = everestVersion
+            
+            origHash = getMD5Hash(os.path.join(os.path.dirname(path), 'orig', 'Celeste.exe'))
+            if origHash in VANILLA_HASH:
+                info['CelesteVersion'] = VANILLA_HASH[origHash]
+        else:
+            info['Everest'] = False
+
+        info['Framework'] = framework
+
+    info['Hash'] = mainHash
+    Cache[install] = info
+    return info
+
+def updateCache(install):
+    path = Installs[install]['Path']
+    newHash = getMD5Hash(path)
+
+    celesteversion, vanilla = getCelesteVersion(path)
+    Cache[install] = {
+        'Hash': newHash,
+        'Everest': not vanilla,
+    }
+    
+    if celesteversion:
+        Cache[install]['CelesteVersion'] = celesteversion
+    pass
+
 def parseVersionSpec(string: str) -> int:
     if string.startswith('1.') and string.endswith('.0'):
         string = string[2:-2]
@@ -205,7 +293,9 @@ def add(args, flags):
         Installs[args[0]] = {
             'Path': installPath,
         }
-        print(f'Found Celeste.exe: {installPath}')
+        print(f'found Celeste.exe: {installPath}')
+        print('caching install info...')
+        getInstallInfo(args[0])
     else:
         print(f'Could not find Celeste.exe {installPath}')
 
@@ -232,47 +322,7 @@ def list(args, flags):
 
 @command
 def info(args, flags):
-    path = Installs[args[0]]['Path']
-    
-    peHash = getMD5Hash(path)
-    if Cache.has_section(args[0]) and Cache[args[0]].get('Hash', '') == peHash:
-        print('Found valid cache')
-        print('Hash: ' + peHash)
-        print('Everest' if Cache[args[0]].getboolean('Everest') else 'Vanilla')
-        return
-    elif (version := VANILLA_HASH.get(peHash, '')) != '':
-        print('Vanilla match')
-        print('Hash: ' + peHash)
-        Cache[args[0]] = {
-            'CelesteVersion': version,
-            'Hash': peHash,
-            'Everest': False,
-        }
-        return
-
-    infoCache = {}
-    print('Hash: ' + peHash)
-    infoCache['Hash'] = peHash
-
-    pe = dnfile.dnPE(path, fast_load=True)
-    pe.parse_data_directories(directories=DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR'])
-    stringHeap = pe.net.metadata.streams_list[1]
-    
-    i = 0
-    foundEverest = False
-    while i < len(stringHeap.__data__):
-        string = stringHeap.get(i)
-        if string.startswith('EverestBuild'):
-            print('Everest Build: ' + string[len('EverestBuild'):])
-            foundEverest = True
-            break
-        i += max(len(string), 1)
-
-    if not foundEverest:
-        print('Vanilla')
-    infoCache['Everest'] = foundEverest
-
-    Cache[args[0]] = infoCache
+    pprint(getInstallInfo(args[0]))
 
 @command
 def install(args, flags):
