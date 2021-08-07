@@ -5,6 +5,7 @@ import sys
 import os
 import configparser
 import importlib
+from enum import Enum, auto
 
 import hashlib
 import subprocess
@@ -49,13 +50,16 @@ VANILLA_HASH = {
 #region UTILITIES
 Commands = {}
 class Command:
-    def __init__(self, func, desc, flagSpec):
+    def __init__(self, func, desc, argSpec, flagSpec):
         self.f = func
         self.desc = desc
         self.flagSpec = flagSpec
+        self.argSpec = argSpec
 
     def __call__(self, args):
         args, flags, res = splitFlags(args, self.flagSpec)
+        if not validateArgs(args, self.argSpec):
+            return
         if res == 'help':
             print(self.desc)
         elif res:
@@ -63,19 +67,19 @@ class Command:
         elif res == None:
             return self.f(args)
 
-def command(func=None, makeGlobal=False, desc:str='', flagSpec={}):
+def command(func=None, makeGlobal=False, desc:str='', argSpec={}, flagSpec={}):
     def add_command(func):
         command = func.__name__.replace('_', '-')
         if command in Commands:
             raise ValueError(f'Duplicate command: {command}')
-        Commands[command] = Command(func, desc or command, flagSpec)
+        Commands[command] = Command(func, desc or command, argSpec, flagSpec)
         if (makeGlobal):
             return func
 
     return add_command(func) if callable(func) else add_command
 
 def splitFlags(args, flagSpec):
-    if not flagSpec:
+    if flagSpec == None:
         return args, None, None
 
     positional = []
@@ -98,6 +102,18 @@ def splitFlags(args, flagSpec):
             positional.append(args[i])
         i += 1
     return positional, flags, True
+
+class ArgType(Enum):
+    INSTALL = auto()
+    PATH = auto()
+
+def validateArgs(args, argSpec):
+    argCount = len(argSpec)
+    for i in range(len(args)):
+        if argSpec[i] == ArgType.INSTALL and args[i] not in Installs.sections():
+            print(f'error: install `{args[0]}` does not exist.')
+            return False
+    return True
 
 def loadConfig(file, default) -> configparser.ConfigParser:
     config = configparser.ConfigParser()
@@ -130,7 +146,23 @@ def resolvePath(*paths: str, local=False) -> str:
     root = ""
     if local:
         root = os.path.dirname(__file__)
-    return os.path.join(root, *paths)
+    return os.path.normpath(os.path.join(root, *paths))
+
+def fileExistsInFolder(path: str, filename: str, forceName=True, log=False):
+    installPath = None
+    if os.path.isfile(path):
+        if not forceName or os.path.basename(path) == filename:
+            installPath = path
+        elif log:
+            print(f'error: file `{installPath}` must be called {filename}')
+    elif os.path.isdir(path):
+        if os.path.isfile(os.path.join(path, filename)):
+            installPath = os.path.join(path, filename)
+        elif log:
+            print(f'error: {filename} file could not be found in `{installPath}`')
+    elif log:
+        print(f'error: `{path}` could not be resolved')
+    return installPath
 
 def getMD5Hash(path: str) -> str:
     with open(path, "rb") as f:
@@ -279,11 +311,7 @@ usage: mons [--version] [--help]
     --set-primary   set as default install for commands''')
 def add(args, flags):
     path = os.path.abspath(args[1])
-    installPath = ''
-    if os.path.isfile(path) and os.path.splitext(path)[1] == '.exe':
-        installPath = path
-    elif os.path.isdir(path) and os.path.isfile(os.path.join(path, 'Celeste.exe')):
-        installPath = os.path.join(path, 'Celeste.exe')
+    installPath = fileExistsInFolder(path, 'Celeste.exe', forceName=False, log=True)
 
     if installPath:
         Installs[args[0]] = {
@@ -292,43 +320,56 @@ def add(args, flags):
         print(f'found Celeste.exe: {installPath}')
         print('caching install info...')
         getInstallInfo(args[0])
-    else:
-        print(f'Could not find Celeste.exe {installPath}')
 
-@command(desc='''usage: mons rename <old> <new>''')
+@command(desc='''usage: mons rename <old> <new>''',
+    argSpec=[ArgType.INSTALL]
+)
 def rename(args, flags):
-    if Installs.has_section(args[0]):
-        if not Installs.has_section(args[1]):
-            Installs[args[1]] = Installs.pop(args[0])
-        else:
-            print(f'error: install `{args[1]}` already exists.')
+    if not Installs.has_section(args[1]):
+        Installs[args[1]] = Installs.pop(args[0])
     else:
-        print(f'error: install `{args[0]}` does not exist.')
+        print(f'error: install `{args[1]}` already exists.')
 
-@command(desc='''usage: mons set-path <name> <pathSpec>
-
-    --relative  resolve path relative to existing''')
+@command(desc='''usage: mons set-path <name> <pathSpec>''',
+    argSpec=[ArgType.INSTALL]
+)
 def set_path(args, flags):
-    # use add command stuff for this
-    Installs[args[0]]['Path'] = resolvePath(args[1])
+    path = os.path.abspath(args[1])
+    installPath = fileExistsInFolder(path, 'Celeste.exe', forceName=False, log=True)
+    if installPath:
+        Installs[args[0]]['Path'] = installPath
+        print(f'found Celeste.exe: {installPath}')
+        print('caching install info...')
+        getInstallInfo(args[0])
 
-@command
+@command(desc='''usage: mons remove <name>''',
+    argSpec=[ArgType.INSTALL]
+)
+def remove(args, flags):
+    Installs.remove_section(args[0])
+    Cache.remove_section(args[0])
+
+@command(desc='''usage: mons set-branch <name> <branch>''',
+    argSpec=[ArgType.INSTALL]
+)
 def set_branch(args, flags):
     Installs[args[0]]['preferredBranch'] = args[1]
 
 @command
 def list(args, flags):
-    print('Current Installs:')
-    pprint(Installs.sections())
+    for install in Installs.sections():
+        info = buildVersionString(getInstallInfo(install))
+        print('{}:\t{}'.format(install, info))
 
 @command(
     desc='''usage: mons info <name> [--verbose]''',
-    flagSpec={ 'verbose': None }
+    flagSpec={ 'verbose': None },
+    argSpec=[ArgType.INSTALL]
 )
 def info(args, flags):
     info = getInstallInfo(args[0])
     if 'verbose' in flags:
-        print("\n".join("{}:\t{}".format(k, v) for k, v in info.items()))
+        print('\n'.join('{}:\t{}'.format(k, v) for k, v in info.items()))
     else:
         print(buildVersionString(info))
 
@@ -366,7 +407,10 @@ def install(args, flags):
                 'Everest': str(True),
             })
 
-@command(desc='''usage: mons launch <name> <flags>''', flagSpec=None)
+@command(desc='''usage: mons launch <name> <flags>''', 
+    flagSpec=None,
+    argSpec=[ArgType.INSTALL]
+)
 def launch(args):
     if os.path.exists(Installs[args[0]]['Path']):
         args[0] = Installs[args[0]]['Path']
