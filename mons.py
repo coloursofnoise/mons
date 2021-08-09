@@ -58,7 +58,7 @@ class Command:
 
     def __call__(self, args):
         args, flags, res = splitFlags(args, self.flagSpec)
-        if not validateArgs(args, self.argSpec):
+        if self.argSpec and not validateArgs(args, self.argSpec):
             return
         if res == 'help':
             print(self.desc)
@@ -105,7 +105,6 @@ def splitFlags(args, flagSpec):
 
 class ArgType(Enum):
     INSTALL = auto()
-    PATH = auto()
 
 def validateArgs(args, argSpec):
     argCount = len(argSpec)
@@ -117,22 +116,22 @@ def validateArgs(args, argSpec):
 
 def loadConfig(file, default) -> configparser.ConfigParser:
     config = configparser.ConfigParser()
-    file = resolvePath(file)
+    file = resolvePath(file, local=True)
     if os.path.isfile(file):
         config.read(file)
     else:
         config['DEFAULT'] = default
-        os.makedirs(resolvePath(USER_FOLDER), exist_ok=True)
+        os.makedirs(resolvePath(USER_FOLDER, local=True), exist_ok=True)
         with open(file, 'x') as f:
             config.write(f)
     return config
 
 def saveConfig(config, file) -> bool:
-    with open(resolvePath(file), 'w') as f:
+    with open(resolvePath(file, local=True), 'w') as f:
         config.write(f)
 
 def loadPlugins():
-    for file in os.listdir(resolvePath(PLUGIN_FOLDER)):
+    for file in os.listdir(resolvePath(PLUGIN_FOLDER, local=True)):
         name, ext = os.path.splitext(file)
         if ext == '.py':
             plugin = importlib.import_module(f'{PLUGIN_MODULE}.{name}')
@@ -292,8 +291,8 @@ def getLatestBuild(branch: str) -> int:
                 pass
     return False
 
-def downloadBuild(build: int):
-    return urllib.request.urlopen(f'https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts?artifactName=olympus-build&api-version=6.0&%24format=zip')
+def getBuildDownload(build: int, artifactName='olympus-build'):
+    return urllib.request.urlopen(f'https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts?artifactName={artifactName}&api-version=6.0&%24format=zip')
 #endregion
 
 #region COMMANDS
@@ -355,7 +354,7 @@ def remove(args, flags):
 def set_branch(args, flags):
     Installs[args[0]]['preferredBranch'] = args[1]
 
-@command
+@command(desc='''usage: mons list''')
 def list(args, flags):
     for install in Installs.sections():
         info = buildVersionString(getInstallInfo(install))
@@ -373,14 +372,25 @@ def info(args, flags):
     else:
         print(buildVersionString(info))
 
-@command
+@command(desc='''''',
+    argSpec=[ArgType.INSTALL],
+    flagSpec={
+        'latest': None,
+        'zip': str,
+        'src': str,
+        'launch': None,
+    }
+)
 def install(args, flags):
     path = Installs[args[0]]['Path']
     success = False
 
     build = parseVersionSpec(args[1])
-    if build:
-        response = downloadBuild(build)
+    if not build:
+        print('Build number could not be retrieved!')
+        return
+
+    response = getBuildDownload(build)
 
     if response and response:
         artifactPath = os.path.join(os.path.dirname(path), 'olympus-build.zip')
@@ -405,7 +415,11 @@ def install(args, flags):
             Cache[args[0]].update({
                 'Hash': peHash,
                 'Everest': str(True),
+                'EverestBuild': str(build),
             })
+            if 'launch' in flags:
+                print('Launching...')
+                subprocess.Popen(path)
 
 @command(desc='''usage: mons launch <name> <flags>''', 
     flagSpec=None,
