@@ -13,6 +13,7 @@ import subprocess
 import urllib.request
 import zipfile
 import json
+import io
 
 import dnfile # https://github.com/malwarefrank/dnfile
 from pefile import DIRECTORY_ENTRY # https://github.com/erocarrera/pefile
@@ -42,7 +43,8 @@ Cache_DEFAULT = {
 }
 
 VANILLA_HASH = {
-    'f1c4967fa8f1f113858327590e274b69': '1.4.0.0',
+    'f1c4967fa8f1f113858327590e274b69': ('1.4.0.0', 'FNA'),
+    '107cd146973f2c5ec9fb0b4f81c1588a': ('1.4.0.0', 'XNA'),
 }
 
 #endregion
@@ -105,6 +107,7 @@ def splitFlags(args, flagSpec):
 
 class ArgType(Enum):
     INSTALL = auto()
+    ANY = auto()
 
 def validateArgs(args, argSpec):
     argCount = len(argSpec)
@@ -112,6 +115,8 @@ def validateArgs(args, argSpec):
         if argSpec[i] == ArgType.INSTALL and args[i] not in Installs.sections():
             print(f'error: install `{args[0]}` does not exist.')
             return False
+        if argSpec[i] == ArgType.ANY:
+            pass
     return True
 
 def loadConfig(file, default) -> configparser.ConfigParser:
@@ -147,7 +152,7 @@ def resolvePath(*paths: str, local=False) -> str:
         root = os.path.dirname(__file__)
     return os.path.normpath(os.path.join(root, *paths))
 
-def fileExistsInFolder(path: str, filename: str, forceName=True, log=False):
+def fileExistsInFolder(path: str, filename: str, forceName=True, log=False) -> str:
     installPath = None
     if os.path.isfile(path):
         if not forceName or os.path.basename(path) == filename:
@@ -188,10 +193,10 @@ def parseExeInfo(path):
     pe.parse_data_directories(directories=DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR'])
     stringHeap: dnfile.stream.StringsHeap = pe.net.metadata.streams_list[1]
 
-    #heapSize = stringHeap.sizeof()
     hasEverest = False
     everestBuild = None
 
+    heapSize = stringHeap.sizeof()
     i = 0
     while i < len(stringHeap.__data__):
         string = stringHeap.get(i)
@@ -202,6 +207,7 @@ def parseExeInfo(path):
             hasEverest = True
             break
         i += max(len(string), 1)
+        printProgressBar(i, heapSize, 'scanning exe:', persist=False)
 
     assemRef = pe.net.mdtables.AssemblyRef
     framework = 'FNA' if any(row.Name == 'FNA' for row in assemRef.rows) else 'XNA'
@@ -293,6 +299,31 @@ def getLatestBuild(branch: str) -> int:
 
 def getBuildDownload(build: int, artifactName='olympus-build'):
     return urllib.request.urlopen(f'https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts?artifactName={artifactName}&api-version=6.0&%24format=zip')
+
+# Print iterations progress - https://stackoverflow.com/a/34325723
+def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 50, fill = '█', printEnd = "\r", persist=True):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
+    # Print New Line on Complete
+    if persist and iteration == total: 
+        print()
+    elif not persist and iteration == total:
+        print('\r' + (' ' * 200), end='\r')
+
 #endregion
 
 #region COMMANDS
@@ -373,16 +404,18 @@ def info(args, flags):
         print(buildVersionString(info))
 
 @command(desc='''''',
-    argSpec=[ArgType.INSTALL],
+    argSpec=[ArgType.INSTALL, ArgType.ANY],
     flagSpec={
         'latest': None,
         'zip': str,
         'src': str,
         'launch': None,
+        'verbose': None,
     }
 )
 def install(args, flags):
     path = Installs[args[0]]['Path']
+    installDir = os.path.dirname(path)
     success = False
 
     build = parseVersionSpec(args[1])
@@ -390,27 +423,61 @@ def install(args, flags):
         print('Build number could not be retrieved!')
         return
 
-    response = getBuildDownload(build)
+    print('downloading metadata')
+    try:
+        meta = getBuildDownload(build, 'olympus-meta')
+        with zipfile.ZipFile(io.BytesIO(meta.read()), mode='r') as file:
+            size = int(file.read('olympus-meta/size.txt').decode('utf-16'))
+    except:
+        size = 0
 
-    if response and response:
-        artifactPath = os.path.join(os.path.dirname(path), 'olympus-build.zip')
-        print(f'Downloading to file: {artifactPath}...')
+    if size > 0:
+        print('downloading olympus-build.zip')
+        response = getBuildDownload(build, 'olympus-build')
+        artifactPath = os.path.join(installDir, 'olympus-build.zip')
+        print(f'to file {artifactPath}')
+        blocksize = max(4096, size//100)
+        with open(artifactPath, 'wb') as file:
+            progress = 0
+            while True:
+                buf = response.read(blocksize)
+                if not buf:
+                    break
+                file.write(buf)
+                progress += len(buf)
+                printProgressBar(progress, size, 'downloading:')
+            printProgressBar(size, size, 'downloading:')
+        with zipfile.ZipFile(artifactPath, 'r') as wrapper:
+            with zipfile.ZipFile(wrapper.open('olympus-build/build.zip')) as artifact:
+                fileCount = 0
+                for zipinfo in artifact.infolist():
+                    fileCount += 1
+                i = 0
+                for zipinfo in artifact.infolist():
+                    artifact.extract(zipinfo)
+                    i += 1
+                    printProgressBar(i, fileCount, 'unzipping:')
+                success = True
+
+    else:
+        print('downloading main.zip')
+        response = getBuildDownload(build, 'main')
+        artifactPath = os.path.join(installDir, 'main.zip')
+        print(f'to file {artifactPath}')
         with open(artifactPath, 'wb') as file:
             file.write(response.read())
-
-        with open(artifactPath, 'rb') as file:
-            print(f'Opening file {artifactPath}...')
-            with zipfile.ZipFile(file, mode='r') as artifact:
-                with zipfile.ZipFile(artifact.open('olympus-build/build.zip')) as build:
-                    print('Extracting files...')
-                    build.extractall(os.path.dirname(path))
-                    success = True
+        print('unzipping main.zip')
+        with zipfile.ZipFile(artifactPath, 'r') as artifact:
+            raise Exception('non-olympus artifacts currently not supported')
+            #artifact.extractall(installDir, 'main')
+            #success = True
 
     if success:
-        print('Success! Starting MiniInstaller:')
-        installer_ret = subprocess.run(os.path.join(os.path.dirname(path), 'MiniInstaller.exe'), cwd=os.path.dirname(path))
+        print('running MiniInstaller...')
+        stdout = None if 'verbose' in flags else subprocess.DEVNULL
+        installer_ret = subprocess.run(os.path.join(installDir, 'MiniInstaller.exe'), stdout=None, stderr=subprocess.STDOUT, cwd=installDir)
         if installer_ret.returncode == 0:
-            print('Computing new hash for cache...')
+            print('success!')
             peHash = getMD5Hash(path)
             Cache[args[0]].update({
                 'Hash': peHash,
@@ -418,7 +485,7 @@ def install(args, flags):
                 'EverestBuild': str(build),
             })
             if 'launch' in flags:
-                print('Launching...')
+                print('launching Celeste')
                 subprocess.Popen(path)
 
 @command(desc='''usage: mons launch <name> <flags>''', 
