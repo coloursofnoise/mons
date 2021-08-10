@@ -139,15 +139,16 @@ def saveConfig(config, file) -> bool:
         config.write(f)
 
 def loadPlugins():
-    for file in os.listdir(resolvePath(PLUGIN_FOLDER, local=True)):
-        name, ext = os.path.splitext(file)
-        if ext == '.py':
-            plugin = importlib.import_module(f'{PLUGIN_MODULE}.{name}')
-            if not (hasattr(plugin, 'PREFIX') and hasattr(plugin, 'main')):
-                print(f'Plugin {plugin} not loaded:')
-                print('Plugins must include a \'PREFIX\' constant and \'main\' function')
-                continue
-            Commands[plugin.PREFIX] = plugin.main
+    if os.path.exists(resolvePath(PLUGIN_FOLDER, local=True)):
+        for file in os.listdir(resolvePath(PLUGIN_FOLDER, local=True)):
+            name, ext = os.path.splitext(file)
+            if ext == '.py':
+                plugin = importlib.import_module(f'{PLUGIN_MODULE}.{name}')
+                if not (hasattr(plugin, 'PREFIX') and hasattr(plugin, 'main')):
+                    print(f'Plugin {plugin} not loaded:')
+                    print('Plugins must include a \'PREFIX\' constant and \'main\' function')
+                    continue
+                Commands[plugin.PREFIX] = plugin.main
 
 def resolvePath(*paths: str, local=False) -> str:
     root = ""
