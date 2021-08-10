@@ -60,10 +60,10 @@ class Command:
 
     def __call__(self, args):
         args, flags, res = splitFlags(args, self.flagSpec)
-        if self.argSpec and not validateArgs(args, self.argSpec):
-            return
         if res == 'help':
             print(self.desc)
+        elif self.argSpec and not validateArgs(args, self.argSpec):
+            return
         elif res:
             return self.f(args, flags)
         elif res == None:
@@ -300,6 +300,19 @@ def getLatestBuild(branch: str) -> int:
 def getBuildDownload(build: int, artifactName='olympus-build'):
     return urllib.request.urlopen(f'https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts?artifactName={artifactName}&api-version=6.0&%24format=zip')
 
+def unpack(zip: zipfile.ZipFile, root: str, prefix=''):
+    totalSize = 0
+    for zipinfo in zip.infolist():
+        if not prefix or zipinfo.filename.startswith(prefix):
+            totalSize += zipinfo.file_size
+
+    progress = 0
+    for zipinfo in zip.infolist():
+        if not prefix or zipinfo.filename.startswith(prefix):
+            zip.extract(zipinfo, root)
+            progress += zipinfo.file_size
+            printProgressBar(progress, totalSize, 'extracting:')
+
 # Print iterations progress - https://stackoverflow.com/a/34325723
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 50, fill = '█', printEnd = "\r", persist=True):
     """
@@ -332,7 +345,7 @@ def help(args, flags):
     print('''
 usage: mons [--version] [--help]
             <command> [<args>]
-'''.lstrip())
+'''.strip())
     print('Available commands:')
     pprint(Commands.keys())
 
@@ -403,7 +416,17 @@ def info(args, flags):
     else:
         print(buildVersionString(info))
 
-@command(desc='''''',
+@command(desc='''
+usage: mons install <name> [<options>] <versionspec>
+
+    --verbose\tbe verbose
+
+    --latest\tlatest available build, branch-ignorant
+    --zip <file>\tinstall from local zip artifact
+    --src <file>\tbuild and install from source folder
+
+    --launch\tlaunch Celeste after installing
+'''.strip(),
     argSpec=[ArgType.INSTALL, ArgType.ANY],
     flagSpec={
         'latest': None,
@@ -418,72 +441,91 @@ def install(args, flags):
     installDir = os.path.dirname(path)
     success = False
 
-    build = parseVersionSpec(args[1])
-    if not build:
-        print('Build number could not be retrieved!')
-        return
+    if 'src' in flags:
+        pass
 
-    print('downloading metadata')
-    try:
-        meta = getBuildDownload(build, 'olympus-meta')
-        with zipfile.ZipFile(io.BytesIO(meta.read()), mode='r') as file:
-            size = int(file.read('olympus-meta/size.txt').decode('utf-16'))
-    except:
-        size = 0
+    
+    if 'zip' in flags:
+        artifactPath = resolvePath(flags['zip'])
+    elif args[1].startswith('file://'):
+        artifactPath = args[1][len('file://'):]
 
-    if size > 0:
-        print('downloading olympus-build.zip')
-        response = getBuildDownload(build, 'olympus-build')
-        artifactPath = os.path.join(installDir, 'olympus-build.zip')
-        print(f'to file {artifactPath}')
-        blocksize = max(4096, size//100)
-        with open(artifactPath, 'wb') as file:
-            progress = 0
-            while True:
-                buf = response.read(blocksize)
-                if not buf:
-                    break
-                file.write(buf)
-                progress += len(buf)
-                printProgressBar(progress, size, 'downloading:')
-            printProgressBar(size, size, 'downloading:')
-        with zipfile.ZipFile(artifactPath, 'r') as wrapper:
-            with zipfile.ZipFile(wrapper.open('olympus-build/build.zip')) as artifact:
-                fileCount = 0
-                for zipinfo in artifact.infolist():
-                    fileCount += 1
-                i = 0
-                for zipinfo in artifact.infolist():
-                    artifact.extract(zipinfo)
-                    i += 1
-                    printProgressBar(i, fileCount, 'unzipping:')
+    if artifactPath:
+        build = None
+        print(f'unzipping {os.path.basename(artifactPath)}')
+        with zipfile.ZipFile(artifactPath) as wrapper:
+            try:
+                entry = wrapper.open('olympus-build/build.zip') # Throws KeyError if not present
+                with zipfile.ZipFile(entry) as artifact:
+                    unpack(artifact, installDir)
+                    success = True
+            except KeyError:
+                unpack(wrapper, installDir, 'main/')
                 success = True
 
     else:
-        print('downloading main.zip')
-        response = getBuildDownload(build, 'main')
-        artifactPath = os.path.join(installDir, 'main.zip')
-        print(f'to file {artifactPath}')
-        with open(artifactPath, 'wb') as file:
-            file.write(response.read())
-        print('unzipping main.zip')
-        with zipfile.ZipFile(artifactPath, 'r') as artifact:
-            raise Exception('non-olympus artifacts currently not supported')
-            #artifact.extractall(installDir, 'main')
-            #success = True
+        build = parseVersionSpec(args[1])
+        if not build:
+            print('Build number could not be retrieved!')
+            return
+
+        print('downloading metadata')
+        try:
+            meta = getBuildDownload(build, 'olympus-meta')
+            with zipfile.ZipFile(io.BytesIO(meta.read())) as file:
+                size = int(file.read('olympus-meta/size.txt').decode('utf-16'))
+        except:
+            size = 0
+
+        if size > 0:
+            print('downloading olympus-build.zip')
+            response = getBuildDownload(build, 'olympus-build')
+            artifactPath = os.path.join(installDir, 'olympus-build.zip')
+            print(f'to file {artifactPath}')
+            blocksize = max(4096, size//100)
+            with open(artifactPath, 'wb') as file:
+                progress = 0
+                while True:
+                    buf = response.read(blocksize)
+                    if not buf:
+                        break
+                    file.write(buf)
+                    progress += len(buf)
+                    printProgressBar(progress, size, 'downloading:')
+                printProgressBar(size, size, 'downloading:')
+            with zipfile.ZipFile(artifactPath) as wrapper:
+                with zipfile.ZipFile(wrapper.open('olympus-build/build.zip')) as artifact:
+                    unpack(artifact, installDir)
+                    success = True
+
+        else:
+            print('downloading main.zip')
+            response = getBuildDownload(build, 'main')
+            artifactPath = os.path.join(installDir, 'main.zip')
+            print(f'to file {artifactPath}')
+            with open(artifactPath, 'wb') as file:
+                file.write(response.read())
+            print('unzipping main.zip')
+            with zipfile.ZipFile(artifactPath) as artifact:
+                unpack(artifact, installDir, 'main/')
+                success = True
 
     if success:
         print('running MiniInstaller...')
         stdout = None if 'verbose' in flags else subprocess.DEVNULL
-        installer_ret = subprocess.run(os.path.join(installDir, 'MiniInstaller.exe'), stdout=None, stderr=subprocess.STDOUT, cwd=installDir)
+        installer_ret = subprocess.run(os.path.join(installDir, 'MiniInstaller.exe'), stdout=stdout, stderr=subprocess.STDOUT, cwd=installDir)
         if installer_ret.returncode == 0:
             print('success!')
-            peHash = getMD5Hash(path)
-            Cache[args[0]].update({
-                'Hash': peHash,
-                'Everest': str(True),
-                'EverestBuild': str(build),
-            })
+            if build:
+                peHash = getMD5Hash(path)
+                Cache[args[0]].update({
+                    'Hash': peHash,
+                    'Everest': str(True),
+                    'EverestBuild': str(build),
+                })
+            else:
+                getInstallInfo(args[0])
+                print('install info cached')
             if 'launch' in flags:
                 print('launching Celeste')
                 subprocess.Popen(path)
