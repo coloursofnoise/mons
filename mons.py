@@ -8,6 +8,7 @@ import importlib
 from enum import Enum, auto
 
 import hashlib
+import shutil
 import subprocess
 
 import urllib.request
@@ -238,7 +239,7 @@ def getInstallInfo(install) -> Union[Dict[str, Any], configparser.SectionProxy]:
 
             origHash = getMD5Hash(os.path.join(os.path.dirname(path), 'orig', 'Celeste.exe'))
             if origHash in VANILLA_HASH:
-                info['CelesteVersion'] = VANILLA_HASH[origHash]
+                info['CelesteVersion'], _ = VANILLA_HASH[origHash]
         else:
             info['Everest'] = False
 
@@ -441,17 +442,43 @@ def install(args, flags):
     installDir = os.path.dirname(path)
     success = False
 
+    sourceDir = None
+    artifactPath = None
+    build = None
     if 'src' in flags:
-        pass
+        sourceDir = flags['src']
+        if not sourceDir:
+            print('--src flag set without a directory specified')
+            return
 
-    
-    if 'zip' in flags:
+        ret = None
+        if shutil.which('dotnet'):
+            ret = subprocess.run('dotnet build', cwd=sourceDir)
+        elif shutil.which('msbuild'):
+            ret = subprocess.run('msbuild', cwd=sourceDir)
+        else:
+            print('unable to build: could not find `dotnet` or `msbuild` on PATH')
+
+        if ret.returncode == 0:
+            print('copying files...')
+            shutil.copytree(os.path.join(sourceDir, 'Celeste.Mod.mm', 'bin', 'Debug', 'net452'), 
+                installDir, 
+                ignore=lambda path, names : [name for name in names if os.path.exists(os.path.join(installDir, name)) and os.stat(os.path.join(installDir, name)).st_mtime - os.stat(os.path.join(path, name)).st_mtime >= 0],
+                dirs_exist_ok=True
+            )
+            shutil.copytree(os.path.join(sourceDir, 'MiniInstaller', 'bin', 'Debug', 'net452'), 
+                installDir, 
+                ignore=lambda path, names : [name for name in names if os.path.exists(os.path.join(installDir, name)) and os.stat(os.path.join(installDir, name)).st_mtime - os.stat(os.path.join(path, name)).st_mtime >= 0],
+                dirs_exist_ok=True
+            )
+            success = True
+
+    elif 'zip' in flags:
         artifactPath = resolvePath(flags['zip'])
     elif args[1].startswith('file://'):
         artifactPath = args[1][len('file://'):]
 
     if artifactPath:
-        build = None
         print(f'unzipping {os.path.basename(artifactPath)}')
         with zipfile.ZipFile(artifactPath) as wrapper:
             try:
@@ -463,7 +490,7 @@ def install(args, flags):
                 unpack(wrapper, installDir, 'main/')
                 success = True
 
-    else:
+    elif not sourceDir:
         build = parseVersionSpec(args[1])
         if not build:
             print('Build number could not be retrieved!')
