@@ -51,6 +51,7 @@ VANILLA_HASH = {
 #endregion
 
 #region UTILITIES
+#region COMMAND UTILS
 Commands = {}
 class Command:
     def __init__(self, func, desc, argSpec, flagSpec):
@@ -119,6 +120,7 @@ def validateArgs(args, argSpec):
         if argSpec[i] == ArgType.ANY:
             pass
     return True
+#endregion
 
 def loadConfig(file, default) -> configparser.ConfigParser:
     config = configparser.ConfigParser()
@@ -314,6 +316,13 @@ def unpack(zip: zipfile.ZipFile, root: str, prefix=''):
             progress += zipinfo.file_size
             printProgressBar(progress, totalSize, 'extracting:')
 
+def isUnchanged(src, dest, file):
+    srcFile = os.path.join(src, file)
+    destFile = os.path.join(dest, file)
+    if os.path.exists(destFile):
+        return os.stat(destFile).st_mtime - os.stat(srcFile).st_mtime >= 0
+    return False
+
 # Print iterations progress - https://stackoverflow.com/a/34325723
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 50, fill = '█', printEnd = "\r", persist=True):
     """
@@ -463,12 +472,12 @@ def install(args, flags):
             print('copying files...')
             shutil.copytree(os.path.join(sourceDir, 'Celeste.Mod.mm', 'bin', 'Debug', 'net452'), 
                 installDir, 
-                ignore=lambda path, names : [name for name in names if os.path.exists(os.path.join(installDir, name)) and os.stat(os.path.join(installDir, name)).st_mtime - os.stat(os.path.join(path, name)).st_mtime >= 0],
+                ignore=lambda path, names : [name for name in names if isUnchanged(path, installDir, name)],
                 dirs_exist_ok=True
             )
             shutil.copytree(os.path.join(sourceDir, 'MiniInstaller', 'bin', 'Debug', 'net452'), 
                 installDir, 
-                ignore=lambda path, names : [name for name in names if os.path.exists(os.path.join(installDir, name)) and os.stat(os.path.join(installDir, name)).st_mtime - os.stat(os.path.join(path, name)).st_mtime >= 0],
+                ignore=lambda path, names : [name for name in names if isUnchanged(path, installDir, name)],
                 dirs_exist_ok=True
             )
             success = True
