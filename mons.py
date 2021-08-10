@@ -455,7 +455,7 @@ def install(args, flags):
         if shutil.which('dotnet'):
             ret = subprocess.run('dotnet build', cwd=sourceDir)
         elif shutil.which('msbuild'):
-            ret = subprocess.run('msbuild', cwd=sourceDir)
+            ret = subprocess.run(['msbuild', '-v:m'], cwd=sourceDir)
         else:
             print('unable to build: could not find `dotnet` or `msbuild` on PATH')
 
