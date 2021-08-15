@@ -175,24 +175,29 @@ def fileExistsInFolder(path: str, filename: str, forceName=True, log=False) -> s
 def getMD5Hash(path: str) -> str:
     with open(path, "rb") as f:
         file_hash = hashlib.md5()
-        while chunk := f.read(8192):
+        chunk = f.read(8129)
+        while chunk:
             file_hash.update(chunk)
+            chunk = f.read(8129)
     return file_hash.hexdigest()
 
 def getCelesteVersion(path, hash=None):
     hash = hash or getMD5Hash(path)
-    if (version := VANILLA_HASH.get(hash, '')):
+    version = VANILLA_HASH.get(hash, '')
+    if version:
         return version, True
 
     orig_path = os.path.join(os.path.dirname(path), 'orig', 'Celeste.exe')
     if os.path.isfile(orig_path):
         hash = getMD5Hash(orig_path)
-        if (version := VANILLA_HASH.get(hash, '')):
+        version = VANILLA_HASH.get(hash, '')
+        if version:
             return version, False
 
     return None, False
 
 def parseExeInfo(path):
+    print('loading exe...', end='\r')
     pe = dnfile.dnPE(path, fast_load=True)
     pe.parse_data_directories(directories=DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR'])
     stringHeap: dnfile.stream.StringsHeap = pe.net.metadata.streams_list[1]
@@ -254,12 +259,16 @@ def getInstallInfo(install) -> Union[Dict[str, Any], configparser.SectionProxy]:
 
 def buildVersionString(installInfo: Dict[str, Any]) -> str:
     versionStr = installInfo.get('CelesteVersion', 'unknown')
-    if framework := installInfo.get('Framework', None):
+    framework = installInfo.get('Framework', None)
+    if framework:
         versionStr += f'-{framework.lower()}'
-    if everestBuild := installInfo.get('EverestBuild', None):
+    everestBuild = installInfo.get('EverestBuild', None)
+    if everestBuild:
         versionStr += f' + 1.{everestBuild}.0'
-    elif hasEverest := installInfo.get('Everest', None):
-        versionStr += f' + Everest(unknown version)'
+    else:
+        hasEverest = installInfo.get('Everest', None)
+        if hasEverest:
+            versionStr += f' + Everest(unknown version)'
     return versionStr
 
 def updateCache(install):
@@ -299,6 +308,7 @@ def getLatestBuild(branch: str) -> int:
                 return int(build['id']) + 700
             except:
                 pass
+    print(f'error: `{branch}` branch could not be found')
     return False
 
 def getBuildDownload(build: int, artifactName='olympus-build'):
@@ -317,6 +327,24 @@ def unpack(zip: zipfile.ZipFile, root: str, prefix=''):
             progress += zipinfo.file_size
             printProgressBar(progress, totalSize, 'extracting:')
 
+# shutils.copytree(dirs_exist_ok) replacement https://stackoverflow.com/a/15824216
+def copy_recursive_force(src, dest, ignore=None):
+    if os.path.isdir(src):
+        if not os.path.isdir(dest):
+            os.makedirs(dest)
+        files = os.listdir(src)
+        if ignore is not None:
+            ignored = ignore(src, files)
+        else:
+            ignored = set()
+        for f in files:
+            if f not in ignored:
+                copy_recursive_force(os.path.join(src, f),
+                                    os.path.join(dest, f),
+                                    ignore)
+    else:
+        shutil.copyfile(src, dest)
+
 def isUnchanged(src, dest, file):
     srcFile = os.path.join(src, file)
     destFile = os.path.join(dest, file)
@@ -325,7 +353,7 @@ def isUnchanged(src, dest, file):
     return False
 
 # Print iterations progress - https://stackoverflow.com/a/34325723
-def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 50, fill = '█', printEnd = "\r", persist=True):
+def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 50, fill = '/', printEnd = "\r", persist=True):
     """
     Call in a loop to create terminal progress bar
     @params:
@@ -341,12 +369,13 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
     percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
     filledLength = int(length * iteration // total)
     bar = fill * filledLength + '-' * (length - filledLength)
-    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
+    output = f'\r{prefix} |{bar}| {percent}% {suffix}'
+    print(output, end = printEnd)
     # Print New Line on Complete
     if persist and iteration == total: 
         print()
     elif not persist and iteration == total:
-        print('\r' + (' ' * 200), end='\r')
+        print('\r' + (' ' * len(output)), end='\r')
 
 #endregion
 
@@ -471,15 +500,13 @@ def install(args, flags):
 
         if ret.returncode == 0:
             print('copying files...')
-            shutil.copytree(os.path.join(sourceDir, 'Celeste.Mod.mm', 'bin', 'Debug', 'net452'), 
-                installDir, 
-                ignore=lambda path, names : [name for name in names if isUnchanged(path, installDir, name)],
-                dirs_exist_ok=True
+            copy_recursive_force(os.path.join(sourceDir, 'Celeste.Mod.mm', 'bin', 'Debug', 'net452'),
+                installDir,
+                ignore=lambda path, names : [name for name in names if isUnchanged(path, installDir, name)]
             )
-            shutil.copytree(os.path.join(sourceDir, 'MiniInstaller', 'bin', 'Debug', 'net452'), 
-                installDir, 
-                ignore=lambda path, names : [name for name in names if isUnchanged(path, installDir, name)],
-                dirs_exist_ok=True
+            copy_recursive_force(os.path.join(sourceDir, 'MiniInstaller', 'bin', 'Debug', 'net452'),
+                installDir,
+                ignore=lambda path, names : [name for name in names if isUnchanged(path, installDir, name)]
             )
             success = True
 
@@ -552,7 +579,7 @@ def install(args, flags):
         stdout = None if 'verbose' in flags else subprocess.DEVNULL
         installer_ret = subprocess.run(os.path.join(installDir, 'MiniInstaller.exe'), stdout=stdout, stderr=subprocess.STDOUT, cwd=installDir)
         if installer_ret.returncode == 0:
-            print('success!')
+            print('install success')
             if build:
                 peHash = getMD5Hash(path)
                 Cache[args[0]].update({
