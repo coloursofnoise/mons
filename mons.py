@@ -464,6 +464,7 @@ usage: mons install <name> [<options>] <versionspec>
     --latest\tlatest available build, branch-ignorant
     --zip <file>\tinstall from local zip artifact
     --src <file>\tbuild and install from source folder
+    --no-build\tuse with --src to install without building
 
     --launch\tlaunch Celeste after installing
 '''.strip(),
@@ -472,6 +473,7 @@ usage: mons install <name> [<options>] <versionspec>
         'latest': None,
         'zip': str,
         'src': str,
+        'no-build': None,
         'launch': None,
         'verbose': None,
     }
@@ -490,15 +492,17 @@ def install(args, flags):
             print('--src flag set without a directory specified')
             return
 
-        ret = None
-        if shutil.which('dotnet'):
-            ret = subprocess.run('dotnet build', cwd=sourceDir)
-        elif shutil.which('msbuild'):
-            ret = subprocess.run(['msbuild', '-v:m'], cwd=sourceDir)
-        else:
-            print('unable to build: could not find `dotnet` or `msbuild` on PATH')
+        nobuild = 'no-build' in flags
+        if not nobuild:
+            ret = None
+            if shutil.which('dotnet'):
+                ret = subprocess.run('dotnet build', cwd=sourceDir)
+            elif shutil.which('msbuild'):
+                ret = subprocess.run(['msbuild', '-v:m'], cwd=sourceDir)
+            else:
+                print('unable to build: could not find `dotnet` or `msbuild` on PATH')
 
-        if ret.returncode == 0:
+        if nobuild or ret.returncode == 0:
             print('copying files...')
             copy_recursive_force(os.path.join(sourceDir, 'Celeste.Mod.mm', 'bin', 'Debug', 'net452'),
                 installDir,
