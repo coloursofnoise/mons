@@ -6,6 +6,8 @@ import os
 import configparser
 import importlib
 from enum import Enum, auto
+from inspect import getmodule
+import cProfile
 
 import hashlib
 import shutil
@@ -33,10 +35,13 @@ CACHE_FILE = f'{USER_FOLDER}/cache.ini'
 PLUGIN_FOLDER = './bin'
 
 #Config, Installs, Cache
+Config = configparser.ConfigParser()
 Config_DEFAULT = {}
+Installs = configparser.ConfigParser()
 Installs_DEFAULT = {
     'PreferredBranch': 'stable',
 }
+Cache = configparser.ConfigParser()
 Cache_DEFAULT = {
     'CelesteVersion': '1.4.0.0',
     'Everest': False,
@@ -74,9 +79,11 @@ class Command:
 def command(func=None, makeGlobal=False, desc:str='', argSpec={}, flagSpec={}):
     def add_command(func):
         command = func.__name__.replace('_', '-')
-        if command in Commands:
+        module = getmodule(func)
+        if command in module.Commands:
             raise ValueError(f'Duplicate command: {command}')
-        Commands[command] = Command(func, desc or command, argSpec, flagSpec)
+
+        module.Commands[command] = Command(func, desc or command, argSpec, flagSpec)
         if (makeGlobal):
             return func
 
@@ -114,6 +121,7 @@ class ArgType(Enum):
 def validateArgs(args, argSpec):
     argCount = len(argSpec)
     for i in range(len(args)):
+        print(Installs.sections())
         if argSpec[i] == ArgType.INSTALL and args[i] not in Installs.sections():
             print(f'error: install `{args[0]}` does not exist.')
             return False
@@ -122,8 +130,7 @@ def validateArgs(args, argSpec):
     return True
 #endregion
 
-def loadConfig(file, default) -> configparser.ConfigParser:
-    config = configparser.ConfigParser()
+def loadConfig(config: configparser.ConfigParser, file, default):
     file = resolvePath(file, local=True)
     if os.path.isfile(file):
         config.read(file)
@@ -144,10 +151,11 @@ def loadPlugins():
             name, ext = os.path.splitext(file)
             if ext == '.py':
                 plugin = importlib.import_module(f'{PLUGIN_MODULE}.{name}')
-                if not (hasattr(plugin, 'PREFIX') and hasattr(plugin, 'main')):
-                    print(f'Plugin {plugin} not loaded:')
-                    print('Plugins must include a \'PREFIX\' constant and \'main\' function')
-                    continue
+                #if not (hasattr(plugin, 'PREFIX') and hasattr(plugin, 'main')):
+                #    print(f'Plugin {plugin} not loaded:')
+                #    print('Plugins must include a \'PREFIX\' constant and \'main\' function')
+                #    continue
+                print(dir(plugin))
                 Commands[plugin.PREFIX] = plugin.main
 
 def resolvePath(*paths: str, local=False) -> str:
@@ -610,6 +618,12 @@ def launch(args):
 
 #region MAIN
 def main():
+    Config = loadConfig(Config, CONFIG_FILE, Config_DEFAULT)
+    Installs = loadConfig(Installs, INSTALLS_FILE, Installs_DEFAULT)
+    Cache = loadConfig(Cache, CACHE_FILE, Cache_DEFAULT)
+
+    loadPlugins()
+
     if (len(sys.argv) < 2 or sys.argv[1] == '--help'):
         Commands['help'](sys.argv[2:])
         return
@@ -620,18 +634,12 @@ def main():
     else:
         print(f'mons: `{command}` is not a mons command. See `mons --help`.')
 
-
-if __name__ == '__main__':
-    global Config, Installs, Cache
-    Config = loadConfig(CONFIG_FILE, Config_DEFAULT)
-    Installs = loadConfig(INSTALLS_FILE, Installs_DEFAULT)
-    Cache = loadConfig(CACHE_FILE, Cache_DEFAULT)
-
-    loadPlugins()
-
-    main()
-
     saveConfig(Config, CONFIG_FILE)
     saveConfig(Installs, INSTALLS_FILE)
     saveConfig(Cache, CACHE_FILE)
+
+
+if __name__ == '__main__':
+    main()
+
 #endregion
