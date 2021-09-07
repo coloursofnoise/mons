@@ -24,3 +24,13 @@ class Install(click.ParamType):
                 self.fail(f'install {value} already exists.', param, ctx)
 
         return value
+
+def default_primary(ctx: click.Context, param, value):
+    if value is None:
+        config: configparser.ConfigParser = ctx.obj.config
+        if config.has_option('user', 'primaryInstall'):
+            value = config.get('user', 'primaryInstall')
+        else:
+            ctx.fail('primary install not set. Use `mons set-primary` to set it.')
+
+    return value
