@@ -5,7 +5,7 @@ import os
 import subprocess
 import io
 
-from mons.mons import cli
+from mons.mons import cli, UserInfo, pass_userinfo
 from mons.utils import *
 from mons.clickExt import *
 
@@ -13,8 +13,9 @@ from mons.clickExt import *
 @click.argument('name', type=Install(exist=False))
 @click.argument('path', type=click.Path(exists=True, resolve_path=True))
 @click.option('--set-primary', is_flag=True, help='set as default install for commands')
-@click.pass_obj
-def add(userInfo, name, path, set_primary):
+@pass_userinfo
+def add(userInfo: UserInfo, name, path, set_primary):
+    '''Add a Celeste Install'''
     installPath = fileExistsInFolder(path, 'Celeste.exe', forceName=False, log=True)
 
     if installPath:
@@ -29,15 +30,17 @@ def add(userInfo, name, path, set_primary):
 
 @cli.command()
 @click.argument('name', type=Install())
-@click.pass_obj
-def set_primary(userInfo, name):
+@pass_userinfo
+def set_primary(userInfo: UserInfo, name):
+    '''Set the primary install used by commands'''
     userInfo.config['user']['primaryInstall'] = name
 
 @cli.command(no_args_is_help=True)
 @click.argument('old', type=Install(exist=True))
 @click.argument('new', type=Install(exist=False))
-@click.pass_obj
-def rename(userInfo, old, new):
+@pass_userinfo
+def rename(userInfo: UserInfo, old, new):
+    '''Rename a Celeste install'''
     if not userInfo.installs.has_section(new):
         userInfo.installs[new] = userInfo.installs.pop(old)
     else:
@@ -46,8 +49,9 @@ def rename(userInfo, old, new):
 @cli.command(no_args_is_help=True)
 @click.argument('name', type=Install())
 @click.argument('path', type=click.Path(exists=True, resolve_path=True))
-@click.pass_obj
-def set_path(userInfo, name, path):
+@pass_userinfo
+def set_path(userInfo: UserInfo, name, path):
+    '''Change the path of an existing install'''
     installPath = fileExistsInFolder(path, 'Celeste.exe', forceName=False, log=True)
     if installPath:
         userInfo.installs[name]['Path'] = installPath
@@ -55,22 +59,29 @@ def set_path(userInfo, name, path):
         echo('caching install info...]r', nl=False)
         echo(buildVersionString(getInstallInfo(userInfo, name)))
 
-@cli.command(no_args_is_help=True)
+@cli.command(no_args_is_help=True, )
 @click.argument('name', type=Install())
-@click.pass_obj
-def remove(userInfo, name):
-    userInfo.installs.remove_section(name)
-    userInfo.cache.remove_section(name)
+@pass_userinfo
+def remove(userInfo: UserInfo, name):
+    '''Remove an existing install'''
+    if click.confirm('Are you sure?'):
+        userInfo.installs.remove_section(name)
+        userInfo.cache.remove_section(name)
+        if userInfo.config.has_option('user', 'primaryInstall'):
+            echo(f'un-setting primary install (was {name})')
+            userInfo.config.remove_option('user', 'primaryInstall')
 
 @cli.command(no_args_is_help=True)
 @click.argument('name', type=Install(resolve_install=True))
 @click.argument('branch')
 def set_branch(name, branch):
+    '''Set the preferred branch for an existing install'''
     name['preferredBranch'] = branch
 
 @cli.command()
-@click.pass_obj
-def list(userInfo):
+@pass_userinfo
+def list(userInfo: UserInfo):
+    '''List existing installs'''
     for install in userInfo.installs.sections():
         info = buildVersionString(getInstallInfo(userInfo, install))
         echo('{}:\t{}'.format(install, info))
@@ -78,13 +89,16 @@ def list(userInfo):
 @cli.command()
 @click.argument('name', type=Install(), required=False, callback=default_primary)
 @click.option('-v', '--verbose', is_flag=True)
-@click.pass_obj
-def info(userInfo, name, verbose):
+@pass_userinfo
+def info(userInfo: UserInfo, name, verbose):
+    '''Output known information for an install'''
     info = getInstallInfo(userInfo, name)
     if verbose:
         echo('\n'.join('{}:\t{}'.format(k, v) for k, v in info.items()))
     else:
-        echo(buildVersionString(info))
+        if name == userInfo.config['user']['primaryInstall']:
+            name = f'{name} (primary)'
+        echo('{}:\t{}'.format(name, buildVersionString(info)))
 
 @cli.command(no_args_is_help=True)
 @click.argument('name', type=Install(), required=False, callback=default_primary)
@@ -99,8 +113,9 @@ def info(userInfo, name, verbose):
     help='build and install from source folder')
 @click.option('--no-build', is_flag=True, help='use with --src to install without building first')
 @click.option('--launch', is_flag=True, help='launch Celeste after installing')
-@click.pass_obj
-def install(userInfo, name, versionspec, verbose, latest, zip, src, no_build, launch):
+@pass_userinfo
+def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, no_build, launch):
+    '''Install Everest'''
     path = userInfo.installs[name]['Path']
     installDir = os.path.dirname(path)
     success = False
@@ -220,6 +235,7 @@ def install(userInfo, name, versionspec, verbose, latest, zip, src, no_build, la
 @click.argument('name', type=Install(), required=False, callback=default_primary)
 @click.pass_context
 def launch(ctx, name):
+    '''Launch the game associated with an install'''
     installs = ctx.obj.installs
     if os.path.exists(installs[name]['Path']):
         path = installs[name]['Path']

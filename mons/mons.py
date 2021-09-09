@@ -21,6 +21,7 @@ class UserInfo(AbstractContextManager):
         saveConfig(self.installs, INSTALLS_FILE)
         saveConfig(self.cache, CACHE_FILE)
 
+pass_userinfo = click.make_pass_decorator(UserInfo)
 
 @click.group()
 @click.pass_context
