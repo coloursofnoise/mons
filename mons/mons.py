@@ -29,4 +29,6 @@ pass_userinfo = click.make_pass_decorator(UserInfo)
 def cli(ctx: click.Context):
     ctx.obj = ctx.with_resource(UserInfo())
 
-from mons.commands import *
+from mons.commands import main
+import mons.commands.mods
+cli.add_command(mons.commands.mods.cli)
