@@ -30,5 +30,3 @@ def cli(ctx: click.Context):
     ctx.obj = ctx.with_resource(UserInfo())
 
 from mons.commands import main
-import mons.commands.mods
-cli.add_command(mons.commands.mods.cli)

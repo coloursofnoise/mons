@@ -1,9 +1,9 @@
 import configparser
 import os
 
-from appdirs import AppDirs # https://github.com/ActiveState/appdirs
+from click import get_app_dir
 
-dirs = AppDirs('mons', 'coloursofnoise')
+config_dir = get_app_dir('mons', roaming=False)
 
 CONFIG_FILE = 'config.ini'
 INSTALLS_FILE = 'installs.ini'
@@ -22,16 +22,16 @@ Cache_DEFAULT = {
 
 def loadConfig(file, default):
     config = configparser.ConfigParser()
-    config_file = os.path.join(dirs.user_data_dir, file)
+    config_file = os.path.join(config_dir, file)
     if os.path.isfile(config_file):
         config.read(config_file)
     else:
         config['DEFAULT'] = default
-        os.makedirs(dirs.user_data_dir, exist_ok=True)
+        os.makedirs(config_dir, exist_ok=True)
         with open(config_file, 'x') as f:
             config.write(f)
     return config
 
 def saveConfig(config, file):
-    with open(os.path.join(dirs.user_data_dir, file), 'w') as f:
+    with open(os.path.join(config_dir, file), 'w') as f:
         config.write(f)
