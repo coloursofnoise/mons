@@ -1,14 +1,21 @@
+from io import BytesIO
 import os
 import configparser
 import json
+import yaml
 
+from datetime import datetime
+from semver import VersionInfo
 import hashlib
+import xxhash
 import zipfile
 import shutil
 
 import urllib.request
+import urllib.parse
+import urllib.response
 
-from click import echo
+from click import echo, progressbar
 
 import dnfile # https://github.com/malwarefrank/dnfile
 from dnfile.mdtable import AssemblyRefRow
@@ -16,7 +23,7 @@ from pefile import DIRECTORY_ENTRY # https://github.com/erocarrera/pefile
 
 from mons.config import *
 
-from typing import Union, List, Dict, Any, cast
+from typing import IO, Union, List, Dict, Any, cast
 
 VANILLA_HASH = {
     'f1c4967fa8f1f113858327590e274b69': ('1.4.0.0', 'FNA'),
@@ -85,6 +92,58 @@ def isUnchanged(src, dest, file):
     if os.path.exists(destFile):
         return os.stat(destFile).st_mtime - os.stat(srcFile).st_mtime >= 0
     return False
+
+def folder_size(start_path = '.'):
+    total_size = 0
+    for dirpath, _, filenames in os.walk(start_path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            # skip if it is symbolic link
+            if not os.path.islink(fp):
+                total_size += os.path.getsize(fp)
+
+    return total_size
+
+def download_with_progress(
+    src,
+    dest: Union[str, None],
+    label: str,
+    atomic: bool=False
+):
+    if not dest and atomic:
+        raise ValueError('atomic download cannot be used without destination file')
+
+    response = urllib.request.urlopen(src) if isinstance(src, str) else src
+    size = int(response.headers.get('content-length'))
+    blocksize = max(4096, size//100)
+    temp_dest = ''
+    if dest is None:
+        io = BytesIO()
+    elif atomic:
+        # yyyyMMdd-HHmmss
+        temp_dest = f'tmpdownload-{datetime.now().strftime("%Y%m%d-%H%M%S")}.zip.part'
+        io = open(temp_dest, 'wb')
+    else:
+        io = open(dest, 'wb')
+    with io as buffer:
+        with progressbar(length=size, label=label) as bar:
+            while True:
+                buf = response.read(blocksize)
+                if not buf:
+                    break
+                buffer.write(buf)
+                bar.update(len(buf))
+
+        if isinstance(buffer, BytesIO):
+            buffer.seek(0)
+            return buffer.read()
+
+    if dest and atomic:
+        if os.path.isfile(dest):
+            os.remove(dest)
+        shutil.move(temp_dest, dest)
+
+    return b''
 
 # Print iterations progress - https://stackoverflow.com/a/34325723
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 50, fill = '/', printEnd = "\r", persist=True):
@@ -246,3 +305,68 @@ def getLatestBuild(branch: str) -> int:
 
 def getBuildDownload(build: int, artifactName='olympus-build'):
     return urllib.request.urlopen(f'https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts?artifactName={artifactName}&api-version=6.0&%24format=zip')
+
+class ModMeta():
+    Hash: Union[str, None]
+    Path: str
+    Size: int
+
+    def __init__(self, data: Dict):
+        self.Name:str = data['Name']
+        self.Version = VersionInfo.parse(data['Version'])
+        self.Dependencies = [ModMeta(dep) for dep in data['Dependencies']] if 'Dependencies' in data else []
+        self.OptionalDependencies = [ModMeta(dep) for dep in data['OptionalDependencies']] if 'OptionalDependencies' in data else []
+
+class UpdateInfo():
+    def __init__(self, old: ModMeta, new: VersionInfo, url: str, mirror: str=None):
+        self.Old = old
+        self.New = new
+        self.Url = url
+        self.Mirror = mirror if mirror else url
+
+def read_mod_info(mod: Union[str, IO[bytes]]):
+    meta = None
+    try:
+        if not isinstance(mod, str) or os.path.isfile and zipfile.is_zipfile(mod):
+            with zipfile.ZipFile(mod) as zip:
+                if 'everest.yaml' in zip.namelist():
+                    meta = ModMeta(yaml.safe_load(zip.read('everest.yaml').decode('utf-8-sig'))[0])
+                    if zip.fp:
+                        zip.fp.seek(0)
+                        meta.Hash = xxhash.xxh64_hexdigest(zip.fp.read())
+                        zip.fp.seek(0, os.SEEK_END)
+                        meta.Size = zip.fp.tell()
+
+        elif os.path.isdir(mod) and os.path.isfile(os.path.join(mod, 'everest.yaml')):
+            with open(os.path.join(mod, 'everest.yaml'), encoding='utf-8-sig') as file:
+                meta = ModMeta(yaml.safe_load(file)[0])
+            meta.Size = folder_size(mod)
+    except:
+        meta = None
+
+    if meta:
+        meta.Path = mod if isinstance(mod, str) else mod.name
+    return meta
+
+def get_mod_list():
+    update_url = urllib.request.urlopen('https://everestapi.github.io/modupdater.txt').read()
+    return yaml.safe_load(download_with_progress(update_url.decode(), None, 'Downloading update list'))
+
+def search_mods(search):
+    search = urllib.parse.quote_plus(search)
+    url = f'https://max480-random-stuff.appspot.com/celeste/gamebanana-search?q={search}'
+    echo(url)
+    response = urllib.request.urlopen(url)
+    return yaml.safe_load(response.read())
+
+def read_blacklist(path: str):
+    with open(path) as file:
+        return [m.strip() for m in file.readlines() if not m.startswith('#')]
+
+def installed_mods(path:str, include_folder=False, valid_only=True, include_blacklisted=False):
+    files = os.listdir(path)
+    if not include_blacklisted and os.path.isfile(os.path.join(path, 'blacklist.txt')):
+        blacklist = read_blacklist(os.path.join(path, 'blacklist.txt'))
+        files = filter(lambda m: m not in blacklist, files)
+    mods = [read_mod_info(os.path.join(path, file)) for file in files if include_folder or not os.path.isdir(os.path.join(path, file))]
+    return list(filter(None, mods))
