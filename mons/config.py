@@ -1,7 +1,7 @@
 import configparser
 import os
 
-from click import get_app_dir
+from click import get_app_dir, edit
 
 config_dir = get_app_dir('mons', roaming=False)
 
@@ -35,3 +35,11 @@ def loadConfig(file, default):
 def saveConfig(config, file):
     with open(os.path.join(config_dir, file), 'w') as f:
         config.write(f)
+
+def editConfig(config: configparser.ConfigParser, file):
+    saveConfig(config, file)
+    edit(
+        filename=os.path.join(config_dir, file), 
+        editor=config.get('user', 'editor', fallback=None)
+    )
+    return loadConfig(file, config['DEFAULT'])

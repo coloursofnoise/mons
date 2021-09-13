@@ -100,21 +100,23 @@ def info(userInfo: UserInfo, name, verbose):
             name = f'{name} (primary)'
         echo('{}:\t{}'.format(name, buildVersionString(info)))
 
-@cli.command(no_args_is_help=True)
+@cli.command(no_args_is_help=True, cls=CommandWithDefaultOptions)
 @click.argument('name', type=Install(), required=False, callback=default_primary)
-@click.argument('versionSpec')
+@click.argument('versionSpec', required=False)
 @click.option('-v', '--verbose', is_flag=True, help='be verbose')
 @click.option('--latest', is_flag=True, help='latest available build, branch-ignorant')
 @click.option('--zip', 
     type=click.Path(exists=True, dir_okay=False, resolve_path=True), 
     help='install from local zip artifact')
-@click.option('--src', 
-    type=click.Path(exists=True, file_okay=False, resolve_path=True), 
+@click.option('--src',
+    cls=ExplicitOption,
+    type=click.Path(exists=True, file_okay=False, resolve_path=True),
     help='build and install from source folder')
+@click.option('--src', cls=DefaultOption, is_flag=True)
 @click.option('--no-build', is_flag=True, help='use with --src to install without building first')
 @click.option('--launch', is_flag=True, help='launch Celeste after installing')
 @pass_userinfo
-def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, no_build, launch):
+def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, src_default, no_build, launch):
     '''Install Everest'''
     path = userInfo.installs[name]['Path']
     installDir = os.path.dirname(path)
@@ -122,6 +124,15 @@ def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, no
 
     artifactPath = None
     build = None
+
+    if src_default:
+        src = userInfo.config.get('user', 'SourceDirectory', fallback=None)
+        if not src:
+            raise click.BadOptionUsage(
+                '--src',
+                '--src option passed with no path and no SourceDirectory set'
+            )
+
     if src:
         build_success = 0 if no_build else 1
         if not no_build:
@@ -240,3 +251,17 @@ def launch(ctx, name):
     if os.path.exists(installs[name]['Path']):
         path = installs[name]['Path']
         subprocess.Popen([path] + ctx.args)
+
+@cli.command()
+@click.option('-e', '--edit', is_flag=True)
+@click.option('--open', is_flag=True, hidden=True)
+@pass_userinfo
+def config(userinfo, edit, open):
+    '''Manage the global config'''
+    if edit:
+        userinfo.config = editConfig(userinfo.config, CONFIG_FILE)
+    elif open:
+        click.launch(os.path.join(config_dir, CONFIG_FILE), locate=True)
+    else:
+        echo('''Managing config directly via commandline is not currently supported.
+Use --edit to edit the config the default editor.''')
