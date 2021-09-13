@@ -30,6 +30,9 @@ def default_primary(ctx: click.Context, param, value):
         config: configparser.ConfigParser = ctx.obj.config
         if config.has_option('user', 'primaryInstall'):
             value = config.get('user', 'primaryInstall')
+            if isinstance(param.type, Install) and param.type.resolve_install:
+                value = ctx.obj.installs[value]
+
         else:
             ctx.fail('primary install not set. Use `mons set-primary` to set it.')
 
