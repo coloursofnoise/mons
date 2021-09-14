@@ -392,7 +392,6 @@ def get_mod_list():
 def search_mods(search):
     search = urllib.parse.quote_plus(search)
     url = f'https://max480-random-stuff.appspot.com/celeste/gamebanana-search?q={search}'
-    echo(url)
     response = urllib.request.urlopen(url)
     return yaml.safe_load(response.read())
 

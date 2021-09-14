@@ -42,9 +42,9 @@ def search(search):
         for m in match:
             echo(m)
         if len(match) < 1:
-            echo(item['itemid'])
+            echo('entry not found: ' + str(item['itemid']))
 
-def prompt_mod_selection(options: Dict):
+def prompt_mod_selection(options: Dict, max: int=-1):
     matchKeys = sorted(options.keys(), key=lambda key: options[key]['LastUpdate'], reverse=True)
     url = None
     if len(matchKeys) == 1:
@@ -56,6 +56,8 @@ def prompt_mod_selection(options: Dict):
         echo('Mods found:')
         idx = 1
         for key in matchKeys:
+            if max > -1 and idx > max:
+                break
             echo(f'  [{idx}] {key} {options[key]["Version"]}')
             idx += 1
 
@@ -71,12 +73,26 @@ def prompt_mod_selection(options: Dict):
 @cli.command()
 @click.argument('name', type=Install(resolve_install=True), required=False, callback=default_primary)
 @click.argument('mod')
-def add(name, mod: str):
+@click.option('--search', is_flag=True)
+def add(name, mod: str, search):
     url = None
     filename = None
     file = None
 
-    if os.path.exists(mod):
+    if search:
+        mod_list = get_mod_list()
+        search_result = search_mods(mod)
+        matches = {}
+        for item in search_result:
+            matches.update({mod: data for mod, data in mod_list.items() if data['GameBananaId'] == item['itemid']})
+
+        if len(matches) < 1:
+            echo('No results found.')
+            return
+        
+        url = prompt_mod_selection(matches, max=9)
+
+    elif os.path.exists(mod):
         file = mod
 
     elif mod.endswith('.zip') and mod.startswith(('http://', 'https://', 'file://')):
