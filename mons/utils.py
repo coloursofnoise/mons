@@ -1,4 +1,4 @@
-from io import BytesIO
+from io import BufferedReader, BytesIO
 import os
 import configparser
 import json
@@ -107,8 +107,8 @@ def folder_size(start_path = '.'):
 def download_with_progress(
     src,
     dest: Union[str, None],
-    label: str,
-    atomic: bool=False
+    label: str=None,
+    atomic: bool=False,
 ):
     if not dest and atomic:
         raise ValueError('atomic download cannot be used without destination file')
@@ -122,28 +122,65 @@ def download_with_progress(
     elif atomic:
         # yyyyMMdd-HHmmss
         temp_dest = f'tmpdownload-{datetime.now().strftime("%Y%m%d-%H%M%S")}.zip.part'
+        os.path.join(os.path.dirname(dest), temp_dest)
         io = open(temp_dest, 'wb')
     else:
         io = open(dest, 'wb')
-    with io as buffer:
-        with progressbar(length=size, label=label) as bar:
-            while True:
-                buf = response.read(blocksize)
-                if not buf:
-                    break
-                buffer.write(buf)
-                bar.update(len(buf))
+    with progressbar(length=size, label=label) as bar:
+        while True:
+            buf = response.read(blocksize)
+            if not buf:
+                break
+            io.write(buf)
+            bar.update(len(buf))
 
-        if isinstance(buffer, BytesIO):
-            buffer.seek(0)
-            return buffer.read()
+    if dest is None and isinstance(io, BytesIO):
+        io.seek(0)
+        return io
+    io.close()
 
     if dest and atomic:
         if os.path.isfile(dest):
             os.remove(dest)
         shutil.move(temp_dest, dest)
 
-    return b''
+    return BytesIO()
+
+def write_with_progress(
+    src: Union[BufferedReader, BytesIO, str],
+    dest: str,
+    label: str=None,
+    atomic: bool=False
+):
+    src = open(src, mode='rb') if isinstance(src, str) else src
+
+    temp_dest = ''
+    if atomic:
+        # yyyyMMdd-HHmmss
+        temp_dest = f'tmpdownload-{datetime.now().strftime("%Y%m%d-%H%M%S")}.zip.part'
+        temp_dest = os.path.join(os.path.dirname(dest), temp_dest)
+        io = open(temp_dest, 'wb')
+    else:
+        io = open(dest, 'wb')
+
+    src.seek(0, os.SEEK_END)
+    size = src.tell()
+    src.seek(0)
+    blocksize = max(4096, size//100)
+    with io as file:
+        with progressbar(length=size, label=label) as bar:
+            while True:
+                buf = src.read(blocksize)
+                if not buf:
+                    break
+                file.write(buf)
+                bar.update(len(buf))
+
+    src.close()
+    if atomic:
+        if os.path.isfile(dest):
+            os.remove(dest)
+        shutil.move(temp_dest, dest)
 
 # Print iterations progress - https://stackoverflow.com/a/34325723
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 50, fill = '/', printEnd = "\r", persist=True):
@@ -308,7 +345,7 @@ def getBuildDownload(build: int, artifactName='olympus-build'):
 
 class ModMeta():
     Hash: Union[str, None]
-    Path: str
+    Path: Union[str, None]
     Size: int
 
     def __init__(self, data: Dict):
@@ -345,7 +382,7 @@ def read_mod_info(mod: Union[str, IO[bytes]]):
         meta = None
 
     if meta:
-        meta.Path = mod if isinstance(mod, str) else mod.name
+        meta.Path = mod if isinstance(mod, str) else None
     return meta
 
 def get_mod_list():

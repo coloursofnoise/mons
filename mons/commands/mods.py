@@ -35,7 +35,7 @@ def search(search):
     if search in mod_list:
         echo(mod_list[search]['GameBananaId'])
         return
-    
+
     search_result = search_mods(search)
     for item in search_result:
         match = [mod for mod, data in mod_list.items() if data['GameBananaId'] == item['itemid']]
@@ -44,11 +44,107 @@ def search(search):
         if len(match) < 1:
             echo(item['itemid'])
 
-@cli.command(hidden=True)
+def prompt_mod_selection(options: Dict):
+    matchKeys = sorted(options.keys(), key=lambda key: options[key]['LastUpdate'], reverse=True)
+    url = None
+    if len(matchKeys) == 1:
+        key = matchKeys[0]
+        echo(f'Mod found: {key} {options[key]["Version"]}')
+        url = str(options[key]['URL'])
+
+    if len(matchKeys) > 1:
+        echo('Mods found:')
+        idx = 1
+        for key in matchKeys:
+            echo(f'  [{idx}] {key} {options[key]["Version"]}')
+            idx += 1
+
+        selection = click.prompt('Select mod to add', type=click.IntRange(0, idx), default=0, show_default=False)
+        if selection:
+            key = matchKeys[selection-1]
+            echo(f'Selected mod: {key} {options[key]["Version"]}')
+            url = str(options[key]['URL'])
+        else:
+            echo('Aborted!')
+    return url
+
+@cli.command()
 @click.argument('name', type=Install(resolve_install=True), required=False, callback=default_primary)
 @click.argument('mod')
-def add(name, mod):
-    pass
+def add(name, mod: str):
+    url = None
+    filename = None
+    file = None
+
+    if os.path.exists(mod):
+        file = mod
+
+    elif mod.endswith('.zip') and mod.startswith(('http://', 'https://', 'file://')):
+        echo('Attempting direct file download:')
+        # Change User-Agent for discord, etc... downloads
+        opener=urllib.request.build_opener()
+        opener.addheaders=[('User-Agent','Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1941.0 Safari/537.36')]
+        urllib.request.install_opener(opener)
+        url = mod
+
+    else:
+        mod_list = get_mod_list()
+        
+        if mod in mod_list:
+            echo(f'Mod found: {mod} {mod_list[mod]["Version"]}')
+            url = str(mod_list[mod]['URL'])
+
+        if mod.startswith(('https://gamebanana.com/mods', 'http://gamebanana.com/mods')) and mod.split('/')[-1].isdigit():
+            modID = int(mod.split('/')[-1])
+            matches = {key: val for key, val in mod_list.items() if modID == val['GameBananaId']}
+            if len(matches) > 0:
+                url = prompt_mod_selection(matches)
+            else:
+                echo('Mod not found in database!')
+                downloads = json.load(download_with_progress(
+                    f'https://gamebanana.com/apiv5/Mod/{modID}?_csvProperties=_aFiles',
+                    None,
+                    'Retrieving download list'))['_aFiles']
+                echo('Available downloads:')
+                idx = 1
+                for d in downloads:
+                    echo(f'  [{idx}] {d["_sFile"]} {d["_sDescription"]}')
+                    idx += 1
+
+                selection = click.prompt('Select file to download', type=click.IntRange(0, idx), default=0, show_default=False)
+                if selection:
+                    d = downloads[selection-1]
+                    echo(f'Selected file: {d["_sFile"]}')
+                    url = str(d['_sDownloadUrl'])
+                else:
+                    echo('Aborted!')
+
+        elif mod.isdigit():
+            modID = int(mod)
+            matches = {key: val for key, val in mod_list.items() if modID == val['GameBananaId']}
+            url = prompt_mod_selection(matches)
+
+    if url:
+        file = download_with_progress(url, None, 'Downloading')
+    
+    if file:
+        meta = read_mod_info(file)
+        if meta:
+            echo(f'Downloaded mod: {meta.Name} {meta.Version}')
+            filename = meta.Name + '.zip'
+        elif click.confirm('everest.yaml is missing or malformed. Install anyways?'):
+            filename = filename or click.prompt('Save As')
+
+        if filename:
+            if not filename.endswith('.zip'):
+                filename += '.zip'
+            write_with_progress(
+                file,
+                os.path.join(os.path.dirname(name['path']), 'Mods', filename),
+                label=f'Saving file to {filename}',
+                atomic=True
+            )
+
 
 @cli.command(hidden=True)
 @click.argument('name', type=Install(resolve_install=True), required=False, callback=default_primary)
