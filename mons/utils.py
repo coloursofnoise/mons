@@ -5,7 +5,6 @@ import json
 import yaml
 
 from datetime import datetime
-from semver import VersionInfo
 import hashlib
 import xxhash
 import zipfile
@@ -22,6 +21,7 @@ from dnfile.mdtable import AssemblyRefRow
 from pefile import DIRECTORY_ENTRY # https://github.com/erocarrera/pefile
 
 from mons.config import *
+from mons.version import Version
 
 from typing import IO, Union, List, Dict, Any, cast
 
@@ -350,12 +350,12 @@ class ModMeta():
 
     def __init__(self, data: Dict):
         self.Name:str = data['Name']
-        self.Version = VersionInfo.parse(data['Version'])
+        self.Version = Version.parse(data['Version'])
         self.Dependencies = [ModMeta(dep) for dep in data['Dependencies']] if 'Dependencies' in data else []
         self.OptionalDependencies = [ModMeta(dep) for dep in data['OptionalDependencies']] if 'OptionalDependencies' in data else []
 
 class UpdateInfo():
-    def __init__(self, old: ModMeta, new: VersionInfo, url: str, mirror: str=None):
+    def __init__(self, old: ModMeta, new: Version, url: str, mirror: str=None):
         self.Old = old
         self.New = new
         self.Url = url

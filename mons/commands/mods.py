@@ -3,11 +3,10 @@ from click import echo_via_pager, echo
 
 import os
 
-import semver
-
 from mons.clickExt import *
 from mons.mons import UserInfo, pass_userinfo
 from mons.utils import *
+from mons.version import Version
 
 @click.group(name='mods', help='Manage Everest mods')
 @click.pass_context
@@ -188,7 +187,7 @@ def update(name, all):
                 if meta.Hash and latest_hash != meta.Hash:
                     update = UpdateInfo(
                         meta,
-                        semver.VersionInfo.parse(server['Version']),
+                        Version.parse(server['Version']),
                         server['URL'],
                     )
                     updates.append(update)
