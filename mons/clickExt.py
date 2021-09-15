@@ -1,6 +1,28 @@
 import click
 
+import sys
 import configparser
+
+class UnhandledError(click.ClickException):
+    def __init__(self, message):
+        super().__init__(message)
+
+class CatchErrorsGroup(click.Group):
+    def main(self, args=None, prog_name=None, complete_var=None, standalone_mode=True, windows_expand_args=True, **extra):
+        debug = False
+        try:
+            debug = '--debug' in sys.argv
+            if debug and not args:
+                sys.argv.remove('--debug')
+            super().main(args=args, prog_name=prog_name, complete_var=complete_var, standalone_mode=standalone_mode, windows_expand_args=windows_expand_args, **extra)
+        except Exception as e:
+            if debug:
+                click.echo('\033[0;31m', nl=False)
+                raise
+            else:
+                click.echo(f'\033[0;31m{type(e).__name__}: {e}\033[0m')
+                click.echo(f'''An unhandled exception was encountered.
+Use the --debug flag to disable clean exception handling.''')
 
 class Install(click.ParamType):
     name = 'Install'

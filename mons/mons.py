@@ -6,6 +6,7 @@ from contextlib import AbstractContextManager
 
 from mons.utils import *
 from mons.config import *
+from mons.clickExt import *
 
 class UserInfo(AbstractContextManager):
     def __enter__(self):
@@ -23,7 +24,7 @@ class UserInfo(AbstractContextManager):
 
 pass_userinfo = click.make_pass_decorator(UserInfo)
 
-@click.group()
+@click.group(cls=CatchErrorsGroup)
 @click.pass_context
 @click.version_option()
 def cli(ctx: click.Context):
