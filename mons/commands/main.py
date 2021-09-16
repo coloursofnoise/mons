@@ -47,7 +47,7 @@ def rename(userInfo: UserInfo, old, new):
         echo(f'error: install `{new}` already exists.')
 
 @cli.command(no_args_is_help=True)
-@click.argument('name', type=Install())
+@click.argument('name', type=Install(check_path=False))
 @click.argument('path', type=click.Path(exists=True, resolve_path=True))
 @pass_userinfo
 def set_path(userInfo: UserInfo, name, path):
@@ -55,8 +55,7 @@ def set_path(userInfo: UserInfo, name, path):
     installPath = fileExistsInFolder(path, 'Celeste.exe', forceName=False, log=True)
     if installPath:
         userInfo.installs[name]['Path'] = installPath
-        echo(f'found Celeste.exe: {installPath}')
-        echo('caching install info...]r', nl=False)
+        echo(f'Found Celeste.exe: {installPath}')
         echo(buildVersionString(getInstallInfo(userInfo, name)))
 
 @cli.command(no_args_is_help=True, )

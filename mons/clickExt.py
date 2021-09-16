@@ -1,5 +1,6 @@
 import click
 
+import os
 import sys
 import configparser
 
@@ -27,10 +28,11 @@ Use the --debug flag to disable clean exception handling.''')
 class Install(click.ParamType):
     name = 'Install'
 
-    def __init__(self, exist=True, resolve_install=False) -> None:
+    def __init__(self, exist=True, resolve_install=False, check_path=True) -> None:
         super().__init__()
         self.exist = exist
         self.resolve_install = resolve_install
+        self.validate_path = check_path
 
     def convert(self, value, param, ctx):
         installs: configparser.ConfigParser = ctx.obj.installs
@@ -39,7 +41,21 @@ class Install(click.ParamType):
             if not isinstance(value, configparser.SectionProxy):
                 if not installs.has_section(value):
                     self.fail(f'install {value} does not exist.', param, ctx)
-                elif self.resolve_install:
+
+                path = installs[value]['Path']
+                if self.validate_path:
+                    error = None
+                    if not os.path.exists(path):
+                        error = 'does not exist.'
+                    elif not os.path.basename(path) == 'Celeste.exe':
+                        error = 'does not point to Celeste.exe'
+
+                    if error:
+                        raise click.UsageError(f'''install {value} does not have a valid path:
+\033[0;31m{path} {error}\033[0m
+Use the `set-path` command to assign a new path.''', ctx)
+
+                if self.resolve_install:
                     value = installs[value]
         else:
             if installs.has_section(value):
