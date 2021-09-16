@@ -3,6 +3,7 @@ import os
 import configparser
 import json
 import yaml
+from yaml.scanner import ScannerError
 
 from datetime import datetime
 import hashlib
@@ -22,6 +23,7 @@ from pefile import DIRECTORY_ENTRY # https://github.com/erocarrera/pefile
 
 from mons.config import *
 from mons.version import Version
+from mons.errors import *
 
 from typing import IO, Union, List, Dict, Any, cast
 
@@ -349,8 +351,8 @@ class ModMeta():
     Size: int
 
     def __init__(self, data: Dict):
-        self.Name:str = data['Name']
-        self.Version = Version.parse(data['Version'])
+        self.Name:str = str(data['Name'])
+        self.Version = Version.parse(str(data['Version']))
         self.Dependencies = [ModMeta(dep) for dep in data['Dependencies']] if 'Dependencies' in data else []
         self.OptionalDependencies = [ModMeta(dep) for dep in data['OptionalDependencies']] if 'OptionalDependencies' in data else []
 
@@ -361,25 +363,34 @@ class UpdateInfo():
         self.Url = url
         self.Mirror = mirror if mirror else url
 
-def read_mod_info(mod: Union[str, IO[bytes]]):
+def read_mod_info(mod: Union[str, IO[bytes]], with_size=False):
     meta = None
     try:
         if not isinstance(mod, str) or os.path.isfile and zipfile.is_zipfile(mod):
             with zipfile.ZipFile(mod) as zip:
                 if 'everest.yaml' in zip.namelist():
-                    meta = ModMeta(yaml.safe_load(zip.read('everest.yaml').decode('utf-8-sig'))[0])
+                    yml = yaml.safe_load(zip.read('everest.yaml').decode('utf-8-sig'))
+                    if yml is None:
+                        raise EmptyFileError()
+                    meta = ModMeta(yml[0])
                     if zip.fp:
                         zip.fp.seek(0)
                         meta.Hash = xxhash.xxh64_hexdigest(zip.fp.read())
                         zip.fp.seek(0, os.SEEK_END)
-                        meta.Size = zip.fp.tell()
+                        meta.Size = zip.fp.tell() if with_size else 0
 
         elif os.path.isdir(mod) and os.path.isfile(os.path.join(mod, 'everest.yaml')):
             with open(os.path.join(mod, 'everest.yaml'), encoding='utf-8-sig') as file:
-                meta = ModMeta(yaml.safe_load(file)[0])
-            meta.Size = folder_size(mod)
-    except:
-        meta = None
+                yml = yaml.safe_load(file)
+                if yml is None:
+                    raise EmptyFileError()
+                meta = ModMeta(yml[0])
+            meta.Size = folder_size(mod) if with_size else 0
+    except (EmptyFileError, ScannerError):
+        return None
+    except Exception:
+        echo(mod)
+        raise
 
     if meta:
         meta.Path = mod if isinstance(mod, str) else None
@@ -399,10 +410,10 @@ def read_blacklist(path: str):
     with open(path) as file:
         return [m.strip() for m in file.readlines() if not m.startswith('#')]
 
-def installed_mods(path:str, include_folder=False, valid_only=True, include_blacklisted=False):
+def installed_mods(path:str, include_folder=False, valid_only=True, include_blacklisted=False, with_size=False):
     files = os.listdir(path)
     if not include_blacklisted and os.path.isfile(os.path.join(path, 'blacklist.txt')):
         blacklist = read_blacklist(os.path.join(path, 'blacklist.txt'))
         files = filter(lambda m: m not in blacklist, files)
-    mods = [read_mod_info(os.path.join(path, file)) for file in files if include_folder or not os.path.isdir(os.path.join(path, file))]
+    mods = [read_mod_info(os.path.join(path, file), with_size=with_size) for file in files if include_folder or not os.path.isdir(os.path.join(path, file))]
     return list(filter(None, mods))

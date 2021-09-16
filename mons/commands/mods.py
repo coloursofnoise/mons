@@ -179,7 +179,7 @@ def update(name, all):
     mod_list = get_mod_list()
     updates: List[UpdateInfo] = []
     if all:
-        installed = installed_mods(os.path.join(os.path.dirname(name['path']), 'Mods'))
+        installed = installed_mods(os.path.join(os.path.dirname(name['path']), 'Mods'), with_size=True)
         for meta in installed:
             if meta.Name in mod_list:
                 server = mod_list[meta.Name]
