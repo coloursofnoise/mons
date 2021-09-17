@@ -3,6 +3,8 @@ from click import echo_via_pager, echo
 
 import os
 
+from gettext import ngettext
+
 from mons.clickExt import *
 from mons.mons import UserInfo, pass_userinfo
 from mons.utils import *
@@ -179,9 +181,12 @@ def update(name, all):
     mod_list = get_mod_list()
     updates: List[UpdateInfo] = []
     if all:
-        installed = installed_mods(os.path.join(os.path.dirname(name['path']), 'Mods'), with_size=True)
+        mods_folder = os.path.join(os.path.dirname(name['path']), 'Mods')
+        installed = installed_mods(mods_folder, with_size=True)
+        updater_blacklist = os.path.join(mods_folder, 'updaterblacklist.txt')
+        updater_blacklist = os.path.exists(updater_blacklist) and read_blacklist(updater_blacklist)
         for meta in installed:
-            if meta.Name in mod_list:
+            if meta.Name in mod_list and (not updater_blacklist or os.path.basename(meta.Path) not in updater_blacklist):
                 server = mod_list[meta.Name]
                 latest_hash = server['xxHash'][0]
                 if meta.Hash and latest_hash != meta.Hash:
@@ -200,7 +205,10 @@ def update(name, all):
         echo('All mods up to date')
         return
     
-    echo(f'{len(updates)} updates available:')
+    echo(ngettext(
+        f'{len(updates)} update available:',
+        f'{len(updates)} updates available:',
+        len(updates)))
     for update in updates:
         echo(f'  {update.Old.Name}: {update.Old.Version} -> {update.New}')
     

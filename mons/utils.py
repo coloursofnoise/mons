@@ -347,7 +347,7 @@ def getBuildDownload(build: int, artifactName='olympus-build'):
 
 class ModMeta():
     Hash: Union[str, None]
-    Path: Union[str, None]
+    Path: str
     Size: int
 
     def __init__(self, data: Dict):
@@ -393,7 +393,7 @@ def read_mod_info(mod: Union[str, IO[bytes]], with_size=False):
         raise
 
     if meta:
-        meta.Path = mod if isinstance(mod, str) else None
+        meta.Path = mod if isinstance(mod, str) else ''
     return meta
 
 def get_mod_list():
