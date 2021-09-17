@@ -238,10 +238,12 @@ def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
                 echo('launching Celeste')
                 subprocess.Popen(path)
 
-@cli.command(context_settings=dict(
-    ignore_unknown_options=True,
-    allow_extra_args=True,
-))
+@cli.command(
+    cls=DefaultArgsCommand,
+    context_settings=dict(
+        ignore_unknown_options=True,
+        allow_extra_args=True,
+    ))
 @click.argument('name', type=Install(), required=False, callback=default_primary)
 @click.pass_context
 def launch(ctx, name):

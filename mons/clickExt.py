@@ -3,6 +3,9 @@ import click
 import os
 import sys
 import configparser
+from gettext import ngettext
+
+from mons.errors import MaybeDefault
 
 class UnhandledError(click.ClickException):
     def __init__(self, message):
@@ -40,7 +43,10 @@ class Install(click.ParamType):
         if self.exist:
             if not isinstance(value, configparser.SectionProxy):
                 if not installs.has_section(value):
-                    self.fail(f'install {value} does not exist.', param, ctx)
+                    if not param.required:
+                        raise MaybeDefault(default_primary(ctx, param, None))
+                    else:
+                        self.fail(f'install {value} does not exist.', param, ctx)
 
                 path = installs[value]['Path']
                 if self.validate_path:
@@ -76,6 +82,43 @@ def default_primary(ctx: click.Context, param, value):
 
     return value
 
+class DefaultArgsCommand(click.Command):
+    def parse_args(self, ctx: click.Context, cmdArgs):
+        if not cmdArgs and self.no_args_is_help and not ctx.resilient_parsing:
+            click.echo(ctx.get_help(), color=ctx.color)
+            ctx.exit()
+
+        parser = self.make_parser(ctx)
+        d_idx = 0
+        while True:
+            opts, args, param_order = parser.parse_args(args=cmdArgs.copy())
+
+            params = click.core.iter_params_for_processing(param_order, self.get_params(ctx))
+            maybe_default = False
+            for param in params:
+                try:
+                    value, args = param.handle_parse_result(ctx, opts, args)
+                except MaybeDefault as d:
+                    cmdArgs.insert(d_idx, d.value)
+                    d_idx += 1
+                    maybe_default = True
+                    break
+
+            if not maybe_default:
+                break
+
+        if args and not ctx.allow_extra_args and not ctx.resilient_parsing:
+            ctx.fail(
+                ngettext(
+                    "Got unexpected extra argument ({args})",
+                    "Got unexpected extra arguments ({args})",
+                    len(args),
+                ).format(args=" ".join(map(str, args)))
+            )
+
+        ctx.args = args
+        return args
+
 class DefaultOption(click.Option):
     """ Mark this option as being a _default option """
     register_default = True
@@ -91,7 +134,7 @@ class ExplicitOption(click.Option):
         if help:
             return (help[0].replace(' ', '[=', 1) + ']',) + help[1:]
 
-class CommandWithDefaultOptions(click.Command):
+class CommandWithDefaultOptions(DefaultArgsCommand):
     def parse_args(self, ctx, args):
         """ Translate any opt to opt_default as needed """
         options = [o for o in ctx.command.params
