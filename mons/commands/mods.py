@@ -7,6 +7,7 @@ from gettext import ngettext
 
 from mons.clickExt import *
 from mons.mons import UserInfo, pass_userinfo
+from mons.mons import cli as mons_cli
 from mons.utils import *
 from mons.version import Version
 
@@ -71,14 +72,58 @@ def prompt_mod_selection(options: Dict, max: int=-1):
             echo('Aborted!')
     return url
 
+def resolve_dependencies(install, mods_folder: str, mod: ModMeta, update_list=None, installed=None):
+    everest_dep = None
+    everest_min = Version(1, 0, 0)
+    echo('Resolving dependencies...')
+    update_list = update_list or get_mod_list()
+    for dep in mod.Dependencies:
+        if dep.Name == 'Everest':
+            everest_dep = dep
+        elif not dep.Name in update_list:
+            click.confirm('Dependency {dep.Name} could not be resolved. Continue?', abort=True)
+    if not everest_dep:
+        raise Exception('Encountered everest.yaml with no Everest dependency.')
+    else:
+        everest_min = everest_dep.Version
+        mod.Dependencies.remove(everest_dep)
+
+    for dep in mod.Dependencies:
+        echo(f'Dependency: {dep.Name} {dep.Version}')
+        file = download_with_progress(str(update_list[dep.Name]['URL']), None, 'Downloading')
+        meta = read_mod_info(file)
+        if meta:
+            echo(f'Downloaded: {meta.Name} {meta.Version}')
+            for dep in meta.Dependencies:
+                if dep.Name == 'Everest':
+                    if not everest_min.satisfies(dep.Version):
+                        everest_min = dep.Version
+                    break
+            filename = meta.Name + '.zip'
+            write_with_progress(
+                file,
+                os.path.join(mods_folder, filename),
+                label=f'Saving file to {filename}',
+                atomic=True
+            )
+
+    current_everest = Version(1, install.getint('EverestBuild', fallback=0), 0)
+    if not current_everest.satisfies(everest_min):
+        echo(f'Installed Everest ({current_everest}) does not satisfy minimum requirement ({everest_min}.')
+        if click.confirm('Update Everest?'):
+            mons_cli.main(args=['install', install.name, str(everest_min)])
+
 @cli.command()
-@click.argument('name', type=Install(resolve_install=True), required=False, callback=default_primary)
+@click.argument('name', type=Install(), required=False, callback=default_primary)
 @click.argument('mod')
 @click.option('--search', is_flag=True)
-def add(name, mod: str, search):
+@pass_userinfo
+def add(userinfo: UserInfo, name, mod: str, search):
+    install = userinfo.installs[name]
     url = None
     filename = None
     file = None
+    mod_list = None
 
     if search:
         mod_list = get_mod_list()
@@ -157,10 +202,12 @@ def add(name, mod: str, search):
                 filename += '.zip'
             write_with_progress(
                 file,
-                os.path.join(os.path.dirname(name['path']), 'Mods', filename),
+                os.path.join(os.path.dirname(install['path']), 'Mods', filename),
                 label=f'Saving file to {filename}',
                 atomic=True
             )
+        if meta:
+            resolve_dependencies(userinfo.cache[name], os.path.join(os.path.dirname(install['path']), 'Mods'), meta, mod_list)
 
 
 @cli.command(hidden=True)

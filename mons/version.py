@@ -1,5 +1,5 @@
 class Version:
-    def __init__(self, major: int, minor: int, build: int, revision: int):
+    def __init__(self, major: int, minor: int, build: int=-1, revision: int=-1):
         self.Major = major
         self.Minor = minor
         self.Build = build
