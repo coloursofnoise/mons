@@ -5,7 +5,7 @@ import sys
 import configparser
 from gettext import ngettext
 
-from mons.errors import MaybeDefault
+from .errors import MaybeDefault
 
 class UnhandledError(click.ClickException):
     def __init__(self, message):

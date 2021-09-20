@@ -5,9 +5,9 @@ import os
 import subprocess
 import io
 
-from mons.mons import cli, UserInfo, pass_userinfo
-from mons.utils import *
-from mons.clickExt import *
+from ..mons import cli, UserInfo, pass_userinfo
+from ..utils import *
+from ..clickExt import *
 
 @cli.command(no_args_is_help=True)
 @click.argument('name', type=Install(exist=False))

@@ -14,7 +14,7 @@ import dnfile # https://github.com/malwarefrank/dnfile
 from dnfile.mdtable import AssemblyRefRow
 from pefile import DIRECTORY_ENTRY # https://github.com/erocarrera/pefile
 
-from mons.config import *
+from .config import *
 
 from typing import Union, List, Dict, Any, cast
 

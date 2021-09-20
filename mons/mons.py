@@ -4,9 +4,9 @@ import click
 
 from contextlib import AbstractContextManager
 
-from mons.utils import *
-from mons.config import *
-from mons.clickExt import *
+from .utils import *
+from .config import *
+from .clickExt import *
 
 class UserInfo(AbstractContextManager):
     def __enter__(self):
@@ -30,4 +30,4 @@ pass_userinfo = click.make_pass_decorator(UserInfo)
 def cli(ctx: click.Context):
     ctx.obj = ctx.with_resource(UserInfo())
 
-from mons.commands import main
+from .commands import main
