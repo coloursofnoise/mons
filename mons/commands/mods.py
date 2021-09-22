@@ -5,11 +5,11 @@ import os
 
 from gettext import ngettext
 
-from mons.clickExt import *
-from mons.mons import UserInfo, pass_userinfo
-from mons.mons import cli as mons_cli
-from mons.utils import *
-from mons.version import Version
+from ..clickExt import *
+from ..mons import UserInfo, pass_userinfo
+from ..mons import cli as mons_cli
+from ..utils import *
+from ..version import Version
 
 @click.group(name='mods', help='Manage Everest mods')
 @click.pass_context
