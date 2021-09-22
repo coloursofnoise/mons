@@ -205,19 +205,28 @@ def parseVersionSpec(string: str) -> int:
     return buildnumber
 
 def getLatestBuild(branch: str) -> int:
-    builds = json.loads(urllib.request.urlopen('https://dev.azure.com/EverestAPI/Everest/_apis/build/builds?api-version=6.0').read())['value']
-    for build in builds:
-        if not (build['status'] == 'completed' and build['result'] == 'succeeded'):
-            continue
-        if not (build['reason'] == 'manual' or build['reason'] == 'individualCI'):
-            continue
+    base_URL = 'https://dev.azure.com/EverestAPI/Everest/_apis/build/builds?'
+    filters = [
+        'statusFilter=completed',
+        'resultFilter=succeeded',
+        'branchName={0}'.format(branch if branch.startswith('refs/heads/') else 'refs/heads/' + branch),
+        'api-version=6.0',
+        '$top=1',
+    ]
+    request = base_URL + '&'.join(filters)
+    response = json.load(urllib.request.urlopen(request))
+    if response['count'] < 1:
+        echo(f'error: `{branch}` branch could not be found')
+        return False
+    elif response['count'] > 1:
+        raise Exception('Unexpected number of builds: {0}'.format(response['count']))
 
-        if not branch or branch == build['sourceBranch'].replace('refs/heads/', ''):
-            try:
-                return int(build['id']) + 700
-            except:
-                pass
-    echo(f'error: `{branch}` branch could not be found')
+    build = response['value'][0]
+    id = build['id']
+    try:
+        return int(id) + 700
+    except:
+        pass
     return False
 
 def getBuildDownload(build: int, artifactName='olympus-build'):
