@@ -209,7 +209,9 @@ def getLatestBuild(branch: str) -> int:
     filters = [
         'statusFilter=completed',
         'resultFilter=succeeded',
-        'branchName={0}'.format(branch if branch.startswith('refs/heads/') else 'refs/heads/' + branch),
+        'branchName={0}'.format(branch
+            if branch.startswith(('refs/heads/', 'refs/pull/'))
+            else 'refs/heads/' + branch),
         'api-version=6.0',
         '$top=1',
     ]
