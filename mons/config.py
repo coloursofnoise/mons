@@ -14,11 +14,7 @@ Config_DEFAULT = {}
 Installs_DEFAULT = {
     'PreferredBranch': 'stable',
 }
-Cache_DEFAULT = {
-    'CelesteVersion': '1.4.0.0',
-    'Everest': False,
-    'Hash': 'f1c4967fa8f1f113858327590e274b69',
-}
+Cache_DEFAULT = {}
 
 def loadConfig(file, default):
     config = configparser.ConfigParser()

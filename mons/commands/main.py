@@ -41,10 +41,7 @@ def set_primary(userInfo: UserInfo, name):
 @pass_userinfo
 def rename(userInfo: UserInfo, old, new):
     '''Rename a Celeste install'''
-    if not userInfo.installs.has_section(new):
-        userInfo.installs[new] = userInfo.installs.pop(old)
-    else:
-        echo(f'error: install `{new}` already exists.')
+    userInfo.installs[new] = userInfo.installs.pop(old)
 
 @cli.command(no_args_is_help=True)
 @click.argument('name', type=Install(check_path=False))
@@ -95,7 +92,7 @@ def info(userInfo: UserInfo, name, verbose):
     if verbose:
         echo('\n'.join('{}:\t{}'.format(k, v) for k, v in info.items()))
     else:
-        if name == userInfo.config['user']['primaryInstall']:
+        if name == userInfo.config['user'].get('primaryInstall', fallback=''):
             name = f'{name} (primary)'
         echo('{}:\t{}'.format(name, buildVersionString(info)))
 
@@ -140,7 +137,7 @@ def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
             elif shutil.which('msbuild'):
                 build_success = ret = subprocess.run(['msbuild', '-v:m'], cwd=src).returncode
             else:
-                print('unable to build: could not find `dotnet` or `msbuild` on PATH')
+                echo('unable to build: could not find `dotnet` or `msbuild` on PATH')
 
         if build_success == 0:
             echo('copying files...')
@@ -192,15 +189,14 @@ def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
             echo(f'to file {artifactPath}')
             blocksize = max(4096, size//100)
             with open(artifactPath, 'wb') as file:
-                progress = 0
-                while True:
-                    buf = response.read(blocksize)
-                    if not buf:
-                        break
-                    file.write(buf)
-                    progress += len(buf)
-                    printProgressBar(progress, size, 'downloading:')
-                printProgressBar(size, size, 'downloading:')
+                with progressbar(length=size, label='Downloading') as bar:
+                    while True:
+                        buf = response.read(blocksize)
+                        if not buf:
+                            break
+                        file.write(buf)
+                        bar.update(len(buf))
+                    bar.update(bar.length - bar.pos)
             with zipfile.ZipFile(artifactPath) as wrapper:
                 with zipfile.ZipFile(wrapper.open('olympus-build/build.zip')) as artifact:
                     unpack(artifact, installDir)
@@ -237,6 +233,8 @@ def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
             if launch:
                 echo('launching Celeste')
                 subprocess.Popen(path)
+    else:
+        click.get_current_context().exit(1)
 
 @cli.command(
     cls=DefaultArgsCommand,
@@ -248,10 +246,8 @@ def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
 @click.pass_context
 def launch(ctx, name):
     '''Launch the game associated with an install'''
-    installs = ctx.obj.installs
-    if os.path.exists(installs[name]['Path']):
-        path = installs[name]['Path']
-        subprocess.Popen([path] + ctx.args)
+    path = ctx.obj.installs[name]['Path']
+    subprocess.Popen([path] + ctx.args)
 
 @cli.command()
 @click.option('-e', '--edit', is_flag=True)

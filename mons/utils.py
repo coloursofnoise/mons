@@ -8,13 +8,14 @@ import shutil
 
 import urllib.request
 
-from click import echo
+from click import echo, progressbar
 
 import dnfile # https://github.com/malwarefrank/dnfile
 from dnfile.mdtable import AssemblyRefRow
 from pefile import DIRECTORY_ENTRY # https://github.com/erocarrera/pefile
 
 from .config import *
+from .clickExt import tempprogressbar
 
 from typing import Union, List, Dict, Any, cast
 
@@ -54,12 +55,11 @@ def unpack(zip: zipfile.ZipFile, root: str, prefix=''):
         if not prefix or zipinfo.filename.startswith(prefix):
             totalSize += zipinfo.file_size
 
-    progress = 0
-    for zipinfo in zip.infolist():
-        if not prefix or zipinfo.filename.startswith(prefix):
-            zip.extract(zipinfo, root)
-            progress += zipinfo.file_size
-            printProgressBar(progress, totalSize, 'extracting:')
+    with progressbar(length=totalSize, label='Extracting') as bar:
+        for zipinfo in zip.infolist():
+            if not prefix or zipinfo.filename.startswith(prefix):
+                zip.extract(zipinfo, root)
+                bar.update(zipinfo.file_size)
 
 # shutils.copytree(dirs_exist_ok) replacement https://stackoverflow.com/a/15824216
 def copy_recursive_force(src, dest, ignore=None):
@@ -86,32 +86,6 @@ def isUnchanged(src, dest, file):
         return os.stat(destFile).st_mtime - os.stat(srcFile).st_mtime >= 0
     return False
 
-# Print iterations progress - https://stackoverflow.com/a/34325723
-def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 50, fill = '/', printEnd = "\r", persist=True):
-    """
-    Call in a loop to create terminal progress bar
-    @params:
-        iteration   - Required  : current iteration (Int)
-        total       - Required  : total iterations (Int)
-        prefix      - Optional  : prefix string (Str)
-        suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent complete (Int)
-        length      - Optional  : character length of bar (Int)
-        fill        - Optional  : bar fill character (Str)
-        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
-    """
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-    filledLength = int(length * iteration // total)
-    bar = fill * filledLength + '-' * (length - filledLength)
-    output = f'\r{prefix} |{bar}| {percent}% {suffix}'
-    print(output, end = printEnd)
-    # Print New Line on Complete
-    if persist and iteration == total: 
-        echo()
-    elif not persist and iteration == total:
-        print('\r' + (' ' * len(output)), end='\r')
-
-
 def getCelesteVersion(path, hash=None):
     hash = hash or getMD5Hash(path)
     version = VANILLA_HASH.get(hash, '')
@@ -128,7 +102,7 @@ def getCelesteVersion(path, hash=None):
     return None, False
 
 def parseExeInfo(path):
-    print('loading exe...', end='\r')
+    echo('Loading exe...\r', nl=False)
     pe = dnfile.dnPE(path, fast_load=True)
     pe.parse_data_directories(directories=DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR'])
     stringHeap: dnfile.stream.StringsHeap = pe.net.metadata.streams_list[1]
@@ -138,18 +112,20 @@ def parseExeInfo(path):
 
     heapSize = stringHeap.sizeof()
     i = 0
-    while i < len(stringHeap.__data__):
-        string = stringHeap.get(i)
-        if string is None:
-            break
-        if string == 'EverestModule':
-            hasEverest = True
-        if str(string).startswith('EverestBuild'):
-            everestBuild = string[len('EverestBuild'):]
-            hasEverest = True
-            break
-        i += max(len(string), 1)
-        printProgressBar(i, heapSize, 'scanning exe:', persist=False)
+    with tempprogressbar(length=heapSize, label='Scanning exe') as bar:
+        while i < len(stringHeap.__data__):
+            string = stringHeap.get(i)
+            if string is None:
+                break
+            if string == 'EverestModule':
+                hasEverest = True
+            if str(string).startswith('EverestBuild'):
+                everestBuild = string[len('EverestBuild'):]
+                hasEverest = True
+                break
+            inc = max(len(string), 1)
+            i += inc
+            bar.update(inc)
 
     assemRef = pe.net.mdtables.AssemblyRef
     framework = 'FNA' if any(cast(AssemblyRefRow, row).Name == 'FNA' for row in assemRef.rows) else 'XNA'
