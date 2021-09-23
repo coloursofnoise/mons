@@ -125,7 +125,7 @@ def download_with_progress(
     elif atomic:
         # yyyyMMdd-HHmmss
         temp_dest = f'tmpdownload-{datetime.now().strftime("%Y%m%d-%H%M%S")}.zip.part'
-        os.path.join(os.path.dirname(dest), temp_dest)
+        temp_dest = os.path.join(os.path.dirname(dest), temp_dest)
         io = open(temp_dest, 'wb')
     else:
         io = open(dest, 'wb')
