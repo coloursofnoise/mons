@@ -37,3 +37,23 @@ class Version:
             if self.Revision != -1:
                 out += '.{0}'.format(self.Revision)
         return out
+    
+    def __gt__(self, other: 'Version'):
+        if self.Major > other.Major:
+            return True
+        elif self.Major == other.Major and self.Minor > other.Minor:
+            return True
+        elif (self.Major == other.Major and
+            self.Minor == other.Minor and
+            self.Build < other.Build
+        ):
+            return True
+        elif (self.Major == other.Major and
+            self.Minor == other.Minor and
+            self.Build == other.Build and
+            self.Revision < other.Revision
+        ):
+            return True
+        return False
+
+

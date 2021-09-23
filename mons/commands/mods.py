@@ -16,10 +16,10 @@ from ..version import Version
 def cli(ctx):
     pass
 
-@cli.command(hidden=True)
+@cli.command(name='list', hidden=True)
 @click.argument('name', type=Install(), required=False, callback=default_primary)
 @pass_userinfo
-def list(userinfo: UserInfo, name):
+def list_mods(userinfo: UserInfo, name):
     basePath = os.path.join(os.path.dirname(userinfo.installs[name]['path']), 'Mods')
     files = os.listdir(basePath)
     if os.name == 'nt':
@@ -71,24 +71,50 @@ def prompt_mod_selection(options: Dict, max: int=-1):
             echo('Aborted!')
     return url
 
-def resolve_dependencies(install, mods_folder: str, mod: ModMeta, update_dict=None, installed_list: List[ModMeta]=None):
+def resolve_dependencies(
+    install,
+    mods_folder: str,
+    mod_meta: Union[ModMeta, List[ModMeta]],
+    update_dict=None,
+    installed_list: List[ModMeta]=None,
+):
     everest_dep = None
     everest_min = Version(1, 0, 0)
     echo('Resolving dependencies...')
     update_dict = update_dict or get_mod_list()
     installed_list = installed_list or installed_mods(mods_folder, include_folder=True, include_blacklisted=True, with_size=True)
     installed = {mod.Name: mod for mod in installed_list}
-    sorted_deps = sorted(mod.Dependencies, key=lambda dep: dep.Name)
+    if isinstance(mod_meta, List):
+        temp_dict: Dict[str, ModMeta] = {}
+        for mod in mod_meta:
+            for dep in mod.Dependencies:
+                if dep.Name in temp_dict:
+                    if dep.Version.Major != temp_dict[dep.Name].Version.Major:
+                        raise ValueError(f'Incompatible dependencies encountered: ' + \
+                            f'{dep.Name} {dep.Version} vs {dep.Name} {temp_dict[dep.Name].Version}')
+                    elif dep.Version > temp_dict[dep.Name].Version:
+                        temp_dict[dep.Name] = dep
+                else:
+                    temp_dict[dep.Name] = dep
+        sorted_deps = [dep for _, dep in temp_dict.items()]
+        sorted_deps.sort(key=lambda dep: dep.Name)
+    else:
+        sorted_deps = sorted(mod_meta.Dependencies, key=lambda dep: dep.Name)
+    ignored_deps = []
     for dep in sorted_deps:
         if dep.Name == 'Everest':
             everest_dep = dep
         elif dep.Name not in installed and dep.Name not in update_dict:
-            click.confirm('Dependency {dep.Name} could not be resolved. Continue?', abort=True)
+            if click.confirm(f'Dependency {dep.Name} could not be resolved. Continue?', abort=True):
+                ignored_deps.append(dep)
+
     if not everest_dep:
         raise Exception('Encountered everest.yaml with no Everest dependency.')
     else:
         everest_min = everest_dep.Version
         sorted_deps.remove(everest_dep)
+    
+    sorted_deps = list(set(sorted_deps) - set(ignored_deps))
 
     for dep in sorted_deps:
         if dep.Name in installed:
@@ -251,7 +277,8 @@ def remove(name, mod):
 #@click.argument('mod', required=False)
 @click.option('--all', is_flag=True, help='Update all currently enabled mods.')
 #@click.option('--upgrade-only', is_flag=True) # Only update if latest file has a higher version
-def update(name, all):
+@pass_userinfo
+def update(userinfo, name, all):
     if not all:
         raise click.UsageError('this command can currently only be used with the --all option')
 
@@ -297,5 +324,14 @@ def update(name, all):
     if not click.confirm('Continue?', default=True):
         return
 
+    new_metas = []
     for update in updates:
         download_with_progress(update.Url, update.Old.Path, f'Downloading mod: {update.Old.Name}', atomic=True)
+        new_metas.append(read_mod_info(update.Old.Path))
+    resolve_dependencies(
+        userinfo.cache[name.name],
+        os.path.join(os.path.dirname(name['path']), 'Mods'),
+        new_metas,
+        mod_list,
+        None,
+    )
