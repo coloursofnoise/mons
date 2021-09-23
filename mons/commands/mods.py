@@ -23,10 +23,9 @@ def list(userinfo: UserInfo, name):
     basePath = os.path.join(os.path.dirname(userinfo.installs[name]['path']), 'Mods')
     files = os.listdir(basePath)
     if os.name == 'nt':
-        for file in files:
-            meta = read_mod_info(os.path.join(basePath, file))
-            if meta:
-                echo(f'{meta.Name}\t{meta.Version}')
+        for meta in installed_mods(basePath, include_folder=True, valid_only=False, include_blacklisted=True):
+            echo(f'{meta.Name}\t{meta.Version}', nl=False)
+            echo('(disabled)' if meta.Blacklisted else '')
     else:
         echo_via_pager(files)
 
@@ -72,28 +71,51 @@ def prompt_mod_selection(options: Dict, max: int=-1):
             echo('Aborted!')
     return url
 
-def resolve_dependencies(install, mods_folder: str, mod: ModMeta, update_list=None, installed=None):
+def resolve_dependencies(install, mods_folder: str, mod: ModMeta, update_dict=None, installed_list: List[ModMeta]=None):
     everest_dep = None
     everest_min = Version(1, 0, 0)
     echo('Resolving dependencies...')
-    update_list = update_list or get_mod_list()
-    for dep in mod.Dependencies:
+    update_dict = update_dict or get_mod_list()
+    installed_list = installed_list or installed_mods(mods_folder, include_folder=True, include_blacklisted=True, with_size=True)
+    installed = {mod.Name: mod for mod in installed_list}
+    sorted_deps = sorted(mod.Dependencies, key=lambda dep: dep.Name)
+    for dep in sorted_deps:
         if dep.Name == 'Everest':
             everest_dep = dep
-        elif not dep.Name in update_list:
+        elif dep.Name not in installed and dep.Name not in update_dict:
             click.confirm('Dependency {dep.Name} could not be resolved. Continue?', abort=True)
     if not everest_dep:
         raise Exception('Encountered everest.yaml with no Everest dependency.')
     else:
         everest_min = everest_dep.Version
-        mod.Dependencies.remove(everest_dep)
+        sorted_deps.remove(everest_dep)
 
-    for dep in mod.Dependencies:
+    for dep in sorted_deps:
+        if dep.Name in installed:
+            existing = installed[dep.Name]
+            if not existing.Version.satisfies(dep.Version):
+                echo(f'Dependency {dep.Name} {dep.Version} not satisfied by installed: {existing.Name} {existing.Version}')
+                if dep.Name in update_dict and Version.parse(update_dict[dep.Name]['Version']).satisfies(dep.Version):
+                    text = 'Update mod?' if not existing.Blacklisted else 'Enable mod and update?'
+                    if click.confirm(text, default=True):
+                        enable_mod(mods_folder, os.path.basename(existing.Path))
+                        download_with_progress(update_dict[dep.Name]['URL'], existing.Path, f'Updating mod: {existing.Name}', atomic=True)
+                else:
+                    echo('No updates found.')
+            elif not existing.Blacklisted:
+                echo(f'Dependency {dep.Name} {dep.Version} already met: {existing.Name} {existing.Version}')
+            else:
+                echo(f'Dependency {dep.Name} {dep.Version} met but blacklisted: {existing.Name} {existing.Version}')
+                if click.confirm('Enable mod?', default=True):
+                    enable_mod(mods_folder, os.path.basename(existing.Path))
+                    dep.Blacklisted = False
+            continue
+
         echo(f'Dependency: {dep.Name} {dep.Version}')
-        file = download_with_progress(str(update_list[dep.Name]['URL']), None, 'Downloading')
+        file = download_with_progress(str(update_dict[dep.Name]['URL']), None, 'Downloading', clear=True)
         meta = read_mod_info(file)
         if meta:
-            echo(f'Downloaded: {meta.Name} {meta.Version}')
+            echo(f'  Installed: {meta.Name} {meta.Version}')
             for dep in meta.Dependencies:
                 if dep.Name == 'Everest':
                     if not everest_min.satisfies(dep.Version):
@@ -104,7 +126,8 @@ def resolve_dependencies(install, mods_folder: str, mod: ModMeta, update_list=No
                 file,
                 os.path.join(mods_folder, filename),
                 label=f'Saving file to {filename}',
-                atomic=True
+                atomic=True,
+                clear=True,
             )
 
     current_everest = Version(1, install.getint('EverestBuild', fallback=0), 0)
@@ -124,7 +147,9 @@ def add(userinfo: UserInfo, name, mod: str, search):
     filename = None
     file = None
     mod_list = None
+    installed = None
 
+    # Query mod search API
     if search:
         mod_list = get_mod_list()
         search_result = search_mods(mod)
@@ -138,9 +163,11 @@ def add(userinfo: UserInfo, name, mod: str, search):
         
         url = prompt_mod_selection(matches, max=9)
 
+    # Install from local filesystem
     elif os.path.exists(mod):
         file = mod
 
+    # Install direct from URL
     elif mod.endswith('.zip') and mod.startswith(('http://', 'https://', 'file://')):
         echo('Attempting direct file download:')
         # Change User-Agent for discord, etc... downloads
@@ -152,10 +179,12 @@ def add(userinfo: UserInfo, name, mod: str, search):
     else:
         mod_list = get_mod_list()
         
+        # Mod ID match
         if mod in mod_list:
             echo(f'Mod found: {mod} {mod_list[mod]["Version"]}')
             url = str(mod_list[mod]['URL'])
 
+        # GameBanana submission URL
         if mod.startswith(('https://gamebanana.com/mods', 'http://gamebanana.com/mods')) and mod.split('/')[-1].isdigit():
             modID = int(mod.split('/')[-1])
             matches = {key: val for key, val in mod_list.items() if modID == val['GameBananaId']}
@@ -181,13 +210,14 @@ def add(userinfo: UserInfo, name, mod: str, search):
                 else:
                     echo('Aborted!')
 
+        # Possible GameBanana Submission ID
         elif mod.isdigit():
             modID = int(mod)
             matches = {key: val for key, val in mod_list.items() if modID == val['GameBananaId']}
             url = prompt_mod_selection(matches)
 
     if url:
-        file = download_with_progress(url, None, 'Downloading')
+        file = download_with_progress(url, None, 'Downloading', clear=True)
     
     if file:
         meta = read_mod_info(file)
@@ -207,7 +237,7 @@ def add(userinfo: UserInfo, name, mod: str, search):
                 atomic=True
             )
         if meta:
-            resolve_dependencies(userinfo.cache[name], os.path.join(os.path.dirname(install['path']), 'Mods'), meta, mod_list)
+            resolve_dependencies(userinfo.cache[name], os.path.join(os.path.dirname(install['path']), 'Mods'), meta, mod_list, installed)
 
 
 @cli.command(hidden=True)

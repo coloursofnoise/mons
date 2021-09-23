@@ -111,6 +111,7 @@ def download_with_progress(
     dest: Union[str, None],
     label: str=None,
     atomic: bool=False,
+    clear: bool=False
 ):
     if not dest and atomic:
         raise ValueError('atomic download cannot be used without destination file')
@@ -128,7 +129,8 @@ def download_with_progress(
         io = open(temp_dest, 'wb')
     else:
         io = open(dest, 'wb')
-    with progressbar(length=size, label=label) as bar:
+    bar = tempprogressbar if clear else progressbar
+    with bar(length=size, label=label) as bar:
         while True:
             buf = response.read(blocksize)
             if not buf:
@@ -152,7 +154,8 @@ def write_with_progress(
     src: Union[BufferedReader, BytesIO, str],
     dest: str,
     label: str=None,
-    atomic: bool=False
+    atomic: bool=False,
+    clear: bool=False,
 ):
     src = open(src, mode='rb') if isinstance(src, str) else src
 
@@ -170,7 +173,8 @@ def write_with_progress(
     src.seek(0)
     blocksize = max(4096, size//100)
     with io as file:
-        with progressbar(length=size, label=label) as bar:
+        bar = tempprogressbar if clear else progressbar
+        with bar(length=size, label=label) as bar:
             while True:
                 buf = src.read(blocksize)
                 if not buf:
@@ -325,6 +329,7 @@ class ModMeta():
     Hash: Union[str, None]
     Path: str
     Size: int
+    Blacklisted: bool=False
 
     def __init__(self, data: Dict):
         self.Name:str = str(data['Name'])
@@ -386,10 +391,33 @@ def read_blacklist(path: str):
     with open(path) as file:
         return [m.strip() for m in file.readlines() if not m.startswith('#')]
 
-def installed_mods(path:str, include_folder=False, valid_only=True, include_blacklisted=False, with_size=False):
+def installed_mods(path: str, include_folder=False, valid_only=True, include_blacklisted=False, with_size=False):
     files = os.listdir(path)
-    if not include_blacklisted and os.path.isfile(os.path.join(path, 'blacklist.txt')):
+    if os.path.isfile(os.path.join(path, 'blacklist.txt')):
         blacklist = read_blacklist(os.path.join(path, 'blacklist.txt'))
-        files = filter(lambda m: m not in blacklist, files)
-    mods = [read_mod_info(os.path.join(path, file), with_size=with_size) for file in files if include_folder or not os.path.isdir(os.path.join(path, file))]
-    return list(filter(None, mods))
+        if not include_blacklisted:
+            files = filter(lambda m: m not in blacklist, files)
+
+    mods: List[ModMeta] = []
+    for file in files:
+        if include_folder or not os.path.isdir(os.path.join(path, file)):
+            mod = read_mod_info(os.path.join(path, file), with_size=with_size)
+            if not mod:
+                continue
+            if blacklist and file in blacklist:
+                mod.Blacklisted = True
+            mods.append(mod)
+    return mods
+
+def enable_mod(path: str, mod: str):
+    blacklist_path = os.path.join(path, 'blacklist.txt')
+    if os.path.isfile(blacklist_path):
+        with open(blacklist_path) as file:
+            blacklist = file.readlines()
+        i = 0
+        while i < len(blacklist):
+            if blacklist[i].strip() == mod:
+                blacklist[i] = '#' + blacklist[i]
+            i += 1
+        with open(blacklist_path, mode='w') as file:
+            file.writelines(blacklist)
