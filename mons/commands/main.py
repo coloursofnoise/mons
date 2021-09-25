@@ -269,7 +269,7 @@ def launch(ctx, name):
     path = ctx.obj.installs[name]['Path']
     if os.name != 'nt':
         if os.uname().sysname == 'Darwin':
-            path = os.path.join(os.path.dirname(path), '..', 'Celeste')
+            path = os.path.normpath(os.path.join(os.path.dirname(path), '..', 'MacOS', 'Celeste'))
         else:
             path = os.path.splitext(path)[0] # drop the .exe
     subprocess.Popen([path] + ctx.args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
