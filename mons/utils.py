@@ -5,6 +5,7 @@ import json
 import hashlib
 import zipfile
 import shutil
+from contextlib import contextmanager
 
 import urllib.request
 
@@ -85,6 +86,22 @@ def isUnchanged(src, dest, file):
     if os.path.exists(destFile):
         return os.stat(destFile).st_mtime - os.stat(srcFile).st_mtime >= 0
     return False
+
+@contextmanager
+def relocated_file(src, dest):
+    file = shutil.move(src, dest)
+    try:
+        yield file
+    finally:
+        shutil.move(file, src)
+
+@contextmanager
+def copied_file(src, dest):
+    file = shutil.copy(src, dest)
+    try:
+        yield file
+    finally:
+        os.remove(file)
 
 def getCelesteVersion(path, hash=None):
     hash = hash or getMD5Hash(path)

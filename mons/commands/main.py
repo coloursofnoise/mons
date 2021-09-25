@@ -16,6 +16,8 @@ from ..clickExt import *
 @pass_userinfo
 def add(userInfo: UserInfo, name, path, set_primary):
     '''Add a Celeste Install'''
+    if os.path.basename(path) == 'Celeste.app':
+        path = os.path.join(path, 'Resources')
     installPath = fileExistsInFolder(path, 'Celeste.exe', forceName=False, log=True)
 
     if installPath:
@@ -215,11 +217,29 @@ def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
                 success = True
 
     if success:
-        echo('running MiniInstaller...')
+        echo('Running MiniInstaller...')
         stdout = None if verbose else subprocess.DEVNULL
-        installer_ret = subprocess.run(os.path.join(installDir, 'MiniInstaller.exe'), stdout=stdout, stderr=subprocess.STDOUT, cwd=installDir)
+        if os.name == 'nt':
+            installer_ret = subprocess.run(os.path.join(installDir, 'MiniInstaller.exe'), stdout=stdout, stderr=None, cwd=installDir)
+        else:
+            uname = os.uname()
+            if uname.system == 'Darwin':
+                kickstart_dir = os.path.join(installDir, '..', 'MacOS')
+                with copied_file(
+                    os.path.join(kickstart_dir, 'Celeste'),
+                    os.path.join(kickstart_dir, 'MiniInstaller')
+                ) as miniinstaller:
+                    installer_ret = subprocess.run(miniinstaller, stdout=stdout, stderr=None, cwd=installDir)
+            else:
+                suffix = 'x86_64' if uname.machine == 'x86_64' else 'x86'
+                with copied_file(
+                    os.path.join(os.path.join(installDir, f'Celeste.bin.{suffix}')),
+                    os.path.join(installDir, f'MiniInstaller.bin.{suffix}')
+                ) as miniinstaller:
+                    installer_ret = subprocess.run(miniinstaller, stdout=stdout, stderr=None, cwd=installDir)
+
         if installer_ret.returncode == 0:
-            echo('install success')
+            echo('Install success')
             if build:
                 peHash = getMD5Hash(path)
                 userInfo.cache[name].update({
@@ -247,7 +267,12 @@ def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
 def launch(ctx, name):
     '''Launch the game associated with an install'''
     path = ctx.obj.installs[name]['Path']
-    subprocess.Popen([path] + ctx.args)
+    if os.name != 'nt':
+        if os.uname().system == 'Darwin':
+            path = os.path.join(os.path.dirname(path), '..', 'Celeste')
+        else:
+            path = os.path.splitext(path)[0] # drop the .exe
+    subprocess.Popen([path] + ctx.args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 @cli.command()
 @click.option('-e', '--edit', is_flag=True)
