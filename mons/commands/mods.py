@@ -85,18 +85,7 @@ def resolve_dependencies(
     installed_list = installed_list or installed_mods(mods_folder, include_folder=True, include_blacklisted=True, with_size=True)
     installed = {mod.Name: mod for mod in installed_list}
     if isinstance(mod_meta, List):
-        temp_dict: Dict[str, ModMeta] = {}
-        for mod in mod_meta:
-            for dep in mod.Dependencies:
-                if dep.Name in temp_dict:
-                    if dep.Version.Major != temp_dict[dep.Name].Version.Major:
-                        raise ValueError(f'Incompatible dependencies encountered: ' + \
-                            f'{dep.Name} {dep.Version} vs {dep.Name} {temp_dict[dep.Name].Version}')
-                    elif dep.Version > temp_dict[dep.Name].Version:
-                        temp_dict[dep.Name] = dep
-                else:
-                    temp_dict[dep.Name] = dep
-        sorted_deps = [dep for _, dep in temp_dict.items()]
+        sorted_deps = combined_dependencies(mod_meta)
         sorted_deps.sort(key=lambda dep: dep.Name)
     else:
         sorted_deps = sorted(mod_meta.Dependencies, key=lambda dep: dep.Name)
@@ -104,6 +93,7 @@ def resolve_dependencies(
     for dep in sorted_deps:
         if dep.Name == 'Everest':
             everest_dep = dep
+            ignored_deps.append(dep)
         elif dep.Name not in installed and dep.Name not in update_dict:
             if click.confirm(f'Dependency {dep.Name} could not be resolved. Continue?', abort=True):
                 ignored_deps.append(dep)
@@ -112,8 +102,7 @@ def resolve_dependencies(
         raise Exception('Encountered everest.yaml with no Everest dependency.')
     else:
         everest_min = everest_dep.Version
-        sorted_deps.remove(everest_dep)
-    
+
     sorted_deps = list(set(sorted_deps) - set(ignored_deps))
 
     for dep in sorted_deps:

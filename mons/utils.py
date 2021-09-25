@@ -337,6 +337,20 @@ class ModMeta():
         self.Dependencies = [ModMeta(dep) for dep in data['Dependencies']] if 'Dependencies' in data else []
         self.OptionalDependencies = [ModMeta(dep) for dep in data['OptionalDependencies']] if 'OptionalDependencies' in data else []
 
+def combined_dependencies(mods: List[ModMeta]) -> List[ModMeta]:
+    temp_dict: Dict[str, ModMeta] = {}
+    for mod in mods:
+        for dep in mod.Dependencies:
+            if dep.Name in temp_dict:
+                if dep.Version.Major != temp_dict[dep.Name].Version.Major:
+                    raise ValueError(f'Incompatible dependencies encountered: ' + \
+                        f'{dep.Name} {dep.Version} vs {dep.Name} {temp_dict[dep.Name].Version}')
+                elif dep.Version > temp_dict[dep.Name].Version:
+                    temp_dict[dep.Name] = dep
+            else:
+                temp_dict[dep.Name] = dep
+    return [dep for _, dep in temp_dict.items()]
+
 class UpdateInfo():
     def __init__(self, old: ModMeta, new: Version, url: str, mirror: str=None):
         self.Old = old
