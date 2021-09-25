@@ -223,7 +223,7 @@ def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
             installer_ret = subprocess.run(os.path.join(installDir, 'MiniInstaller.exe'), stdout=stdout, stderr=None, cwd=installDir)
         else:
             uname = os.uname()
-            if uname.system == 'Darwin':
+            if uname.sysname == 'Darwin':
                 kickstart_dir = os.path.join(installDir, '..', 'MacOS')
                 with copied_file(
                     os.path.join(kickstart_dir, 'Celeste'),
@@ -268,7 +268,7 @@ def launch(ctx, name):
     '''Launch the game associated with an install'''
     path = ctx.obj.installs[name]['Path']
     if os.name != 'nt':
-        if os.uname().system == 'Darwin':
+        if os.uname().sysname == 'Darwin':
             path = os.path.join(os.path.dirname(path), '..', 'Celeste')
         else:
             path = os.path.splitext(path)[0] # drop the .exe
