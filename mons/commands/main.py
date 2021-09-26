@@ -98,25 +98,28 @@ def info(userInfo: UserInfo, name, verbose):
             name = f'{name} (primary)'
         echo('{}:\t{}'.format(name, buildVersionString(info)))
 
+
 @cli.command(no_args_is_help=True, cls=CommandWithDefaultOptions)
 @click.argument('name', type=Install(), required=False, callback=default_primary)
 @click.argument('versionSpec', required=False)
-@click.option('-v', '--verbose', is_flag=True, help='be verbose')
-@click.option('--latest', is_flag=True, help='latest available build, branch-ignorant')
+@click.option('-v', '--verbose', is_flag=True, help='Be verbose.')
+@click.option('--latest', is_flag=True, help='Install latest available build, branch-ignorant.')
 @click.option('--zip', 
     type=click.Path(exists=True, dir_okay=False, resolve_path=True), 
-    help='install from local zip artifact')
+    help='Install from local zip artifact.')
 @click.option('--src',
     cls=ExplicitOption,
     type=click.Path(exists=True, file_okay=False, resolve_path=True),
-    help='build and install from source folder')
+    help='Build and install from source folder.')
 @click.option('--src', cls=DefaultOption, is_flag=True)
-@click.option('--no-build', is_flag=True, help='use with --src to install without building first')
-@click.option('--launch', is_flag=True, help='launch Celeste after installing')
+@click.option('--no-build', is_flag=True, help='Use with --src to install without building.')
+@click.option('--launch', is_flag=True, help='Launch Celeste after installing.')
 @pass_userinfo
-def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, src_default, no_build, launch):
-    '''Install Everest'''
-    path = userInfo.installs[name]['Path']
+def install(userinfo: UserInfo, name, versionspec, verbose, latest, zip, src, src_default, no_build, launch):
+    '''Install Everest
+
+    VERSIONSPEC can be a branch name, build number, or version number.'''
+    path = userinfo.installs[name]['Path']
     installDir = os.path.dirname(path)
     success = False
 
@@ -124,7 +127,7 @@ def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
     build = None
 
     if src_default:
-        src = userInfo.config.get('user', 'SourceDirectory', fallback=None)
+        src = userinfo.config.get('user', 'SourceDirectory', fallback=None)
         if not src:
             raise click.BadOptionUsage(
                 '--src',
@@ -135,14 +138,27 @@ def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
         build_success = 0 if no_build else 1
         if not no_build:
             if shutil.which('dotnet'):
-                build_success = subprocess.run('dotnet build', cwd=src).returncode
+                build_success = subprocess.run(
+                    [
+                        'dotnet', 'build',
+                        '--verbosity', 'normal' if verbose else 'minimal'
+                    ],
+                    cwd=src
+                ).returncode
             elif shutil.which('msbuild'):
-                build_success = ret = subprocess.run(['msbuild', '-v:m'], cwd=src).returncode
+                build_success = subprocess.run(
+                    [
+                        'msbuild',
+                        '-verbosity:' + ('normal' if verbose else 'minimal')
+                    ],
+                    cwd=src
+                ).returncode
             else:
-                echo('unable to build: could not find `dotnet` or `msbuild` on PATH')
+                raise click.ClickException('Unable to build project: could not find `dotnet` or `msbuild` on PATH.\n' +
+                'Include the --no-build switch to skip build step.')
 
         if build_success == 0:
-            echo('copying files...')
+            echo('Copying files...')
             copy_recursive_force(os.path.join(src, 'Celeste.Mod.mm', 'bin', 'Debug', 'net452'),
                 installDir,
                 ignore=lambda path, names : [name for name in names if isUnchanged(path, installDir, name)]
@@ -155,28 +171,29 @@ def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
 
     elif zip:
         artifactPath = zip
-    elif versionspec.startswith('file://'):
+    elif versionspec and versionspec.startswith('file://'):
         artifactPath = versionspec[len('file://'):]
 
     if artifactPath:
-        echo(f'unzipping {os.path.basename(artifactPath)}')
+        label = f'Unzipping {os.path.basename(artifactPath)}'
         with zipfile.ZipFile(artifactPath) as wrapper:
             try:
                 entry = wrapper.open('olympus-build/build.zip') # Throws KeyError if not present
                 with zipfile.ZipFile(entry) as artifact:
-                    unpack(artifact, installDir)
+                    unpack(artifact, installDir, label=label)
                     success = True
             except KeyError:
-                unpack(wrapper, installDir, 'main/')
+                unpack(wrapper, installDir, 'main/', label=label)
                 success = True
 
     elif not src:
+        versionspec = '' if latest else (versionspec or userinfo.installs.get(name, 'PreferredBranch'))
         build = parseVersionSpec(versionspec)
         if not build:
-            echo('Build number could not be retrieved!')
-            return
+            raise click.ClickException(f'Build number could not be retrieved for `{versionspec}`.')
 
-        echo('downloading metadata')
+        echo(f'Installing Everest build {build}')
+        echo('Downloading build metadata...')
         try:
             meta = getBuildDownload(build, 'olympus-meta')
             with zipfile.ZipFile(io.BytesIO(meta.read())) as file:
@@ -185,10 +202,10 @@ def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
             size = 0
 
         if size > 0:
-            echo('downloading olympus-build.zip')
+            echo('Downloading olympus-build.zip', nl=False)
             response = getBuildDownload(build, 'olympus-build')
             artifactPath = os.path.join(installDir, 'olympus-build.zip')
-            echo(f'to file {artifactPath}')
+            echo(f' to file {artifactPath}')
             blocksize = max(4096, size//100)
             with open(artifactPath, 'wb') as file:
                 with progressbar(length=size, label='Downloading') as bar:
@@ -201,19 +218,19 @@ def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
                     bar.update(bar.length - bar.pos)
             with zipfile.ZipFile(artifactPath) as wrapper:
                 with zipfile.ZipFile(wrapper.open('olympus-build/build.zip')) as artifact:
-                    unpack(artifact, installDir)
+                    unpack(artifact, installDir, label='Extracting olympus-build.zip')
                     success = True
 
         else:
-            echo('downloading main.zip')
+            echo('Downloading main.zip', nl=False)
             response = getBuildDownload(build, 'main')
             artifactPath = os.path.join(installDir, 'main.zip')
-            echo(f'to file {artifactPath}')
+            echo(f' to file {artifactPath}')
             with open(artifactPath, 'wb') as file:
                 file.write(response.read())
-            echo('unzipping main.zip')
+            echo('Unzipping main.zip')
             with zipfile.ZipFile(artifactPath) as artifact:
-                unpack(artifact, installDir, 'main/')
+                unpack(artifact, installDir, 'main/', label='Extracting main.zip')
                 success = True
 
     if success:
@@ -242,19 +259,21 @@ def install(userInfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
             echo('Install success')
             if build:
                 peHash = getMD5Hash(path)
-                userInfo.cache[name].update({
+                userinfo.cache[name].update({
                     'Hash': peHash,
                     'Everest': str(True),
                     'EverestBuild': str(build),
                 })
             else:
-                getInstallInfo(userInfo, name)
-                echo('install info cached')
+                getInstallInfo(userinfo, name)
+                echo('Install info cached')
             if launch:
-                echo('launching Celeste')
+                echo('Launching Celeste...')
                 subprocess.Popen(path)
-    else:
-        click.get_current_context().exit(1)
+            return
+
+    # If we got this far, something went wrong
+    click.get_current_context().exit(1)
 
 @cli.command(
     cls=DefaultArgsCommand,
