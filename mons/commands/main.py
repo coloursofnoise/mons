@@ -9,10 +9,11 @@ from ..mons import cli, UserInfo, pass_userinfo
 from ..utils import *
 from ..clickExt import *
 
+
 @cli.command(no_args_is_help=True)
 @click.argument('name', type=Install(exist=False))
 @click.argument('path', type=click.Path(exists=True, resolve_path=True))
-@click.option('--set-primary', is_flag=True, help='set as default install for commands')
+@click.option('--set-primary', is_flag=True, help='Set as default install for commands.')
 @pass_userinfo
 def add(userInfo: UserInfo, name, path, set_primary):
     '''Add a Celeste Install'''
@@ -24,18 +25,22 @@ def add(userInfo: UserInfo, name, path, set_primary):
         userInfo.installs[name] = {
             'Path': installPath,
         }
-        echo(f'found Celeste.exe: {installPath}')
-        echo('caching install info...')
+        echo(f'Found Celeste.exe: {installPath}')
+        echo('Caching install info...')
         echo(buildVersionString(getInstallInfo(userInfo, name)))
         if set_primary:
-            userInfo.config['user']['primaryInstall'] = name
+            userInfo.config['user']['PrimaryInstall'] = name
+            echo(f'Primary install is now `{name}`.')
+
 
 @cli.command()
 @click.argument('name', type=Install())
 @pass_userinfo
 def set_primary(userInfo: UserInfo, name):
     '''Set the primary install used by commands'''
-    userInfo.config['user']['primaryInstall'] = name
+    userInfo.config['user']['PrimaryInstall'] = name
+    echo(f'Primary install is now `{name}`.')
+
 
 @cli.command(no_args_is_help=True)
 @click.argument('old', type=Install(exist=True))
@@ -44,6 +49,7 @@ def set_primary(userInfo: UserInfo, name):
 def rename(userInfo: UserInfo, old, new):
     '''Rename a Celeste install'''
     userInfo.installs[new] = userInfo.installs.pop(old)
+
 
 @cli.command(no_args_is_help=True)
 @click.argument('name', type=Install(check_path=False))
@@ -57,45 +63,55 @@ def set_path(userInfo: UserInfo, name, path):
         echo(f'Found Celeste.exe: {installPath}')
         echo(buildVersionString(getInstallInfo(userInfo, name)))
 
+
 @cli.command(no_args_is_help=True, )
 @click.argument('name', type=Install())
 @pass_userinfo
 def remove(userInfo: UserInfo, name):
     '''Remove an existing install'''
-    if click.confirm('Are you sure?'):
+    if click.confirm('Are you sure?', abort=True):
         userInfo.installs.remove_section(name)
         userInfo.cache.remove_section(name)
-        if userInfo.config.has_option('user', 'primaryInstall'):
-            echo(f'un-setting primary install (was {name})')
-            userInfo.config.remove_option('user', 'primaryInstall')
+        if userInfo.config.has_option('user', 'PrimaryInstall'):
+            echo(f'Un-setting primary install (was {name}).')
+            userInfo.config.remove_option('user', 'PrimaryInstall')
+
 
 @cli.command(no_args_is_help=True)
 @click.argument('name', type=Install(resolve_install=True))
 @click.argument('branch')
 def set_branch(name, branch):
-    '''Set the preferred branch for an existing install'''
-    name['preferredBranch'] = branch
+    '''Set the preferred branch name for an existing install'''
+    name['PreferredBranch'] = branch
+    echo(f'Preferred branch for `{name.name}` is now `{branch}`.')
+
 
 @cli.command()
 @pass_userinfo
 def list(userInfo: UserInfo):
     '''List existing installs'''
+    primary = userInfo.config['user'].get('PrimaryInstall', fallback='')
     for install in userInfo.installs.sections():
         info = buildVersionString(getInstallInfo(userInfo, install))
-        echo('{}:\t{}'.format(install, info))
+        name = install + (' (primary)' if install == primary else '')
+        echo('{}:\t{}'.format(name, info))
+
 
 @cli.command()
 @click.argument('name', type=Install(), required=False, callback=default_primary)
 @click.option('-v', '--verbose', is_flag=True)
 @pass_userinfo
 def info(userInfo: UserInfo, name, verbose):
-    '''Output known information for an install'''
+    '''Get information for a specific install'''
     info = getInstallInfo(userInfo, name)
+    primary = name == userInfo.config['user'].get('PrimaryInstall', fallback='')
     if verbose:
+        if primary:
+            echo('--Primary install--')
         echo('\n'.join('{}:\t{}'.format(k, v) for k, v in info.items()))
     else:
-        if name == userInfo.config['user'].get('primaryInstall', fallback=''):
-            name = f'{name} (primary)'
+        if primary:
+            name = name + ' (primary)'
         echo('{}:\t{}'.format(name, buildVersionString(info)))
 
 
@@ -275,6 +291,7 @@ def install(userinfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
     # If we got this far, something went wrong
     click.get_current_context().exit(1)
 
+
 @cli.command(
     cls=DefaultArgsCommand,
     context_settings=dict(
@@ -292,6 +309,7 @@ def launch(ctx, name):
         else:
             path = os.path.splitext(path)[0] # drop the .exe
     subprocess.Popen([path] + ctx.args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
 
 @cli.command()
 @click.option('-e', '--edit', is_flag=True)
