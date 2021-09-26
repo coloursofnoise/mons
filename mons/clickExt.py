@@ -10,10 +10,6 @@ from gettext import ngettext
 
 from .errors import MaybeDefault
 
-class UnhandledError(click.ClickException):
-    def __init__(self, message):
-        super().__init__(message)
-
 class CatchErrorsGroup(click.Group):
     def main(self, args=None, prog_name=None, complete_var=None, standalone_mode=True, windows_expand_args=True, **extra):
         debug = False
@@ -34,7 +30,7 @@ Use the --debug flag to disable clean exception handling.''')
 class Install(click.ParamType):
     name = 'Install'
 
-    def __init__(self, exist=True, resolve_install=False, check_path=True) -> None:
+    def __init__(self, exist: bool=True, resolve_install: bool=False, check_path: bool=True) -> None:
         super().__init__()
         self.exist = exist
         self.resolve_install = resolve_install
@@ -49,7 +45,7 @@ class Install(click.ParamType):
                     if not param.required:
                         raise MaybeDefault(default_primary(ctx, param, None))
                     else:
-                        self.fail(f'install {value} does not exist.', param, ctx)
+                        self.fail(f'Install {value} does not exist.', param, ctx)
 
                 path = installs[value]['Path']
                 if self.validate_path:
@@ -60,7 +56,7 @@ class Install(click.ParamType):
                         error = 'does not point to Celeste.exe'
 
                     if error:
-                        raise click.UsageError(f'''install {value} does not have a valid path:
+                        raise click.UsageError(f'''Install {value} does not have a valid path:
 \033[0;31m{path} {error}\033[0m
 Use the `set-path` command to assign a new path.''', ctx)
 
@@ -68,24 +64,29 @@ Use the `set-path` command to assign a new path.''', ctx)
                     value = installs[value]
         else:
             if installs.has_section(value):
-                self.fail(f'install {value} already exists.', param, ctx)
+                self.fail(f'Install {value} already exists.', param, ctx)
 
         return value
 
 def default_primary(ctx: click.Context, param, value):
     if value is None:
         config: configparser.ConfigParser = ctx.obj.config
-        if config.has_option('user', 'primaryInstall'):
-            value = config.get('user', 'primaryInstall')
+        if config.has_option('user', 'PrimaryInstall'):
+            value = config.get('user', 'PrimaryInstall')
             if isinstance(param.type, Install) and param.type.resolve_install:
                 value = ctx.obj.installs[value]
-
         else:
-            ctx.fail('primary install not set. Use `mons set-primary` to set it.')
+            ctx.fail('Primary install not found. Use `mons set-primary` to set it.')
 
     return value
 
 class DefaultArgsCommand(click.Command):
+    """Command type allowing multiple default arguments.
+    
+    ParamTypes must throw a `MaybeDefault` exception containing 
+    the default value for that parameter.
+    Attempts to prepend the `MaybeDefault` value to the argument list,
+    and tries the command again."""
     def parse_args(self, ctx: click.Context, cmdArgs):
         if not cmdArgs and self.no_args_is_help and not ctx.resilient_parsing:
             click.echo(ctx.get_help(), color=ctx.color)
@@ -132,12 +133,14 @@ class DefaultOption(click.Option):
         self.hidden = True
 
 class ExplicitOption(click.Option):
+    """ Fix the help string for this option to display as an optional argument """
     def get_help_record(self, ctx):
         help = super(ExplicitOption, self).get_help_record(ctx)
         if help:
             return (help[0].replace(' ', '[=', 1) + ']',) + help[1:]
 
 class CommandWithDefaultOptions(DefaultArgsCommand):
+    """ Command implementation for `DefaultOption` and `ExplicitOption` option types """
     def parse_args(self, ctx, args):
         """ Translate any opt to opt_default as needed """
         options = [o for o in ctx.command.params
