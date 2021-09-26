@@ -234,7 +234,7 @@ def install(userinfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
                     bar.update(bar.length - bar.pos)
             with zipfile.ZipFile(artifactPath) as wrapper:
                 with zipfile.ZipFile(wrapper.open('olympus-build/build.zip')) as artifact:
-                    unpack(artifact, installDir, label='Extracting olympus-build.zip')
+                    unpack(artifact, installDir, label='Extracting')
                     success = True
 
         else:
@@ -246,7 +246,7 @@ def install(userinfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
                 file.write(response.read())
             echo('Unzipping main.zip')
             with zipfile.ZipFile(artifactPath) as artifact:
-                unpack(artifact, installDir, 'main/', label='Extracting main.zip')
+                unpack(artifact, installDir, 'main/', label='Extracting')
                 success = True
 
     if success:

@@ -18,7 +18,7 @@ from pefile import DIRECTORY_ENTRY # https://github.com/erocarrera/pefile
 from .config import *
 from .clickExt import tempprogressbar
 
-from typing import Union, List, Dict, Any, cast
+from typing import Union, cast
 
 VANILLA_HASH = {
     'f1c4967fa8f1f113858327590e274b69': ('1.4.0.0', 'FNA'),
@@ -31,14 +31,14 @@ def fileExistsInFolder(path: str, filename: str, forceName=True, log=False) -> U
         if not forceName or os.path.basename(path) == filename:
             installPath = path
         elif log:
-            echo(f'error: file `{installPath}` must be called {filename}')
+            echo(f'Error: file `{installPath}` must be called {filename}')
     elif os.path.isdir(path):
         if os.path.isfile(os.path.join(path, filename)):
             installPath = os.path.join(path, filename)
         elif log:
-            echo(f'error: {filename} file could not be found in `{installPath}`')
+            echo(f'Error: {filename} file could not be found in `{installPath}`')
     elif log:
-        echo(f'error: `{path}` could not be resolved')
+        echo(f'Error: `{path}` could not be resolved')
     return installPath
 
 def getMD5Hash(path: str) -> str:
@@ -149,7 +149,7 @@ def parseExeInfo(path):
 
     return hasEverest, everestBuild, framework
 
-def getInstallInfo(userInfo, install) -> Union[Dict[str, Any], configparser.SectionProxy]:
+def getInstallInfo(userInfo: UserInfo, install: str) -> configparser.SectionProxy:
     path = userInfo.installs[install]['Path']
     mainHash = getMD5Hash(path)
     if userInfo.cache.has_section(install) and userInfo.cache[install].get('Hash', '') == mainHash:
@@ -180,10 +180,10 @@ def getInstallInfo(userInfo, install) -> Union[Dict[str, Any], configparser.Sect
         info['Framework'] = framework
 
     info['Hash'] = mainHash
-    userInfo.cache[install] = info.copy() # otherwise it makes all keys in info lowercase
-    return info
+    userInfo.cache[install] = info # otherwise it makes all keys in info lowercase
+    return userInfo.cache[install]
 
-def buildVersionString(installInfo: Union[Dict[str, Any], configparser.SectionProxy]) -> str:
+def buildVersionString(installInfo: configparser.SectionProxy) -> str:
     versionStr = installInfo.get('CelesteVersion', 'unknown')
     framework = installInfo.get('Framework', None)
     if framework:

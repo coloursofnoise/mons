@@ -2,7 +2,6 @@
 
 import click
 
-from .utils import *
 from .config import *
 from .clickExt import *
 
