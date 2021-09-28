@@ -5,6 +5,7 @@ import os
 
 from gettext import ngettext
 import re
+from concurrent import futures
 
 from ..clickExt import *
 from ..mons import UserInfo, pass_userinfo
@@ -96,7 +97,7 @@ def search(search):
         for m in match:
             echo(m)
         if len(match) < 1:
-            echo('entry not found: ' + str(item['itemid']))
+            raise click.UsageError('Entry not found: ' + str(item['itemid']))
 
 def prompt_mod_selection(options: Dict, max: int=-1):
     matchKeys = sorted(options.keys(), key=lambda key: options[key]['LastUpdate'], reverse=True)
@@ -215,7 +216,6 @@ def add(userinfo: UserInfo, name, mod: str, search):
     filename = None
     file = None
     mod_list = None
-    installed = None
 
     # Query mod search API
     if search:
@@ -305,7 +305,7 @@ def add(userinfo: UserInfo, name, mod: str, search):
                 atomic=True
             )
         if meta:
-            resolve_dependencies(userinfo.cache[name], os.path.join(os.path.dirname(install['path']), 'Mods'), meta, mod_list, installed)
+            resolve_dependencies(userinfo.cache[name], os.path.join(os.path.dirname(install['path']), 'Mods'), meta, mod_list)
 
 
 @cli.command(hidden=True)
@@ -314,55 +314,71 @@ def add(userinfo: UserInfo, name, mod: str, search):
 def remove(name, mod):
     pass
 
+
+def get_size_diff(mod, url, old):
+    request = urllib.request.Request(url, method='HEAD')
+    return int(urllib.request.urlopen(request).headers['Content-Length']) - old
+
 @cli.command()
 @click.argument('name', type=Install(resolve_install=True), required=False, callback=default_primary)
 #@click.argument('mod', required=False)
-@click.option('--all', is_flag=True, help='Update all currently enabled mods.')
-#@click.option('--upgrade-only', is_flag=True) # Only update if latest file has a higher version
+@click.option('--all', is_flag=True, help='Update all installed mods.')
+@click.option('--enabled', is_flag=True, help='Update all currently enabled mods.', default=None)
+@click.option('--upgrade-only', is_flag=True, help='Only update if latest file is a higher version')
 @pass_userinfo
-def update(userinfo, name, all):
-    if not all:
-        raise click.UsageError('this command can currently only be used with the --all option')
+def update(userinfo, name, all, enabled, upgrade_only):
+    if not (all or enabled):
+        raise click.UsageError('this command can currently only be used with the --all or --enabled option')
 
     mod_list = get_mod_list()
     updates: List[UpdateInfo] = []
+    has_updates = False
+    total_size = 0
     if all:
+        enabled = None
+    if all or enabled:
         mods_folder = os.path.join(os.path.dirname(name['path']), 'Mods')
-        installed = installed_mods(mods_folder, with_size=True)
+        installed = installed_mods(mods_folder, blacklisted=enabled, dirs=False, valid=True, with_size=True, with_hash=True)
         updater_blacklist = os.path.join(mods_folder, 'updaterblacklist.txt')
         updater_blacklist = os.path.exists(updater_blacklist) and read_blacklist(updater_blacklist)
-        for meta in installed:
-            if meta.Name in mod_list and (not updater_blacklist or os.path.basename(meta.Path) not in updater_blacklist):
-                server = mod_list[meta.Name]
-                latest_hash = server['xxHash'][0]
-                if meta.Hash and latest_hash != meta.Hash:
-                    update = UpdateInfo(
-                        meta,
-                        Version.parse(server['Version']),
-                        server['URL'],
-                    )
-                    updates.append(update)
+        with futures.ThreadPoolExecutor() as executor:
+            requests: List[futures.Future] = []
+            for meta in installed:
+                if meta.Name in mod_list and (not updater_blacklist or os.path.basename(meta.Path) not in updater_blacklist):
+                    server = mod_list[meta.Name]
+                    latest_hash = server['xxHash'][0]
+                    latest_version = Version.parse(server['Version'])
+                    if meta.Hash and latest_hash != meta.Hash and (not upgrade_only or latest_version > meta.Version):
+                        update = UpdateInfo(
+                            meta,
+                            latest_version,
+                            server['URL'],
+                        )
+                        if not has_updates:
+                            echo('Updates available:')
+                            has_updates = True
+                        echo(f'  {update.Old.Name}: {update.Old.Version} -> {update.New}')
+                        requests.append(executor.submit(get_size_diff, update.Old.Name, update.Url, update.Old.Size))
+                        updates.append(update)
 
-    total_size = 0
-    for update in updates:
-        total_size += int(urllib.request.urlopen(update.Url).headers['Content-Length']) - update.Old.Size
+            for req in requests:
+                total_size += req.result()
 
-    if len(updates) < 1:
+    if not has_updates:
         echo('All mods up to date')
         return
-    
+
     echo(ngettext(
-        f'{len(updates)} update available:',
-        f'{len(updates)} updates available:',
-        len(updates)))
-    for update in updates:
-        echo(f'  {update.Old.Name}: {update.Old.Version} -> {update.New}')
-    
+        f'{len(updates)} update found',
+        f'{len(updates)} updates found',
+        int(has_updates) + 1))
+
     if total_size >= 0:
         echo(f'After this operation, an additional {total_size} B disk space will be used')
     else:
         echo(f'After this operation, {abs(total_size)} B disk space will be freed')
-    
+
+
     if not click.confirm('Continue?', default=True):
         return
 
@@ -375,5 +391,4 @@ def update(userinfo, name, all):
         os.path.join(os.path.dirname(name['path']), 'Mods'),
         new_metas,
         mod_list,
-        None,
     )
