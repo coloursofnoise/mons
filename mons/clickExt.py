@@ -42,7 +42,7 @@ class Install(click.ParamType):
         if self.exist:
             if not isinstance(value, configparser.SectionProxy):
                 if not installs.has_section(value):
-                    if not param.required:
+                    if not param.required and isinstance(ctx.command, DefaultArgsCommand):
                         raise MaybeDefault(default_primary(ctx, param, None))
                     else:
                         self.fail(f'Install {value} does not exist.', param, ctx)
