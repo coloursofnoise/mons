@@ -4,6 +4,7 @@ from click import echo_via_pager, echo
 import os
 
 from gettext import ngettext
+import re
 
 from ..clickExt import *
 from ..mons import UserInfo, pass_userinfo
@@ -16,18 +17,70 @@ from ..version import Version
 def cli(ctx):
     pass
 
-@cli.command(name='list', hidden=True)
+
+def format_mod_info(meta: ModMeta):
+    out = meta.Name
+    if meta.Blacklisted:
+        out += '\t(disabled)'
+    out += '\n\t{}'.format(meta.Version)
+    out += '\n\t{}'.format(os.path.basename(meta.Path))
+    if os.path.isdir(meta.Path):
+        out += '/'
+    out += '\n'
+    return out
+
+@cli.command(name='list', help='List installed mods.')
 @click.argument('name', type=Install(), required=False, callback=default_primary)
+@click.option('--enabled/--disabled', help='Filter by enabled/disabled mods.', default=None)
+@click.option('--valid/--invalid', help='Filter mods with valid everest.yaml.', default=None)
+@click.option('--dll/--no-dll', help='List mods that register DLLs.', default=None)
+@click.option('--dir/--zip', 'dir', flag_value=True, help='List mods in folders/zips.', default=None)
+@click.option('--no-zip/--no-dir', 'dir', flag_value=False, hidden=True, default=None)
+@click.option('-d', '--dependency', help='Filter mods by dependency.', metavar='MODID')
+@click.option('-s', '--search', help='Search for mods with a regex pattern.', metavar='QUERY')
+@click.option('-v', '--verbose', is_flag=True, help='Be verbose.')
 @pass_userinfo
-def list_mods(userinfo: UserInfo, name):
+def list_mods(userinfo: UserInfo, enabled, valid, name, dll, dir, dependency, search, verbose):
+    if valid == False:
+        if dll == True:
+            raise click.UsageError('--invalid and --dll options are incompatible.')
+        if dependency:
+            raise click.UsageError('--invalid and --dependency options are incompatible.')
+
     basePath = os.path.join(os.path.dirname(userinfo.installs[name]['path']), 'Mods')
-    files = os.listdir(basePath)
-    if os.name == 'nt':
-        for meta in installed_mods(basePath, include_folder=True, valid_only=False, include_blacklisted=True):
-            echo(f'{meta.Name}\t{meta.Version}', nl=False)
-            echo('(disabled)' if meta.Blacklisted else '')
+
+    installed = installed_mods(
+        basePath,
+        dirs=dir,
+        valid=valid,
+        blacklisted=enabled
+    )
+
+    gen = installed
+    if dll is not None:
+        gen = filter(lambda meta: not dll ^ bool(meta.DLL), gen)
+
+    if dependency:
+        gen = filter(lambda meta: next(filter(lambda d: dependency == d.Name, meta.Dependencies), None), gen)
+
+    if search:
+        pattern = re.compile(search, flags=re.I)
+        gen = filter(
+            lambda meta: bool(pattern.search(meta.Name) or pattern.search(os.path.basename(meta.Path))),
+            gen)
+
+    if verbose:
+        gen = (format_mod_info(meta) for meta in gen)
     else:
-        echo_via_pager(files)
+        gen = (f'{meta.Name}\t{meta.Version}' + ('\t(disabled)' if meta.Blacklisted else '') + '\n'
+            for meta in gen)
+
+    if os.name == 'nt':
+        for mod in gen:
+            echo(mod, nl=False)
+    else:
+        # Currently broken on Windows
+        echo_via_pager(gen)
 
 @cli.command(hidden=True)
 @click.argument('search')
@@ -82,8 +135,8 @@ def resolve_dependencies(
     everest_min = Version(1, 0, 0)
     echo('Resolving dependencies...')
     update_dict = update_dict or get_mod_list()
-    installed_list = installed_list or installed_mods(mods_folder, include_folder=True, include_blacklisted=True, with_size=True)
-    installed = {mod.Name: mod for mod in installed_list}
+    installed_temp = installed_list or installed_mods(mods_folder, valid=True, with_size=True)
+    installed = {mod.Name: mod for mod in installed_temp}
     if isinstance(mod_meta, List):
         sorted_deps = combined_dependencies(mod_meta)
         sorted_deps.sort(key=lambda dep: dep.Name)

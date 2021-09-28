@@ -26,7 +26,7 @@ from .version import Version
 from .errors import *
 from .clickExt import tempprogressbar
 
-from typing import IO, Union, List, Dict, Any, cast
+from typing import IO, Iterator, Union, List, Dict, Any, cast
 
 VANILLA_HASH = {
     'f1c4967fa8f1f113858327590e274b69': ('1.4.0.0', 'FNA'),
@@ -334,6 +334,7 @@ class ModMeta():
     def __init__(self, data: Dict):
         self.Name:str = str(data['Name'])
         self.Version = Version.parse(str(data['Version']))
+        self.DLL = str(data['DLL']) if 'DLL' in data else None
         self.Dependencies = [ModMeta(dep) for dep in data['Dependencies']] if 'Dependencies' in data else []
         self.OptionalDependencies = [ModMeta(dep) for dep in data['OptionalDependencies']] if 'OptionalDependencies' in data else []
 
@@ -358,7 +359,7 @@ class UpdateInfo():
         self.Url = url
         self.Mirror = mirror if mirror else url
 
-def read_mod_info(mod: Union[str, IO[bytes]], with_size=False):
+def read_mod_info(mod: Union[str, IO[bytes]], with_size=False, with_hash=False):
     meta = None
     try:
         if not isinstance(mod, str) or os.path.isfile and zipfile.is_zipfile(mod):
@@ -370,7 +371,8 @@ def read_mod_info(mod: Union[str, IO[bytes]], with_size=False):
                     meta = ModMeta(yml[0])
                     if zip.fp:
                         zip.fp.seek(0)
-                        meta.Hash = xxhash.xxh64_hexdigest(zip.fp.read())
+                        if with_hash:
+                            meta.Hash = xxhash.xxh64_hexdigest(zip.fp.read())
                         zip.fp.seek(0, os.SEEK_END)
                         meta.Size = zip.fp.tell() if with_size else 0
 
@@ -405,23 +407,58 @@ def read_blacklist(path: str):
     with open(path) as file:
         return [m.strip() for m in file.readlines() if not m.startswith('#')]
 
-def installed_mods(path: str, include_folder=False, valid_only=True, include_blacklisted=False, with_size=False):
+def mod_placeholder(path: str):
+    basename = os.path.basename(path)
+    meta = None
+    if os.path.isdir(path):
+        meta = ModMeta({
+            'Name': '_dir_' + basename,
+            'Version': Version(0, 0, 0)
+        })
+
+    elif zipfile.is_zipfile(path):
+        name = os.path.splitext(basename)[0]
+        meta = ModMeta({
+            'Name': '_zip_' + name,
+            'Version': Version(0, 0, 0)
+        })
+
+    if meta:
+        meta.Path = path
+        return meta
+
+    return None
+
+def installed_mods(
+    path: str,
+    dirs: bool=None,
+    valid: bool=None,
+    blacklisted: bool=None,
+    with_size=False,
+    with_hash=False,
+) -> Iterator[ModMeta]:
     files = os.listdir(path)
     if os.path.isfile(os.path.join(path, 'blacklist.txt')):
         blacklist = read_blacklist(os.path.join(path, 'blacklist.txt'))
-        if not include_blacklisted:
-            files = filter(lambda m: m not in blacklist, files)
+        if blacklisted is not None:
+            files = filter(lambda m: blacklisted ^ (m in blacklist), files)
 
-    mods: List[ModMeta] = []
     for file in files:
-        if include_folder or not os.path.isdir(os.path.join(path, file)):
-            mod = read_mod_info(os.path.join(path, file), with_size=with_size)
-            if not mod:
+        modpath = os.path.join(path, file)
+        if dirs is not None:
+            if dirs ^ bool(os.path.isdir(modpath)):
                 continue
-            if blacklist and file in blacklist:
-                mod.Blacklisted = True
-            mods.append(mod)
-    return mods
+
+        mod = read_mod_info(modpath, with_size=with_size, with_hash=with_hash)
+        if valid is not None:
+            if valid ^ bool(mod):
+                continue
+        mod = mod or mod_placeholder(modpath)
+        if not mod:
+            continue
+        if blacklist and file in blacklist:
+            mod.Blacklisted = True
+        yield mod
 
 def enable_mod(path: str, mod: str):
     blacklist_path = os.path.join(path, 'blacklist.txt')

@@ -45,13 +45,13 @@ class Version:
             return True
         elif (self.Major == other.Major and
             self.Minor == other.Minor and
-            self.Build < other.Build
+            self.Build > other.Build
         ):
             return True
         elif (self.Major == other.Major and
             self.Minor == other.Minor and
             self.Build == other.Build and
-            self.Revision < other.Revision
+            self.Revision > other.Revision
         ):
             return True
         return False
