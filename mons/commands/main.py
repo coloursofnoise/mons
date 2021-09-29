@@ -213,7 +213,7 @@ def install(userinfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
         try:
             meta = getBuildDownload(build, 'olympus-meta')
             with zipfile.ZipFile(io.BytesIO(meta.read())) as file:
-                size = int(file.read('olympus-meta/size.txt').decode('utf-16'))
+                size = int(file.read('olympus-meta/size.txt'))
         except:
             size = 0
 
