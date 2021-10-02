@@ -38,10 +38,11 @@ def format_mod_info(meta: ModMeta):
 @click.option('--dir/--zip', 'dir', flag_value=True, help='List mods in folders/zips.', default=None)
 @click.option('--no-zip/--no-dir', 'dir', flag_value=False, hidden=True, default=None)
 @click.option('-d', '--dependency', help='Filter mods by dependency.', metavar='MODID')
-@click.option('-s', '--search', help='Search for mods with a regex pattern.', metavar='QUERY')
+@click.option('-s', '--search', help='Filter mods with a regex pattern.', metavar='QUERY')
 @click.option('-v', '--verbose', is_flag=True, help='Be verbose.')
 @pass_userinfo
 def list_mods(userinfo: UserInfo, enabled, valid, name, dll, dir, dependency, search, verbose):
+    '''List installed mods.'''
     if valid == False:
         if dll == True:
             raise click.UsageError('--invalid and --dll options are incompatible.')
@@ -208,10 +209,13 @@ def resolve_dependencies(
 @cli.command(no_args_is_help=True)
 @click.argument('name', type=Install(), required=False, callback=default_primary)
 @click.argument('mod')
-@click.option('--search', is_flag=True)
+@click.option('--search', is_flag=True, help='Use the Celeste mod search API to find a mod.')
 @click.option('--random', is_flag=True, hidden=True)
 @pass_userinfo
 def add(userinfo: UserInfo, name, mod: str, search, random):
+    '''Add a mod.
+
+    MOD can be a mod ID, local path, zip file, GameBanana page, or GameBanana submission ID.'''
     install = userinfo.installs[name]
     url = None
     filename = None
@@ -330,6 +334,7 @@ def remove(name, mod):
 @click.option('--upgrade-only', is_flag=True, help='Only update if latest file is a higher version')
 @pass_userinfo
 def update(userinfo, name, all, enabled, upgrade_only):
+    '''Update installed mods.'''
     if not (all or enabled):
         raise click.UsageError('this command can currently only be used with the --all or --enabled option')
 
