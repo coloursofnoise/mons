@@ -10,6 +10,7 @@ import hashlib
 import xxhash
 import zipfile
 import shutil
+from contextlib import contextmanager
 
 import urllib.request
 import urllib.parse
@@ -39,14 +40,14 @@ def fileExistsInFolder(path: str, filename: str, forceName=True, log=False) -> U
         if not forceName or os.path.basename(path) == filename:
             installPath = path
         elif log:
-            echo(f'error: file `{installPath}` must be called {filename}')
+            echo(f'Error: file `{installPath}` must be called {filename}')
     elif os.path.isdir(path):
         if os.path.isfile(os.path.join(path, filename)):
             installPath = os.path.join(path, filename)
         elif log:
-            echo(f'error: {filename} file could not be found in `{installPath}`')
+            echo(f'Error: {filename} file could not be found in `{installPath}`')
     elif log:
-        echo(f'error: `{path}` could not be resolved')
+        echo(f'Error: `{path}` could not be resolved')
     return installPath
 
 def getMD5Hash(path: str) -> str:
@@ -58,13 +59,13 @@ def getMD5Hash(path: str) -> str:
             chunk = f.read(8129)
     return file_hash.hexdigest()
 
-def unpack(zip: zipfile.ZipFile, root: str, prefix=''):
+def unpack(zip: zipfile.ZipFile, root: str, prefix='', label='Extracting'):
     totalSize = 0
     for zipinfo in zip.infolist():
         if not prefix or zipinfo.filename.startswith(prefix):
             totalSize += zipinfo.file_size
 
-    with progressbar(length=totalSize, label='Extracting') as bar:
+    with progressbar(length=totalSize, label=label) as bar:
         for zipinfo in zip.infolist():
             if not prefix or zipinfo.filename.startswith(prefix):
                 zip.extract(zipinfo, root)
@@ -188,6 +189,22 @@ def write_with_progress(
             os.remove(dest)
         shutil.move(temp_dest, dest)
 
+@contextmanager
+def relocated_file(src, dest):
+    file = shutil.move(src, dest)
+    try:
+        yield file
+    finally:
+        shutil.move(file, src)
+
+@contextmanager
+def copied_file(src, dest):
+    file = shutil.copy(src, dest)
+    try:
+        yield file
+    finally:
+        os.remove(file)
+
 def getCelesteVersion(path, hash=None):
     hash = hash or getMD5Hash(path)
     version = VANILLA_HASH.get(hash, '')
@@ -234,7 +251,7 @@ def parseExeInfo(path):
 
     return hasEverest, everestBuild, framework
 
-def getInstallInfo(userInfo, install) -> Union[Dict[str, Any], configparser.SectionProxy]:
+def getInstallInfo(userInfo: UserInfo, install: str) -> configparser.SectionProxy:
     path = userInfo.installs[install]['Path']
     mainHash = getMD5Hash(path)
     if userInfo.cache.has_section(install) and userInfo.cache[install].get('Hash', '') == mainHash:
@@ -265,10 +282,10 @@ def getInstallInfo(userInfo, install) -> Union[Dict[str, Any], configparser.Sect
         info['Framework'] = framework
 
     info['Hash'] = mainHash
-    userInfo.cache[install] = info.copy() # otherwise it makes all keys in info lowercase
-    return info
+    userInfo.cache[install] = info # otherwise it makes all keys in info lowercase
+    return userInfo.cache[install]
 
-def buildVersionString(installInfo: Union[Dict[str, Any], configparser.SectionProxy]) -> str:
+def buildVersionString(installInfo: configparser.SectionProxy) -> str:
     versionStr = installInfo.get('CelesteVersion', 'unknown')
     framework = installInfo.get('Framework', None)
     if framework:
@@ -279,10 +296,10 @@ def buildVersionString(installInfo: Union[Dict[str, Any], configparser.SectionPr
     else:
         hasEverest = installInfo.get('Everest', None)
         if hasEverest:
-            versionStr += f' + Everest(unknown version)'
+            versionStr += ' + Everest(unknown version)'
     return versionStr
 
-def updateCache(userInfo, install):
+def updateCache(userInfo: UserInfo, install: str):
     path = userInfo.installs[install]['Path']
     newHash = getMD5Hash(path)
 
@@ -296,7 +313,7 @@ def updateCache(userInfo, install):
         userInfo.cache[install]['CelesteVersion'] = celesteversion
     pass
 
-def parseVersionSpec(string: str) -> int:
+def parseVersionSpec(string: str):
     if string.startswith('1.') and string.endswith('.0'):
         string = string[2:-2]
     if string.isdigit():
@@ -306,23 +323,33 @@ def parseVersionSpec(string: str) -> int:
 
     return buildnumber
 
-def getLatestBuild(branch: str) -> int:
-    builds = json.loads(urllib.request.urlopen('https://dev.azure.com/EverestAPI/Everest/_apis/build/builds?api-version=6.0').read())['value']
-    for build in builds:
-        if not (build['status'] == 'completed' and build['result'] == 'succeeded'):
-            continue
-        if not (build['reason'] == 'manual' or build['reason'] == 'individualCI'):
-            continue
+def getLatestBuild(branch: str):
+    base_URL = 'https://dev.azure.com/EverestAPI/Everest/_apis/build/builds?'
+    filters = [
+        'statusFilter=completed',
+        'resultFilter=succeeded',
+        'branchName={0}'.format(branch
+            if branch == '' or branch.startswith(('refs/heads/', 'refs/pull/'))
+            else 'refs/heads/' + branch),
+        'api-version=6.0',
+        '$top=1',
+    ]
+    request = base_URL + '&'.join(filters)
+    response = json.load(urllib.request.urlopen(request))
+    if response['count'] < 1:
+        return None
+    elif response['count'] > 1:
+        raise Exception('Unexpected number of builds: {0}'.format(response['count']))
 
-        if not branch or branch == build['sourceBranch'].replace('refs/heads/', ''):
-            try:
-                return int(build['id']) + 700
-            except:
-                pass
-    echo(f'error: `{branch}` branch could not be found')
-    return False
+    build = response['value'][0]
+    id = build['id']
+    try:
+        return int(id) + 700
+    except:
+        pass
+    return None
 
-def getBuildDownload(build: int, artifactName='olympus-build'):
+def getBuildDownload(build: int, artifactName: str='olympus-build'):
     return urllib.request.urlopen(f'https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts?artifactName={artifactName}&api-version=6.0&%24format=zip')
 
 class ModMeta():
