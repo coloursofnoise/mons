@@ -205,17 +205,24 @@ def resolve_dependencies(
         if click.confirm('Update Everest?'):
             mons_cli.main(args=['install', install.name, str(everest_min)])
 
-@cli.command()
+@cli.command(no_args_is_help=True)
 @click.argument('name', type=Install(), required=False, callback=default_primary)
 @click.argument('mod')
 @click.option('--search', is_flag=True)
+@click.option('--random', is_flag=True, hidden=True)
 @pass_userinfo
-def add(userinfo: UserInfo, name, mod: str, search):
+def add(userinfo: UserInfo, name, mod: str, search, random):
     install = userinfo.installs[name]
     url = None
     filename = None
     file = None
     mod_list = None
+
+    if random:
+        mod = urllib.request.urlopen('https://max480-random-stuff.appspot.com/celeste/random-map').url
+
+    if not mod:
+        raise click.UsageError('Missing argument \'MOD\'')
 
     # Query mod search API
     if search:
@@ -315,10 +322,6 @@ def remove(name, mod):
     pass
 
 
-def get_size_diff(mod, url, old):
-    request = urllib.request.Request(url, method='HEAD')
-    return int(urllib.request.urlopen(request).headers['Content-Length']) - old
-
 @cli.command()
 @click.argument('name', type=Install(resolve_install=True), required=False, callback=default_primary)
 #@click.argument('mod', required=False)
@@ -341,28 +344,24 @@ def update(userinfo, name, all, enabled, upgrade_only):
         installed = installed_mods(mods_folder, blacklisted=enabled, dirs=False, valid=True, with_size=True, with_hash=True)
         updater_blacklist = os.path.join(mods_folder, 'updaterblacklist.txt')
         updater_blacklist = os.path.exists(updater_blacklist) and read_blacklist(updater_blacklist)
-        with futures.ThreadPoolExecutor() as executor:
-            requests: List[futures.Future] = []
-            for meta in installed:
-                if meta.Name in mod_list and (not updater_blacklist or os.path.basename(meta.Path) not in updater_blacklist):
-                    server = mod_list[meta.Name]
-                    latest_hash = server['xxHash'][0]
-                    latest_version = Version.parse(server['Version'])
-                    if meta.Hash and latest_hash != meta.Hash and (not upgrade_only or latest_version > meta.Version):
-                        update = UpdateInfo(
-                            meta,
-                            latest_version,
-                            server['URL'],
-                        )
-                        if not has_updates:
-                            echo('Updates available:')
-                            has_updates = True
-                        echo(f'  {update.Old.Name}: {update.Old.Version} -> {update.New}')
-                        requests.append(executor.submit(get_size_diff, update.Old.Name, update.Url, update.Old.Size))
-                        updates.append(update)
+        for meta in installed:
+            if meta.Name in mod_list and (not updater_blacklist or os.path.basename(meta.Path) not in updater_blacklist):
+                server = mod_list[meta.Name]
+                latest_hash = server['xxHash'][0]
+                latest_version = Version.parse(server['Version'])
+                if meta.Hash and latest_hash != meta.Hash and (not upgrade_only or latest_version > meta.Version):
+                    update = UpdateInfo(
+                        meta,
+                        latest_version,
+                        server['URL'],
+                    )
+                    if not has_updates:
+                        echo('Updates available:')
+                        has_updates = True
+                    echo(f'  {update.Old.Name}: {update.Old.Version} -> {update.New}')
+                    updates.append(update)
+                    total_size += server['Size'] - update.Old.Size
 
-            for req in requests:
-                total_size += req.result()
 
     if not has_updates:
         echo('All mods up to date')
@@ -371,7 +370,7 @@ def update(userinfo, name, all, enabled, upgrade_only):
     echo(ngettext(
         f'{len(updates)} update found',
         f'{len(updates)} updates found',
-        int(has_updates) + 1))
+        len(updates)))
 
     if total_size >= 0:
         echo(f'After this operation, an additional {total_size} B disk space will be used')
