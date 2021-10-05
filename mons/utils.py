@@ -58,9 +58,16 @@ def unpack(zip: zipfile.ZipFile, root: str, prefix='', label='Extracting'):
 
     with progressbar(length=totalSize, label=label) as bar:
         for zipinfo in zip.infolist():
-            if not prefix or zipinfo.filename.startswith(prefix):
-                zip.extract(zipinfo, root)
-                bar.update(zipinfo.file_size)
+            if not zipinfo.filename or zipinfo.filename.endswith('/'):
+                continue
+
+            if prefix:
+                if not zipinfo.filename.startswith(prefix):
+                    continue
+                zipinfo.filename = zipinfo.filename[len(prefix):]
+
+            zip.extract(zipinfo, root)
+            bar.update(zipinfo.file_size)
 
 # shutils.copytree(dirs_exist_ok) replacement https://stackoverflow.com/a/15824216
 def copy_recursive_force(src, dest, ignore=None):
