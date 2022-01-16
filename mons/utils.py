@@ -9,12 +9,14 @@ from datetime import datetime
 import hashlib
 import xxhash
 import zipfile
+import gzip
 import shutil
 from contextlib import contextmanager
 
 import urllib.request
 import urllib.parse
 import urllib.response
+from http.client import HTTPResponse
 
 from click import echo, progressbar
 
@@ -107,18 +109,37 @@ def folder_size(start_path = '.'):
 
     return total_size
 
+def read_with_progress(
+    input,
+    output,
+    size=0,
+    blocksize=4096,
+    label='',
+    clear_progress=False,
+):
+    bar = tempprogressbar if clear_progress else progressbar
+    with bar(length=size, label=label) as bar:
+        while True:
+            buf = input.read(blocksize)
+            if not buf:
+                break
+            output.write(buf)
+            bar.update(len(buf))
+
 def download_with_progress(
-    src,
+    src: Union[str, urllib.request.Request, HTTPResponse],
     dest: Union[str, None],
     label: str=None,
     atomic: bool=False,
-    clear: bool=False
+    clear: bool=False,
+    response_handler=None,
 ):
     if not dest and atomic:
         raise ValueError('atomic download cannot be used without destination file')
 
-    response = urllib.request.urlopen(src) if isinstance(src, str) else src
-    size = int(response.headers.get('content-length'))
+    response = urllib.request.urlopen(src) if isinstance(src, (str, urllib.request.Request)) else src
+    content = response_handler(response) if response_handler else response
+    size = int(response.headers.get('Content-Length') or 100)
     blocksize = max(4096, size//100)
     temp_dest = ''
     if dest is None:
@@ -130,14 +151,7 @@ def download_with_progress(
         io = open(temp_dest, 'wb')
     else:
         io = open(dest, 'wb')
-    bar = tempprogressbar if clear else progressbar
-    with bar(length=size, label=label) as bar:
-        while True:
-            buf = response.read(blocksize)
-            if not buf:
-                break
-            io.write(buf)
-            bar.update(len(buf))
+    read_with_progress(content, io, size, blocksize, label, clear)
 
     if dest is None and isinstance(io, BytesIO):
         io.seek(0)
@@ -174,14 +188,7 @@ def write_with_progress(
     src.seek(0)
     blocksize = max(4096, size//100)
     with io as file:
-        bar = tempprogressbar if clear else progressbar
-        with bar(length=size, label=label) as bar:
-            while True:
-                buf = src.read(blocksize)
-                if not buf:
-                    break
-                file.write(buf)
-                bar.update(len(buf))
+        read_with_progress(src, file, size, blocksize, label, clear)
 
     src.close()
     if atomic:
@@ -422,7 +429,11 @@ def read_mod_info(mod: Union[str, IO[bytes]], with_size=False, with_hash=False):
 
 def get_mod_list():
     update_url = urllib.request.urlopen('https://everestapi.github.io/modupdater.txt').read()
-    return yaml.safe_load(download_with_progress(update_url.decode(), None, 'Downloading update list'))
+    request = urllib.request.Request(update_url.decode(), headers={
+        'User-Agent': 'mons/' + '; gzip',
+        'Accept-Encoding': 'gzip'
+    })
+    return yaml.safe_load(download_with_progress(request, None, 'Downloading update list', response_handler=gzip.open))
 
 def search_mods(search):
     search = urllib.parse.quote_plus(search)
@@ -465,6 +476,7 @@ def installed_mods(
     with_hash=False,
 ) -> Iterator[ModMeta]:
     files = os.listdir(path)
+    blacklist = None
     if os.path.isfile(os.path.join(path, 'blacklist.txt')):
         blacklist = read_blacklist(os.path.join(path, 'blacklist.txt'))
         if blacklisted is not None:

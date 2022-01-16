@@ -206,7 +206,7 @@ def resolve_dependencies(
         if click.confirm('Update Everest?'):
             mons_cli.main(args=['install', install.name, str(everest_min)])
 
-@cli.command(no_args_is_help=True)
+@cli.command(no_args_is_help=True, cls=DefaultArgsCommand)
 @click.argument('name', type=Install(), required=False, callback=default_primary)
 @click.argument('mod')
 @click.option('--search', is_flag=True, help='Use the Celeste mod search API to find a mod.')
@@ -317,6 +317,8 @@ def add(userinfo: UserInfo, name, mod: str, search, random):
             )
         if meta:
             resolve_dependencies(userinfo.cache[name], os.path.join(os.path.dirname(install['path']), 'Mods'), meta, mod_list)
+    else:
+        click.ClickException(f'Mod \'{mod}\' could not be resolved.')
 
 
 @cli.command(hidden=True)
@@ -388,7 +390,11 @@ def update(userinfo, name, all, enabled, upgrade_only):
 
     new_metas = []
     for update in updates:
-        download_with_progress(update.Url, update.Old.Path, f'Downloading mod: {update.Old.Name}', atomic=True)
+        try:
+            download_with_progress(update.Url, update.Old.Path, f'Downloading mod: {update.Old.Name}', atomic=True)
+        except:
+            if update.Url != update.Mirror:
+                download_with_progress(update.Mirror, update.Old.Path, f'Downloading mod: {update.Old.Name}', atomic=True)
         new_metas.append(read_mod_info(update.Old.Path))
     resolve_dependencies(
         userinfo.cache[name.name],
