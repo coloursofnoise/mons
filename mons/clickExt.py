@@ -19,7 +19,7 @@ class CatchErrorsGroup(click.Group):
                 sys.argv.remove('--debug')
             super().main(args=args, prog_name=prog_name, complete_var=complete_var, standalone_mode=standalone_mode, windows_expand_args=windows_expand_args, **extra)
         except Exception as e:
-            if debug:
+            if debug or os.environ.get("MONS_DEBUG", 'false') == 'true':
                 click.echo('\033[0;31m', nl=False)
                 raise
             else:

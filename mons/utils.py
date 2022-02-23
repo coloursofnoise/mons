@@ -16,6 +16,9 @@ from contextlib import contextmanager
 import urllib.request
 import urllib.parse
 import urllib.response
+opener=urllib.request.build_opener()
+opener.addheaders=[('User-Agent','Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1941.0 Safari/537.36')]
+urllib.request.install_opener(opener)
 from http.client import HTTPResponse
 
 from click import echo, progressbar
@@ -29,12 +32,22 @@ from .version import Version
 from .errors import *
 from .clickExt import tempprogressbar
 
-from typing import IO, Iterator, Union, List, Dict, Any, cast
+from typing import IO, Iterable, Iterator, Union, List, Dict, cast
 
 VANILLA_HASH = {
     'f1c4967fa8f1f113858327590e274b69': ('1.4.0.0', 'FNA'),
     '107cd146973f2c5ec9fb0b4f81c1588a': ('1.4.0.0', 'XNA'),
 }
+
+def partition(pred, iterable):
+    trues = []
+    falses = []
+    for item in iterable:
+        if pred(item):
+            trues.append(item)
+        else:
+            falses.append(item)
+    return trues, falses
 
 def fileExistsInFolder(path: str, filename: str, forceName=True, log=False) -> Union[str,None]:
     installPath = None
@@ -108,6 +121,10 @@ def folder_size(start_path = '.'):
                 total_size += os.path.getsize(fp)
 
     return total_size
+
+def get_download_size(url: str, initial_size: int=0):
+    request = urllib.request.Request(url, method='HEAD')
+    return int(urllib.request.urlopen(request).headers['Content-Length']) - initial_size
 
 def read_with_progress(
     input,
@@ -359,32 +376,86 @@ def getLatestBuild(branch: str):
 def getBuildDownload(build: int, artifactName: str='olympus-build'):
     return urllib.request.urlopen(f'https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts?artifactName={artifactName}&api-version=6.0&%24format=zip')
 
-class ModMeta():
+class _ModMeta_Base():
+    def __init__(self, name:str, version:Union[str, Version]):
+        self.Name = name
+        if isinstance(version, str):
+            version = Version.parse(version)
+        self.Version = version
+
+    @classmethod
+    def fromDict(cls, data):
+        return _ModMeta_Base(str(data['Name']), str(data['Version']))
+
+    def __repr__(self) -> str:
+        return f'{self.Name}: {self.Version}'
+
+class _ModMeta_Deps():
+    def __init__(
+        self,
+        dependencies:List[_ModMeta_Base],
+        optionals:List[_ModMeta_Base],
+    ):
+        self.Dependencies = dependencies
+        self.OptionalDependencies = optionals
+        assert isinstance(self.Dependencies, List)
+
+    @classmethod
+    def fromDict(cls, data):
+        return _ModMeta_Deps(
+            [_ModMeta_Base.fromDict(dep) for dep in data['Dependencies']],
+            [_ModMeta_Base.fromDict(dep) for dep in data['OptionalDependencies']]
+        )
+
+class ModMeta(_ModMeta_Base,_ModMeta_Deps):
     Hash: Union[str, None]
     Path: str
-    Size: int
     Blacklisted: bool=False
 
     def __init__(self, data: Dict):
-        self.Name:str = str(data['Name'])
-        self.Version = Version.parse(str(data['Version']))
+        _ModMeta_Base.__init__(self, str(data['Name']), str(data['Version']))
+        _ModMeta_Deps.__init__(self,
+            [_ModMeta_Base.fromDict(dep) for dep in data.get('Dependencies', [])],
+            [_ModMeta_Base.fromDict(dep) for dep in data.get('OptionalDependencies', [])]
+        )
         self.DLL = str(data['DLL']) if 'DLL' in data else None
-        self.Dependencies = [ModMeta(dep) for dep in data['Dependencies']] if 'Dependencies' in data else []
-        self.OptionalDependencies = [ModMeta(dep) for dep in data['OptionalDependencies']] if 'OptionalDependencies' in data else []
+        self.Size = int(data['Size']) if 'Size' in data else 0
 
-def combined_dependencies(mods: List[ModMeta]) -> List[ModMeta]:
-    temp_dict: Dict[str, ModMeta] = {}
+class ModDownload():
+    def __init__(self, meta: Union[ModMeta, Dict], url: str, mirror: str=None):
+        if isinstance(meta, Dict):
+            meta = ModMeta(meta)
+        self.Meta = meta
+        self.Url = url
+        self.Mirror = mirror if mirror else url
+
+def _merge_dependencies(dict, dep: _ModMeta_Base):
+    if dep.Name in dict:
+        if dep.Version.Major != dict[dep.Name].Version.Major:
+            raise ValueError('Incompatible dependencies encountered: ' + \
+                f'{dep.Name} {dep.Version} vs {dep.Name} {dict[dep.Name].Version}')
+        elif dep.Version > dict[dep.Name].Version:
+            dict[dep.Name] = dep
+    else:
+        dict[dep.Name] = dep
+
+def recurse_dependencies(mods: Iterable[_ModMeta_Base], dependency_graph, dict):
     for mod in mods:
-        for dep in mod.Dependencies:
-            if dep.Name in temp_dict:
-                if dep.Version.Major != temp_dict[dep.Name].Version.Major:
-                    raise ValueError(f'Incompatible dependencies encountered: ' + \
-                        f'{dep.Name} {dep.Version} vs {dep.Name} {temp_dict[dep.Name].Version}')
-                elif dep.Version > temp_dict[dep.Name].Version:
-                    temp_dict[dep.Name] = dep
-            else:
-                temp_dict[dep.Name] = dep
-    return [dep for _, dep in temp_dict.items()]
+        _merge_dependencies(dict, mod)
+        if mod.Name in dependency_graph:
+            recurse_dependencies(_ModMeta_Deps.fromDict(dependency_graph[mod.Name]).Dependencies, dependency_graph, dict)
+
+def combined_dependencies(mods: Iterable[_ModMeta_Base], dependency_graph) -> Dict[str, _ModMeta_Base]:
+    deps = {}
+    for mod in mods:
+        dependencies = None
+        if mod.Name in dependency_graph:
+            dependencies = _ModMeta_Deps.fromDict(dependency_graph[mod.Name]).Dependencies
+        elif isinstance(mod, _ModMeta_Deps):
+            dependencies = mod.Dependencies
+        if dependencies:
+            recurse_dependencies(dependencies, dependency_graph, deps)
+    return deps
 
 class UpdateInfo():
     def __init__(self, old: ModMeta, new: Version, url: str, mirror: str=None):
@@ -427,13 +498,20 @@ def read_mod_info(mod: Union[str, IO[bytes]], with_size=False, with_hash=False):
         meta.Path = mod if isinstance(mod, str) else ''
     return meta
 
-def get_mod_list():
+def get_mod_list() -> Dict[str, Dict]:
     update_url = urllib.request.urlopen('https://everestapi.github.io/modupdater.txt').read()
     request = urllib.request.Request(update_url.decode(), headers={
         'User-Agent': 'mons/' + '; gzip',
         'Accept-Encoding': 'gzip'
     })
     return yaml.safe_load(download_with_progress(request, None, 'Downloading update list', response_handler=gzip.open))
+
+def get_dependency_graph() -> Dict[str, Dict]:
+    request = urllib.request.Request('https://max480-random-stuff.appspot.com/celeste/mod_dependency_graph.yaml?format=everestyaml', headers={
+        'User-Agent': 'mons/' + '; gzip',
+        'Accept-Encoding': 'gzip',
+    })
+    return yaml.safe_load(download_with_progress(request, None, 'Downloading dependency graph', response_handler=gzip.open))
 
 def search_mods(search):
     search = urllib.parse.quote_plus(search)
@@ -469,11 +547,12 @@ def mod_placeholder(path: str):
 
 def installed_mods(
     path: str,
+    *,
     dirs: bool=None,
     valid: bool=None,
     blacklisted: bool=None,
-    with_size=False,
-    with_hash=False,
+    with_size: bool=False,
+    with_hash: bool=False,
 ) -> Iterator[ModMeta]:
     files = os.listdir(path)
     blacklist = None

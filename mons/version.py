@@ -7,6 +7,9 @@ class Version:
 
     @classmethod
     def parse(cls, version: str) -> 'Version':
+        if version == 'NoVersion':
+            return Version(1, 0)
+
         # discard semver prerelease version
         strArr = version.split('-', maxsplit=1)[0].split('.')
         if 4 > len(strArr) < 2 or not all(n.isdigit() for n in strArr):
@@ -16,6 +19,10 @@ class Version:
         return Version(*arr)
 
     def satisfies(self, required: 'Version'):
+        # Special case: Always True if version == 0.0.*
+        if self.Major == 0 and self.Minor == 0:
+            return True
+
         # Major version, breaking changes, must match.
         if self.Major != required.Major:
             return False
