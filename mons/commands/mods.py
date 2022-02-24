@@ -1,9 +1,11 @@
 import itertools
 from typing import Iterable, Sequence, Tuple, Any, cast
+from urllib.parse import ParseResult
 import click
 from click import echo_via_pager, echo
 
 import os
+import shutil
 
 from gettext import ngettext
 import re
@@ -122,8 +124,7 @@ def prompt_mod_selection(options: Dict, max: int=-1) -> Union[ModDownload,None]:
             echo(f'Selected mod: {key} {options[key]["Version"]}')
             options[key]['Name'] = key
             selection = ModDownload(options[key], options[key]["URL"])
-        else:
-            echo('Aborted!')
+
     return selection
 
 def resolve_dependencies(mods: Iterable[ModMeta]):
@@ -144,16 +145,17 @@ def resolve_mods(mods: Sequence[str]) -> Tuple[List[ModDownload], List[str]]:
     unresolved = list()
     mod_list = get_mod_list()
     for mod in mods:
+        parsed_url = urllib.parse.urlparse(mod)
         download = None
         url = None
 
         # Install from local filesystem
-        if mod.endswith('.zip') and (os.path.exists(mod) or mod.startswith('file://')):
-            if not mod.startswith('file://'):
-                mod = 'file://' + os.path.abspath(mod)
-            meta = read_mod_info(mod[len('file://'):])
+        if (mod.endswith('.zip') and os.path.exists(mod)) or (parsed_url.scheme == 'file' and parsed_url.path.endswith('.zip')):
+            if not parsed_url.scheme == 'file':
+                parsed_url = ParseResult('file', '', os.path.abspath(mod), '', '', '')
+            meta = read_mod_info(parsed_url.path)
             if meta:
-                download = ModDownload(meta, mod, None)
+                download = ModDownload(meta, urllib.parse.urlunparse(parsed_url), None)
                 echo(f'Mod found: {meta}')
 
         # Mod ID match
@@ -164,8 +166,8 @@ def resolve_mods(mods: Sequence[str]) -> Tuple[List[ModDownload], List[str]]:
             echo(f'Mod found: {mod} {mod_info["Version"]}')
 
         # GameBanana submission URL
-        elif mod.startswith(('https://gamebanana.com/mods', 'http://gamebanana.com/mods')) and mod.split('/')[-1].isdigit():
-            modID = int(mod.split('/')[-1])
+        elif parsed_url.scheme in ('http', 'https') and parsed_url.path.startswith('gamebanana.com/mods') and parsed_url.path.split('/')[-1].isdigit():
+            modID = int(parsed_url.path.split('/')[-1])
             matches = {key: val for key, val in mod_list.items() if modID == val['GameBananaId']}
             if len(matches) > 0:
                 download = prompt_mod_selection(matches)
@@ -189,7 +191,7 @@ def resolve_mods(mods: Sequence[str]) -> Tuple[List[ModDownload], List[str]]:
                 else:
                     echo('Aborted!')
 
-        elif mod.startswith(('http://', 'https://')) and mod.endswith('.zip'):
+        elif parsed_url.scheme in ('http', 'https') and parsed_url.path.endswith('.zip'):
             url = mod
 
         # Possible GameBanana Submission ID
@@ -222,6 +224,7 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
 
     MOD can be a mod ID, local path, zip file, GameBanana page, or GameBanana submission ID.'''
     install = userinfo.installs[name]
+    install_cache = userinfo.cache[name]
     mod_folder = os.path.join(os.path.dirname(install['path']), 'Mods')
     mod_list = get_mod_list()
 
@@ -232,9 +235,9 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
     unresolved: List[str] = list()
 
     if random:
-        unresolved = [urllib.request.urlopen('https://max480-random-stuff.appspot.com/celeste/random-map').url]
+        mods = (urllib.request.urlopen('https://max480-random-stuff.appspot.com/celeste/random-map').url,)
 
-    elif not mods:
+    if not mods:
         raise click.UsageError('Missing argument \'MODS\'')
 
     # Query mod search API
@@ -247,12 +250,13 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
 
         if len(matches) < 1:
             echo('No results found.')
-            return
+            exit()
         
         match = prompt_mod_selection(matches, max=9)
-        if match:
-            resolved = [match]
-    
+        if not match:
+            raise click.Abort()
+        resolved = [match]
+
     else:
         resolved, unresolved = resolve_mods(mods)
 
@@ -264,22 +268,23 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
         echo(f'Downloading them all will use up to {format_bytes(download_size)} disk space.')
         if click.confirm('Download and attempt to resolve them before continuing?', True):
             for url in unresolved:
-                file = download_with_progress(url, None, f"Downloading {url}", clear=True)
-                meta = read_mod_info(file)
-                if meta:
-                    if meta.Name in installed_list:
-                        if os.path.isdir(installed_list[meta.Name].Path):
-                            raise IsADirectoryError("Could not overwrite non-zipped mod.")
-                        write_with_progress(file, installed_list[meta.Name].Path, atomic=True, clear=True)
+                with temporary_file(persist=True) as file:
+                    download_with_progress(url, file, f"Downloading {url}", clear=True)
+                    meta = read_mod_info(file)
+                    if meta:
+                        if meta.Name in installed_list:
+                            if os.path.isdir(installed_list[meta.Name].Path):
+                                raise IsADirectoryError("Could not overwrite non-zipped mod.")
+                            shutil.move(file, installed_list[meta.Name].Path)
+                        else:
+                            resolved.append(ModDownload(meta, f'file:{urllib.request.pathname2url(file)}'))
+                    elif click.confirm('This file does not seem to be an Everest mod. Install anyways?'):
+                        filename = click.prompt('Save as file')
+                        if filename:
+                            filename = filename if filename.endswith('.zip') else filename + '.zip'
+                            shutil.move(file, os.path.join(mod_folder, filename))
                     else:
-                        resolved.append(ModDownload(meta, url))
-                elif click.confirm('This file does not seem to be an Everest mod. Install anyways?'):
-                    filename = click.prompt('Save as file')
-                    if filename:
-                        filename = filename if filename.endswith('.zip') else filename + '.zip'
-                        write_with_progress(file, os.path.join(mod_folder, filename), atomic=True, clear=True)
-                else:
-                    echo(f'Skipped install for {url}.')
+                        echo(f'Skipped install for {url}.')
 
             unresolved = []
 
@@ -343,7 +348,7 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
             download_with_progress(mod.Url, os.path.join(mod_folder, mod.Meta.Name + '.zip'), f'{mod.Meta.Name}: {mod.Url}', True, True)
 
         everest_min = next((dep.Version for dep in unregistered if dep.Name == 'Everest'), Version(1, 0, 0))
-        current_everest = Version(1, install.getint('EverestBuild', fallback=0), 0)
+        current_everest = Version(1, install_cache.getint('everestbuild', fallback=0), 0)
         if not current_everest.satisfies(everest_min):
             echo(f'Installed Everest ({current_everest}) does not satisfy minimum requirement ({everest_min}).')
             if click.confirm('Update Everest?', True):

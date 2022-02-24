@@ -1,7 +1,9 @@
 from io import BufferedReader, BytesIO
 import os
+import atexit
 import configparser
 import json
+import tempfile
 import yaml
 from yaml.scanner import ScannerError
 
@@ -48,6 +50,12 @@ def partition(pred, iterable):
         else:
             falses.append(item)
     return trues, falses
+
+def tryExec(func, *params):
+    try:
+        func(*params)
+    except:
+        pass
 
 def fileExistsInFolder(path: str, filename: str, forceName=True, log=False) -> Union[str,None]:
     installPath = None
@@ -174,7 +182,7 @@ def download_with_progress(
         return io
     io.close()
 
-    if dest and atomic:
+    if isinstance(dest, str) and atomic:
         if os.path.isfile(dest):
             os.remove(dest)
         shutil.move(temp_dest, dest)
@@ -227,6 +235,18 @@ def copied_file(src, dest):
         yield file
     finally:
         os.remove(file)
+
+@contextmanager
+def temporary_file(persist=False):
+    fd, path = tempfile.mkstemp(suffix='_mons')
+    if persist:
+        atexit.register(tryExec, os.remove, path)
+    os.close(fd)
+    try:
+        yield path
+    finally:
+        if not persist and os.path.isfile(path):
+            os.remove(path)
 
 def getCelesteVersion(path, hash=None):
     hash = hash or getMD5Hash(path)
