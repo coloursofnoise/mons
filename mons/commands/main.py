@@ -101,8 +101,8 @@ def list(userInfo: UserInfo):
 @click.argument('name', type=Install(), required=False, callback=default_primary)
 @click.option('-v', '--verbose', is_flag=True)
 @pass_userinfo
-def info(userInfo: UserInfo, name, verbose):
-    '''Get information for a specific install'''
+def show(userInfo: UserInfo, name, verbose):
+    '''Display information for a specific install'''
     info = getInstallInfo(userInfo, name)
     primary = name == userInfo.config['user'].get('PrimaryInstall', fallback='')
     if verbose:
@@ -220,18 +220,10 @@ def install(userinfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
         if size > 0:
             echo('Downloading olympus-build.zip', nl=False)
             response = getBuildDownload(build, 'olympus-build')
+            response.headers['Content-Length'] = size
             artifactPath = os.path.join(installDir, 'olympus-build.zip')
             echo(f' to file {artifactPath}')
-            blocksize = max(4096, size//100)
-            with open(artifactPath, 'wb') as file:
-                with progressbar(length=size, label='Downloading') as bar:
-                    while True:
-                        buf = response.read(blocksize)
-                        if not buf:
-                            break
-                        file.write(buf)
-                        bar.update(len(buf))
-                    bar.update(bar.length - bar.pos)
+            download_with_progress(response, artifactPath, label='Downloading', clear=True)
             with zipfile.ZipFile(artifactPath) as wrapper:
                 with zipfile.ZipFile(wrapper.open('olympus-build/build.zip')) as artifact:
                     unpack(artifact, installDir, label='Extracting')

@@ -21,7 +21,8 @@ opener.addheaders=[('User-Agent','Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKi
 urllib.request.install_opener(opener)
 from http.client import HTTPResponse
 
-from click import echo, progressbar
+from click import echo
+from tqdm import tqdm
 
 import dnfile # https://github.com/malwarefrank/dnfile
 from dnfile.mdtable import AssemblyRefRow
@@ -30,7 +31,6 @@ from pefile import DIRECTORY_ENTRY # https://github.com/erocarrera/pefile
 from .config import *
 from .version import Version
 from .errors import *
-from .clickExt import tempprogressbar
 
 from typing import IO, Iterable, Iterator, Union, List, Dict, cast
 
@@ -80,7 +80,7 @@ def unpack(zip: zipfile.ZipFile, root: str, prefix='', label='Extracting'):
         if not prefix or zipinfo.filename.startswith(prefix):
             totalSize += zipinfo.file_size
 
-    with progressbar(length=totalSize, label=label) as bar:
+    with tqdm(total=totalSize, desc=label) as bar:
         for zipinfo in zip.infolist():
             if not prefix or zipinfo.filename.startswith(prefix):
                 zip.extract(zipinfo, root)
@@ -134,8 +134,7 @@ def read_with_progress(
     label='',
     clear_progress=False,
 ):
-    bar = tempprogressbar if clear_progress else progressbar
-    with bar(length=size, label=label) as bar:
+    with tqdm(total=size, desc=label, leave=(not clear_progress)) as bar:
         while True:
             buf = input.read(blocksize)
             if not buf:
@@ -255,7 +254,7 @@ def parseExeInfo(path):
 
     heapSize = stringHeap.sizeof()
     i = 0
-    with tempprogressbar(length=heapSize, label='Scanning exe') as bar:
+    with tqdm(total=heapSize, desc='Scanning exe', leave=False) as bar:
         while i < len(stringHeap.__data__):
             string = stringHeap.get(i)
             if string is None:
