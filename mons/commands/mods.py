@@ -1,4 +1,5 @@
 import itertools
+import time
 from typing import Iterable, Sequence, Tuple, Any, cast
 from urllib.parse import ParseResult
 import click
@@ -9,12 +10,12 @@ import shutil
 
 from gettext import ngettext
 import re
-from concurrent import futures
 
 from ..clickExt import *
 from ..mons import UserInfo, pass_userinfo
 from ..mons import cli as mons_cli
 from ..utils import *
+from ..downloading import download_threaded
 from ..version import Version
 from ..formatting import format_bytes
 
@@ -310,7 +311,7 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
         if count > 0:
             echo(f"\t{count} To Install:")
             for download in itertools.chain(deps_install, resolved):
-                echo(f"{download.Meta.Name}: {download.Meta.Version}")
+                echo(download.Meta)
         count = len(deps_update)
         if count > 0:
             echo(f"\t{count}To Update:")
@@ -320,13 +321,22 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
         if count > 0:
             echo(f"\t{count}To Enable:")
             for mod in deps_blacklisted:
-                echo(f"{mod.Name}: {mod.Version}")
+                echo(mod)
 
-        download_size = sum(
-            get_download_size(mod.Url, mod.Old.Size) if isinstance(mod, UpdateInfo) else mod.Meta.Size
-            for mod in itertools.chain(resolved, deps_install, deps_update)
+        # Hack to allow assigning to a variable out of scope
+        download_size_ref = [0]
+        def download_size_key(mod: Union[UpdateInfo, ModDownload]):
+            size = get_download_size(mod.Url, mod.Old.Size) if isinstance(mod, UpdateInfo) else mod.Meta.Size
+            download_size_ref[0] += size
+            return size
+
+        sorted_dep_downloads = sorted(
+            itertools.chain(deps_install, deps_update),
+            key = download_size_key
         )
+        sorted_main_downloads = sorted(resolved, key = download_size_key)
 
+        download_size = download_size_ref[0]
         if download_size >= 0:
             echo(f'After this operation, an additional {format_bytes(download_size)} disk space will be used')
         else:
@@ -334,18 +344,14 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
 
         click.confirm('Continue?', default=True, abort=True)
 
-        for mod in deps_install:
-            download_with_progress(mod.Url, os.path.join(mod_folder, mod.Meta.Name + '.zip'), f'{mod.Meta.Name}: {mod.Url}', True, True)
-        for mod in deps_update:
-            if os.path.isdir(mod.Old.Path):
-                echo("Could not update unzipped mod: " + os.path.basename(mod.Old.Path))
-            else:
-                download_with_progress(mod.Url, mod.Old.Path, f'{mod.Old.Name}: {mod.Url}', True, True)
-        for mod in itertools.chain(deps_update, deps_blacklisted):
-            filename = os.path.basename(mod.Old.Path if isinstance(mod, UpdateInfo) else mod.Path)
-            enable_mod(mod_folder, filename)
-        for mod in resolved:
-            download_with_progress(mod.Url, os.path.join(mod_folder, mod.Meta.Name + '.zip'), f'{mod.Meta.Name}: {mod.Url}', True, True)
+        start = time.perf_counter()
+        for mod in itertools.chain((mod.Old for mod in deps_update), deps_blacklisted):
+            enable_mod(mod_folder, os.path.basename(mod.Path))
+
+        download_threaded(mod_folder, sorted_dep_downloads, thread_count=10)
+        download_threaded(mod_folder, sorted_main_downloads, thread_count=5)
+        end = time.perf_counter()
+        tqdm.write(str.format('Downloaded files in {:3f} seconds.', end-start))
 
         everest_min = next((dep.Version for dep in unregistered if dep.Name == 'Everest'), Version(1, 0, 0))
         current_everest = Version(1, install_cache.getint('everestbuild', fallback=0), 0)

@@ -23,7 +23,7 @@ opener.addheaders=[('User-Agent','Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKi
 urllib.request.install_opener(opener)
 from http.client import HTTPResponse
 
-from click import echo
+from click import echo, Abort
 from tqdm import tqdm
 
 import dnfile # https://github.com/malwarefrank/dnfile
@@ -134,6 +134,8 @@ def get_download_size(url: str, initial_size: int=0):
     request = urllib.request.Request(url, method='HEAD')
     return int(urllib.request.urlopen(request).headers['Content-Length']) - initial_size
 
+_download_interrupt = False
+
 def read_with_progress(
     input,
     output,
@@ -142,8 +144,11 @@ def read_with_progress(
     label='',
     clear_progress=False,
 ):
-    with tqdm(total=size, desc=label, leave=(not clear_progress)) as bar:
+    with tqdm(total=size, desc=label, leave=(not clear_progress), unit_scale=True, unit='b', disable=False) as bar:
         while True:
+            if _download_interrupt:
+                raise Abort
+
             buf = input.read(blocksize)
             if not buf:
                 break
@@ -156,21 +161,22 @@ def download_with_progress(
     label: str=None,
     atomic: bool=False,
     clear: bool=False,
+    *,
     response_handler=None,
 ):
     if not dest and atomic:
         raise ValueError('atomic download cannot be used without destination file')
 
-    response = urllib.request.urlopen(src) if isinstance(src, (str, urllib.request.Request)) else src
+    response = urllib.request.urlopen(src, timeout=5) if isinstance(src, (str, urllib.request.Request)) else src
     content = response_handler(response) if response_handler else response
     size = int(response.headers.get('Content-Length') or 100)
-    blocksize = max(4096, size//100)
+    blocksize = 8192
     temp_dest = ''
     if dest is None:
         io = BytesIO()
     elif atomic:
         # yyyyMMdd-HHmmss
-        temp_dest = f'tmpdownload-{datetime.now().strftime("%Y%m%d-%H%M%S")}.zip.part'
+        temp_dest = f'{datetime.now().strftime("%Y%m%d-%H%M%S")}-{os.path.basename(dest)}.part'
         temp_dest = os.path.join(os.path.dirname(dest), temp_dest)
         io = open(temp_dest, 'wb')
     else:
@@ -201,7 +207,7 @@ def write_with_progress(
     temp_dest = ''
     if atomic:
         # yyyyMMdd-HHmmss
-        temp_dest = f'tmpdownload-{datetime.now().strftime("%Y%m%d-%H%M%S")}.zip.part'
+        temp_dest = f'{datetime.now().strftime("%Y%m%d-%H%M%S")}-{os.path.basename(dest)}.part'
         temp_dest = os.path.join(os.path.dirname(dest), temp_dest)
         io = open(temp_dest, 'wb')
     else:
