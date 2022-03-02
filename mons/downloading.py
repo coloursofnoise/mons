@@ -1,11 +1,13 @@
 import os
+import shutil
+from tempfile import TemporaryDirectory
 from typing import Sequence, Union
 from concurrent.futures import ThreadPoolExecutor, wait
 
 from tqdm import tqdm
 from click import Abort
 
-from .utils import ModDownload, UpdateInfo, download_with_progress
+from .utils import ModDownload, UpdateInfo, download_with_progress, nullcontext
 from . import utils
 
 def downloader(mod_folder, download):
@@ -24,16 +26,23 @@ def downloader(mod_folder, download):
     except Exception as e:
         tqdm.write(f'\nError downloading file {os.path.basename(dest)}: {e}')
 
-def download_threaded(mod_folder, downloads: Sequence[Union[ModDownload, UpdateInfo]], thread_count=8):
+def download_threaded(mod_folder, downloads: Sequence[Union[ModDownload, UpdateInfo]], late_downloads=None, thread_count=8):
     with ThreadPoolExecutor(max_workers=thread_count, thread_name_prefix='download_') as pool:
         futures = [pool.submit(downloader, mod_folder, download) for download in downloads]
-        try:
-            while True:
-                _, not_done = wait(futures, timeout=0.1)
-                if len(not_done) < 1:
-                    break
-        except (KeyboardInterrupt, SystemExit):
-            for future in futures:
-                future.cancel()
-            utils._download_interrupt = True
-            raise
+        with TemporaryDirectory('_mons') if late_downloads else nullcontext('') as temp_dir:
+            if late_downloads:
+                futures += [pool.submit(downloader, temp_dir, download) for download in late_downloads]
+            try:
+                while True:
+                    _, not_done = wait(futures, timeout=0.1)
+                    if len(not_done) < 1:
+                        break
+            except (KeyboardInterrupt, SystemExit):
+                for future in futures:
+                    future.cancel()
+                utils._download_interrupt = True
+                raise
+
+            if late_downloads:
+                for file in os.listdir(temp_dir):
+                    shutil.move(os.path.join(temp_dir, file), mod_folder)

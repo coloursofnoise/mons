@@ -230,8 +230,11 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
     mod_list = get_mod_list()
 
     installed_list = installed_mods(mod_folder, valid=True, with_size=True)
-    installed_list = {meta.Name: meta for meta in installed_list}
-    
+    installed_list = {
+        meta.Name: meta 
+        for meta in tqdm(installed_list, desc='Reading Installed Mods', leave=False, unit='')
+    }
+
     resolved: List[ModDownload] = list()
     unresolved: List[str] = list()
 
@@ -314,12 +317,12 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
                 echo(download.Meta)
         count = len(deps_update)
         if count > 0:
-            echo(f"\t{count}To Update:")
+            echo(f"\t{count} To Update:")
             for mod in deps_update:
                 echo(f"{mod.Old.Name}: {mod.New}")
         count = len(deps_blacklisted)
         if count > 0:
-            echo(f"\t{count}To Enable:")
+            echo(f"\t{count} To Enable:")
             for mod in deps_blacklisted:
                 echo(mod)
 
@@ -348,10 +351,9 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
         for mod in itertools.chain((mod.Old for mod in deps_update), deps_blacklisted):
             enable_mod(mod_folder, os.path.basename(mod.Path))
 
-        download_threaded(mod_folder, sorted_dep_downloads, thread_count=10)
-        download_threaded(mod_folder, sorted_main_downloads, thread_count=5)
+        download_threaded(mod_folder, sorted_dep_downloads, late_downloads=sorted_main_downloads, thread_count=10)
         end = time.perf_counter()
-        tqdm.write(str.format('Downloaded files in {:3f} seconds.', end-start))
+        tqdm.write(str.format('Downloaded files in {:.3f} seconds.', end-start))
 
         everest_min = next((dep.Version for dep in unregistered if dep.Name == 'Everest'), Version(1, 0, 0))
         current_everest = Version(1, install_cache.getint('everestbuild', fallback=0), 0)

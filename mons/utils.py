@@ -33,12 +33,14 @@ from .config import *
 from .version import Version
 from .errors import *
 
-from typing import IO, Iterable, Iterator, Union, List, Dict, cast, TypeVar
+from typing import IO, Generic, Iterable, Iterator, Union, List, Dict, cast, TypeVar
 
 VANILLA_HASH = {
     'f1c4967fa8f1f113858327590e274b69': ('1.4.0.0', 'FNA'),
     '107cd146973f2c5ec9fb0b4f81c1588a': ('1.4.0.0', 'XNA'),
 }
+
+T = TypeVar('T')
 
 def partition(pred, iterable):
     trues = []
@@ -71,6 +73,16 @@ def fileExistsInFolder(path: str, filename: str, forceName=True, log=False) -> U
     elif log:
         echo(f'Error: `{path}` could not be resolved')
     return installPath
+
+def find(iter:Iterable[T], matches:Iterable[T]):
+    return next((match for match in iter if match in matches), None)
+
+
+def find_file(path:str, files:Iterable[str]):
+    for file in files:
+        if os.path.isfile(os.path.join(path, file)):
+            return file
+    return None
 
 def getMD5Hash(path: str) -> str:
     with open(path, "rb") as f:
@@ -143,7 +155,7 @@ def read_with_progress(
     label='',
     clear_progress=False,
 ):
-    with tqdm(total=size, desc=label, leave=(not clear_progress), unit_scale=True, unit='b', disable=False) as bar:
+    with tqdm(total=size, desc=label, leave=(not clear_progress), unit_scale=True, unit='b', delay=0.4, disable=False) as bar:
         while True:
             if _download_interrupt:
                 raise Abort
@@ -216,11 +228,25 @@ def temporary_file(persist=False):
         if not persist and os.path.isfile(path):
             os.remove(path)
 
-T = TypeVar('T')
 
 @contextmanager
 def nullcontext(ret: T) -> Iterator[T]:
     yield ret
+
+class GeneratorWithLen(Generic[T]):
+    def __init__(self, gen:Iterator[T], length: int):
+        self.gen = gen
+        self.length = length
+    
+    def __iter__(self):
+        return self.gen
+
+    def __next__(self):
+        return next(self.gen)
+
+    def __len__(self):
+        return self.length
+
 
 def getCelesteVersion(path, hash=None):
     hash = hash or getMD5Hash(path)
@@ -462,8 +488,9 @@ def read_mod_info(mod: Union[str, IO[bytes]], with_size=False, with_hash=False):
     try:
         if not isinstance(mod, str) or os.path.isfile and zipfile.is_zipfile(mod):
             with zipfile.ZipFile(mod) as zip:
-                if 'everest.yaml' in zip.namelist():
-                    yml = yaml.safe_load(zip.read('everest.yaml').decode('utf-8-sig'))
+                everest_file = find(zip.namelist(), ('everest.yaml', 'everest.yml'))
+                if everest_file:
+                    yml = yaml.safe_load(zip.read(everest_file).decode('utf-8-sig'))
                     if yml is None:
                         raise EmptyFileError()
                     meta = ModMeta(yml[0])
@@ -474,13 +501,15 @@ def read_mod_info(mod: Union[str, IO[bytes]], with_size=False, with_hash=False):
                         zip.fp.seek(0, os.SEEK_END)
                         meta.Size = zip.fp.tell() if with_size else 0
 
-        elif os.path.isdir(mod) and os.path.isfile(os.path.join(mod, 'everest.yaml')):
-            with open(os.path.join(mod, 'everest.yaml'), encoding='utf-8-sig') as file:
-                yml = yaml.safe_load(file)
-                if yml is None:
-                    raise EmptyFileError()
-                meta = ModMeta(yml[0])
-            meta.Size = folder_size(mod) if with_size else 0
+        elif os.path.isdir(mod):
+            everest_file = find_file(mod, ('everest.yaml', 'everest.yml'))
+            if everest_file:
+                with open(os.path.join(mod, everest_file), encoding='utf-8-sig') as file:
+                    yml = yaml.safe_load(file)
+                    if yml is None:
+                        raise EmptyFileError()
+                    meta = ModMeta(yml[0])
+                meta.Size = folder_size(mod) if with_size else 0
     except (EmptyFileError, ScannerError):
         return None
     except Exception:
@@ -497,14 +526,14 @@ def get_mod_list() -> Dict[str, Dict]:
         'User-Agent': 'mons/' + '; gzip',
         'Accept-Encoding': 'gzip'
     })
-    return yaml.safe_load(download_with_progress(request, None, 'Downloading update list', response_handler=gzip.open))
+    return yaml.safe_load(download_with_progress(request, None, 'Downloading Update List', clear=True, response_handler=gzip.open))
 
 def get_dependency_graph() -> Dict[str, Dict]:
     request = urllib.request.Request('https://max480-random-stuff.appspot.com/celeste/mod_dependency_graph.yaml?format=everestyaml', headers={
         'User-Agent': 'mons/' + '; gzip',
         'Accept-Encoding': 'gzip',
     })
-    return yaml.safe_load(download_with_progress(request, None, 'Downloading dependency graph', response_handler=gzip.open))
+    return yaml.safe_load(download_with_progress(request, None, 'Downloading Dependency Graph', clear=True, response_handler=gzip.open))
 
 def search_mods(search):
     search = urllib.parse.quote_plus(search)
@@ -552,24 +581,26 @@ def installed_mods(
     if os.path.isfile(os.path.join(path, 'blacklist.txt')):
         blacklist = read_blacklist(os.path.join(path, 'blacklist.txt'))
         if blacklisted is not None:
-            files = filter(lambda m: blacklisted ^ (m in blacklist), files)
+            files = list(filter(lambda m: blacklisted ^ (m in blacklist), files))
 
-    for file in files:
-        modpath = os.path.join(path, file)
-        if dirs is not None:
-            if dirs ^ bool(os.path.isdir(modpath)):
-                continue
+    def _iter():
+        for file in files:
+            modpath = os.path.join(path, file)
+            if dirs is not None:
+                if dirs ^ bool(os.path.isdir(modpath)):
+                    continue
 
-        mod = read_mod_info(modpath, with_size=with_size, with_hash=with_hash)
-        if valid is not None:
-            if valid ^ bool(mod):
+            mod = read_mod_info(modpath, with_size=with_size, with_hash=with_hash)
+            if valid is not None:
+                if valid ^ bool(mod):
+                    continue
+            mod = mod or mod_placeholder(modpath)
+            if not mod:
                 continue
-        mod = mod or mod_placeholder(modpath)
-        if not mod:
-            continue
-        if blacklist and file in blacklist:
-            mod.Blacklisted = True
-        yield mod
+            if blacklist and file in blacklist:
+                mod.Blacklisted = True
+            yield mod
+    return GeneratorWithLen(_iter(), len(files))
 
 def enable_mod(path: str, mod: str):
     blacklist_path = os.path.join(path, 'blacklist.txt')
