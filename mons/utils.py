@@ -1,4 +1,4 @@
-from io import BufferedReader, BytesIO
+from io import BytesIO
 import os
 import atexit
 import configparser
@@ -7,7 +7,6 @@ import tempfile
 import yaml
 from yaml.scanner import ScannerError
 
-from datetime import datetime
 import hashlib
 import xxhash
 import zipfile
@@ -34,7 +33,7 @@ from .config import *
 from .version import Version
 from .errors import *
 
-from typing import IO, Iterable, Iterator, Union, List, Dict, cast
+from typing import IO, Iterable, Iterator, Union, List, Dict, cast, TypeVar
 
 VANILLA_HASH = {
     'f1c4967fa8f1f113858327590e274b69': ('1.4.0.0', 'FNA'),
@@ -171,60 +170,23 @@ def download_with_progress(
     content = response_handler(response) if response_handler else response
     size = int(response.headers.get('Content-Length') or 100)
     blocksize = 8192
-    temp_dest = ''
-    if dest is None:
-        io = BytesIO()
-    elif atomic:
-        # yyyyMMdd-HHmmss
-        temp_dest = f'{datetime.now().strftime("%Y%m%d-%H%M%S")}-{os.path.basename(dest)}.part'
-        temp_dest = os.path.join(os.path.dirname(dest), temp_dest)
-        io = open(temp_dest, 'wb')
-    else:
-        io = open(dest, 'wb')
-    read_with_progress(content, io, size, blocksize, label, clear)
+    
+    with temporary_file(persist=False) if atomic else nullcontext(dest) as file:
+        with open(file, 'wb') if file else nullcontext(BytesIO()) as io:
+            read_with_progress(content, io, size, blocksize, label, clear)
 
-    if dest is None and isinstance(io, BytesIO):
-        io.seek(0)
-        return io
-    io.close()
-
-    if isinstance(dest, str) and atomic:
-        if os.path.isfile(dest):
-            os.remove(dest)
-        shutil.move(temp_dest, dest)
+            if dest is None and isinstance(io, BytesIO):
+                # io will not be closed by contextmanager because it used nullcontext
+                io.seek(0)
+                return io
+        
+        if atomic:
+            dest = cast(str, dest)
+            if os.path.isfile(dest):
+                os.remove(dest)
+            shutil.move(cast(str, file), dest)
 
     return BytesIO()
-
-def write_with_progress(
-    src: Union[BufferedReader, BytesIO, str],
-    dest: str,
-    label: str=None,
-    atomic: bool=False,
-    clear: bool=False,
-):
-    src = open(src, mode='rb') if isinstance(src, str) else src
-
-    temp_dest = ''
-    if atomic:
-        # yyyyMMdd-HHmmss
-        temp_dest = f'{datetime.now().strftime("%Y%m%d-%H%M%S")}-{os.path.basename(dest)}.part'
-        temp_dest = os.path.join(os.path.dirname(dest), temp_dest)
-        io = open(temp_dest, 'wb')
-    else:
-        io = open(dest, 'wb')
-
-    src.seek(0, os.SEEK_END)
-    size = src.tell()
-    src.seek(0)
-    blocksize = max(4096, size//100)
-    with io as file:
-        read_with_progress(src, file, size, blocksize, label, clear)
-
-    src.close()
-    if atomic:
-        if os.path.isfile(dest):
-            os.remove(dest)
-        shutil.move(temp_dest, dest)
 
 @contextmanager
 def relocated_file(src, dest):
@@ -253,6 +215,12 @@ def temporary_file(persist=False):
     finally:
         if not persist and os.path.isfile(path):
             os.remove(path)
+
+T = TypeVar('T')
+
+@contextmanager
+def nullcontext(ret: T) -> Iterator[T]:
+    yield ret
 
 def getCelesteVersion(path, hash=None):
     hash = hash or getMD5Hash(path)
