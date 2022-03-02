@@ -42,9 +42,9 @@ VANILLA_HASH = {
 
 T = TypeVar('T')
 
-def partition(pred, iterable):
-    trues = []
-    falses = []
+def partition(pred, iterable:Iterable[T]):
+    trues: List[T] = []
+    falses: List[T] = []
     for item in iterable:
         if pred(item):
             trues.append(item)

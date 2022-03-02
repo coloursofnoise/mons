@@ -217,13 +217,13 @@ def resolve_mods(mods: Sequence[str]) -> Tuple[List[ModDownload], List[str]]:
 @click.argument('mods', nargs=-1)
 @click.option('--search', is_flag=True, help='Use the Celeste mod search API to find a mod.')
 @click.option('--random', is_flag=True, hidden=True)
-@click.option('--deps/--no-deps', is_flag=True, default=True)
-@click.option('--optional-deps/--no-optional-deps', is_flag=True, default=False)
+@click.option('--deps/--no-deps', is_flag=True, default=True, hidden=True)
+@click.option('--optional-deps/--no-optional-deps', is_flag=True, default=False, hidden=True)
 @pass_userinfo
 def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, optional_deps):
-    '''Add a mod.
+    '''Add one or more mods.
 
-    MOD can be a mod ID, local path, zip file, GameBanana page, or GameBanana submission ID.'''
+    MODS can be one or more of: mod ID, local path, zip file, GameBanana page, or GameBanana submission ID.'''
     install = userinfo.installs[name]
     install_cache = userinfo.cache[name]
     mod_folder = os.path.join(os.path.dirname(install['path']), 'Mods')
@@ -293,9 +293,15 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
             unresolved = []
 
     if len(resolved) > 0:
-        resolved = [mod for mod in resolved if not mod.Meta.Name in installed_list]
+        installed, resolved = partition(lambda mod: mod.Meta.Name in installed_list, resolved)
+        if len(installed) > 0:
+            echo('Already installed:')
+            for mod in installed:
+                echo(installed_list[mod.Meta.Name])
 
+    if len(resolved) > 0:
         dependencies = resolve_dependencies(map(lambda d: d.Meta, resolved))
+        special, dependencies = partition(lambda mod: mod.Name in ('Celeste', 'Everest'), dependencies)
         deps_install: List = []; deps_update: List[UpdateInfo] = []; deps_blacklisted: List[ModMeta] = []
         for dep in dependencies:
             if dep.Name in installed_list:
@@ -309,7 +315,13 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
                 deps_install.append(dep)
 
         deps_install, unregistered = partition(lambda mod: mod.Name in mod_list, deps_install)
-        deps_install = [get_mod_download(mod.Name, mod_list) for mod in deps_install if mod.Name in mod_list]
+        if len(unregistered) > 0:
+            echo(f'{len(unregistered)} dependencies could not be found:')
+            for mod in unregistered:
+                echo(mod)
+            click.confirm('Skip missing dependencies?', default=True, abort=True)
+
+        deps_install = [get_mod_download(mod.Name, mod_list) for mod in deps_install]
         count = len(deps_install) + len(resolved)
         if count > 0:
             echo(f"\t{count} To Install:")
@@ -355,7 +367,7 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
         end = time.perf_counter()
         tqdm.write(str.format('Downloaded files in {:.3f} seconds.', end-start))
 
-        everest_min = next((dep.Version for dep in unregistered if dep.Name == 'Everest'), Version(1, 0, 0))
+        everest_min = next((dep.Version for dep in special if dep.Name == 'Everest'), Version(1, 0, 0))
         current_everest = Version(1, install_cache.getint('everestbuild', fallback=0), 0)
         if not current_everest.satisfies(everest_min):
             echo(f'Installed Everest ({current_everest}) does not satisfy minimum requirement ({everest_min}).')
@@ -374,21 +386,19 @@ def remove(name, mod):
 @click.argument('name', type=Install(resolve_install=True), required=False, callback=default_primary)
 #@click.argument('mod', required=False)
 @click.option('--all', is_flag=True, help='Update all installed mods.')
-@click.option('--enabled', is_flag=True, help='Update all currently enabled mods.', default=None)
+@click.option('--enabled', is_flag=True, help='Update currently enabled mods.', default=None)
 @click.option('--upgrade-only', is_flag=True, help='Only update if latest file is a higher version')
 @pass_userinfo
 def update(userinfo, name, all, enabled, upgrade_only):
     '''Update installed mods.'''
-    if not (all or enabled):
-        raise click.UsageError('this command can currently only be used with the --all or --enabled option')
+    if not all:
+        raise click.UsageError('this command can currently only be used with the --all option')
 
     mod_list = get_mod_list()
     updates: List[UpdateInfo] = []
     has_updates = False
-    total_size = 0
+    total_size = 0 
     if all:
-        enabled = None
-    if all or enabled:
         mods_folder = os.path.join(os.path.dirname(name['path']), 'Mods')
         installed = installed_mods(mods_folder, blacklisted=enabled, dirs=False, valid=True, with_size=True, with_hash=True)
         updater_blacklist = os.path.join(mods_folder, 'updaterblacklist.txt')
@@ -422,17 +432,17 @@ def update(userinfo, name, all, enabled, upgrade_only):
         len(updates)))
 
     if total_size >= 0:
-        echo(f'After this operation, an additional {total_size} B disk space will be used')
+        echo(f'After this operation, an additional {format_bytes(total_size)} disk space will be used')
     else:
-        echo(f'After this operation, {abs(total_size)} B disk space will be freed')
+        echo(f'After this operation, {format_bytes(abs(total_size))} disk space will be freed')
 
 
     if not click.confirm('Continue?', default=True):
         return
 
-    for update in updates:
-        try:
-            download_with_progress(update.Url, update.Old.Path, f'Downloading mod: {update.Old.Name}', atomic=True)
-        except:
-            if update.Url != update.Mirror:
-                download_with_progress(update.Mirror, update.Old.Path, f'Downloading mod: {update.Old.Name}', atomic=True)
+
+    start = time.perf_counter()
+    download_threaded('', updates, thread_count=10)
+    end = time.perf_counter()
+    tqdm.write(str.format('Downloaded files in {:.3f} seconds.', end-start))
+
