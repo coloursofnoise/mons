@@ -33,7 +33,7 @@ from .config import *
 from .version import Version
 from .errors import *
 
-from typing import IO, Generic, Iterable, Iterator, Union, List, Dict, cast, TypeVar
+from typing import IO, Generic, Iterable, Iterator, Tuple, Union, List, Dict, cast, TypeVar, Optional
 
 VANILLA_HASH = {
     'f1c4967fa8f1f113858327590e274b69': ('1.4.0.0', 'FNA'),
@@ -42,7 +42,12 @@ VANILLA_HASH = {
 
 T = TypeVar('T')
 
-def partition(pred, iterable:Iterable[T]):
+def flip(b:Optional[T]) -> Optional[T]:
+    if b is None:
+        return None
+    return cast(Optional[T], not b)
+
+def partition(pred, iterable:Iterable[T]) -> Tuple[List[T], List[T]]:
     trues: List[T] = []
     falses: List[T] = []
     for item in iterable:
@@ -51,6 +56,25 @@ def partition(pred, iterable:Iterable[T]):
         else:
             falses.append(item)
     return trues, falses
+
+def multi_partition(*predicates, iterable:Iterable[T]) -> Tuple[List[T], ...]:
+    results: List[List[T]] = [[] for _ in predicates]
+    results.append([])
+
+    for item in iterable:
+        i = 0
+        matched = False
+        for pred in predicates:
+            if pred(item):
+                results[i].append(item)
+                matched = True
+                break
+            i += 1
+        if not matched:
+            results[-1].append(item)
+
+    return tuple(results)
+
 
 def tryExec(func, *params):
     try:
@@ -152,8 +176,8 @@ def read_with_progress(
     output,
     size=0,
     blocksize=4096,
-    label='',
-    clear_progress=False,
+    label: Optional[str]='',
+    clear_progress: Optional[bool]=False,
 ):
     with tqdm(total=size, desc=label, leave=(not clear_progress), unit_scale=True, unit='b', delay=0.4, disable=False) as bar:
         while True:
@@ -168,10 +192,10 @@ def read_with_progress(
 
 def download_with_progress(
     src: Union[str, urllib.request.Request, HTTPResponse],
-    dest: Union[str, None],
-    label: str=None,
-    atomic: bool=False,
-    clear: bool=False,
+    dest: Optional[str],
+    label: Optional[str]=None,
+    atomic: Optional[bool]=False,
+    clear: Optional[bool]=False,
     *,
     response_handler=None,
 ):
@@ -427,9 +451,9 @@ class _ModMeta_Deps():
         )
 
 class ModMeta(_ModMeta_Base,_ModMeta_Deps):
-    Hash: Union[str, None]
+    Hash: Optional[str]
     Path: str
-    Blacklisted: bool=False
+    Blacklisted: Optional[bool]=False
 
     def __init__(self, data: Dict):
         _ModMeta_Base.__init__(self, str(data['Name']), str(data['Version']))
@@ -441,7 +465,7 @@ class ModMeta(_ModMeta_Base,_ModMeta_Deps):
         self.Size = int(data['Size']) if 'Size' in data else 0
 
 class ModDownload():
-    def __init__(self, meta: Union[ModMeta, Dict], url: str, mirror: str=None):
+    def __init__(self, meta: Union[ModMeta, Dict], url: str, mirror: Optional[str]=None):
         if isinstance(meta, Dict):
             meta = ModMeta(meta)
         self.Meta = meta
@@ -477,7 +501,7 @@ def combined_dependencies(mods: Iterable[_ModMeta_Base], dependency_graph) -> Di
     return deps
 
 class UpdateInfo():
-    def __init__(self, old: ModMeta, new: Version, url: str, mirror: str=None):
+    def __init__(self, old: ModMeta, new: Version, url: str, mirror: Optional[str]=None):
         self.Old = old
         self.New = new
         self.Url = url
@@ -570,9 +594,9 @@ def mod_placeholder(path: str):
 def installed_mods(
     path: str,
     *,
-    dirs: bool=None,
-    valid: bool=None,
-    blacklisted: bool=None,
+    dirs: Optional[bool]=None,
+    valid: Optional[bool]=None,
+    blacklisted: Optional[bool]=None,
     with_size: bool=False,
     with_hash: bool=False,
 ) -> Iterator[ModMeta]:
@@ -582,6 +606,8 @@ def installed_mods(
         blacklist = read_blacklist(os.path.join(path, 'blacklist.txt'))
         if blacklisted is not None:
             files = list(filter(lambda m: blacklisted ^ (m in blacklist), files))
+    elif blacklisted:
+        files = []
 
     def _iter():
         for file in files:

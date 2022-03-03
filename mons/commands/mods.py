@@ -29,8 +29,8 @@ def format_mod_info(meta: ModMeta):
     out = meta.Name
     if meta.Blacklisted:
         out += '\t(disabled)'
-    out += '\n\t{}'.format(meta.Version)
-    out += '\n\t{}'.format(os.path.basename(meta.Path))
+    out += '\n\tVersion: {}'.format(meta.Version)
+    out += '\n\tFile: {}'.format(os.path.basename(meta.Path))
     if os.path.isdir(meta.Path):
         out += '/'
     out += '\n'
@@ -61,7 +61,7 @@ def list_mods(userinfo: UserInfo, enabled, valid, name, dll, dir, dependency, se
         basePath,
         dirs=dir,
         valid=valid,
-        blacklisted=enabled
+        blacklisted=flip(enabled)
     )
 
     gen = installed
@@ -130,7 +130,6 @@ def prompt_mod_selection(options: Dict, max: int=-1) -> Union[ModDownload,None]:
 
 def resolve_dependencies(mods: Iterable[ModMeta]):
     dependency_graph = get_dependency_graph()
-    echo('Resolving dependencies...')
     deps = combined_dependencies(mods, dependency_graph)
     sorted_deps = sorted(deps.values(), key=lambda dep: dep.Name)
 
@@ -156,7 +155,7 @@ def resolve_mods(mods: Sequence[str]) -> Tuple[List[ModDownload], List[str]]:
                 parsed_url = ParseResult('file', '', os.path.abspath(mod), '', '', '')
             meta = read_mod_info(parsed_url.path)
             if meta:
-                download = ModDownload(meta, urllib.parse.urlunparse(parsed_url), None)
+                download = ModDownload(meta, urllib.parse.urlunparse(parsed_url))
                 echo(f'Mod found: {meta}')
 
         # Mod ID match
@@ -167,7 +166,7 @@ def resolve_mods(mods: Sequence[str]) -> Tuple[List[ModDownload], List[str]]:
             echo(f'Mod found: {mod} {mod_info["Version"]}')
 
         # GameBanana submission URL
-        elif parsed_url.scheme in ('http', 'https') and parsed_url.path.startswith('gamebanana.com/mods') and parsed_url.path.split('/')[-1].isdigit():
+        elif parsed_url.scheme in ('http', 'https') and parsed_url.netloc == 'gamebanana.com' and parsed_url.path.startswith('/mods') and parsed_url.path.split('/')[-1].isdigit():
             modID = int(parsed_url.path.split('/')[-1])
             matches = {key: val for key, val in mod_list.items() if modID == val['GameBananaId']}
             if len(matches) > 0:
@@ -191,6 +190,11 @@ def resolve_mods(mods: Sequence[str]) -> Tuple[List[ModDownload], List[str]]:
                     url = str(d['_sDownloadUrl'])
                 else:
                     echo('Aborted!')
+
+        # Google Drive share URL
+        elif parsed_url.scheme in ('http', 'https') and parsed_url.netloc == 'drive.google.com' and parsed_url.path.startswith('/file/d/'):
+            file_id = parsed_url.path[len('/file/d/'):].split('/')[0]
+            url = 'https://drive.google.com/uc?export=download&id=' + file_id
 
         elif parsed_url.scheme in ('http', 'https') and parsed_url.path.endswith('.zip'):
             url = mod
@@ -300,6 +304,7 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
                 echo(installed_list[mod.Meta.Name])
 
     if len(resolved) > 0:
+        echo('Resolving dependencies...')
         dependencies = resolve_dependencies(map(lambda d: d.Meta, resolved))
         special, dependencies = partition(lambda mod: mod.Name in ('Celeste', 'Everest'), dependencies)
         deps_install: List = []; deps_update: List[UpdateInfo] = []; deps_blacklisted: List[ModMeta] = []
@@ -400,7 +405,7 @@ def update(userinfo, name, all, enabled, upgrade_only):
     total_size = 0 
     if all:
         mods_folder = os.path.join(os.path.dirname(name['path']), 'Mods')
-        installed = installed_mods(mods_folder, blacklisted=enabled, dirs=False, valid=True, with_size=True, with_hash=True)
+        installed = installed_mods(mods_folder, blacklisted=flip(enabled), dirs=False, valid=True, with_size=True, with_hash=True)
         updater_blacklist = os.path.join(mods_folder, 'updaterblacklist.txt')
         updater_blacklist = os.path.exists(updater_blacklist) and read_blacklist(updater_blacklist)
         for meta in installed:
@@ -446,3 +451,71 @@ def update(userinfo, name, all, enabled, upgrade_only):
     end = time.perf_counter()
     tqdm.write(str.format('Downloaded files in {:.3f} seconds.', end-start))
 
+@cli.command()
+@click.argument('name', type=Install())
+#@click.argument('mod', required=False)
+@click.option('--all', is_flag=True, help='Resolve all installed mods.')
+@click.option('--enabled', is_flag=True, help='Resolve currently enabled mods.', default=None)
+@pass_userinfo
+def resolve(userinfo: UserInfo, name, all, enabled):
+    if not all:
+        raise click.UsageError('this command can currently only be used with the --all option')
+
+    install = userinfo.installs[name]
+    install_cache = userinfo.cache[name]
+
+    mods_folder = os.path.join(os.path.dirname(install['path']), 'Mods')
+    installed = installed_mods(mods_folder, valid=True, blacklisted=flip(enabled))
+    installed = list(tqdm(installed, desc='Reading Installed Mods', leave=False, unit=''))
+    installed_dict = {meta.Name: meta for meta in installed}
+
+    deps = resolve_dependencies(installed)
+
+    special, _, deps = multi_partition(
+        lambda meta: meta.Name in ('Celeste', 'Everest'),
+        lambda meta: meta.Name in installed_dict,
+        iterable = deps
+    )
+
+    if len(deps) < 1:
+        return
+
+    echo(f'{len(deps)} dependencies missing, attempting to resolve...')
+
+    mod_list = get_mod_list()
+    deps_install = [get_mod_download(mod.Name, mod_list) for mod in deps if mod.Name in mod_list]
+
+    if len(deps_install) != len(deps):
+        echo(f'{len(deps)-len(deps_install)} mods could not be resolved.')
+
+    echo('\tTo Install:')
+    for mod in deps_install:
+        echo(mod.Meta)
+
+    download_size_ref = [0]
+    def download_size_key(mod: Union[UpdateInfo, ModDownload]):
+        size = get_download_size(mod.Url, mod.Old.Size) if isinstance(mod, UpdateInfo) else mod.Meta.Size
+        download_size_ref[0] += size
+        return size
+
+    sorted_dep_downloads = sorted(deps_install, key = download_size_key)
+
+    download_size = download_size_ref[0]
+    if download_size >= 0:
+        echo(f'After this operation, an additional {format_bytes(download_size)} disk space will be used')
+    else:
+        echo(f'After this operation, {format_bytes(abs(download_size))} disk space will be freed')
+
+    click.confirm('Continue?', default=True, abort=True)
+
+    start = time.perf_counter()
+    download_threaded(mods_folder, sorted_dep_downloads, thread_count=10)
+    end = time.perf_counter()
+    tqdm.write(str.format('Downloaded files in {:.3f} seconds.', end-start))
+
+    everest_min = next((dep.Version for dep in special if dep.Name == 'Everest'), Version(1, 0, 0))
+    current_everest = Version(1, install_cache.getint('everestbuild', fallback=0), 0)
+    if not current_everest.satisfies(everest_min):
+        echo(f'Installed Everest ({current_everest}) does not satisfy minimum requirement ({everest_min}).')
+        if click.confirm('Update Everest?', True):
+            mons_cli.main(args=['install', install.name, str(everest_min)])
