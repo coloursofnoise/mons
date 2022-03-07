@@ -456,8 +456,9 @@ def update(userinfo, name, all, enabled, upgrade_only):
 #@click.argument('mod', required=False)
 @click.option('--all', is_flag=True, help='Resolve all installed mods.')
 @click.option('--enabled', is_flag=True, help='Resolve currently enabled mods.', default=None)
+@click.option('--update/--no-update', help='Update outdated dependencies.', default=True)
 @pass_userinfo
-def resolve(userinfo: UserInfo, name, all, enabled):
+def resolve(userinfo: UserInfo, name, all, enabled, update):
     if not all:
         raise click.UsageError('this command can currently only be used with the --all option')
 
@@ -471,26 +472,39 @@ def resolve(userinfo: UserInfo, name, all, enabled):
 
     deps = resolve_dependencies(installed)
 
-    special, _, deps = multi_partition(
+    special, deps_installed, deps_missing = multi_partition(
         lambda meta: meta.Name in ('Celeste', 'Everest'),
         lambda meta: meta.Name in installed_dict,
         iterable = deps
     )
 
-    if len(deps) < 1:
+    deps_outdated = [
+        dep for dep in deps_installed 
+        if not dep.Version.satisfies(installed_dict[dep.Name].Version)
+    ] if update else []
+
+    if len(deps_missing) + len(deps_outdated) < 1:
         return
 
-    echo(f'{len(deps)} dependencies missing, attempting to resolve...')
+    echo(f'{len(deps_missing) + len(deps_outdated)} dependencies missing {"or outdated" if update else ""}, attempting to resolve...')
 
     mod_list = get_mod_list()
-    deps_install = [get_mod_download(mod.Name, mod_list) for mod in deps if mod.Name in mod_list]
+    deps_install = [get_mod_download(mod.Name, mod_list) for mod in deps_missing if mod.Name in mod_list]
+    deps_update = [
+        UpdateInfo(installed_dict[dep.Name], dep.Version, mod_list[dep.Name]['URL'])
+        for dep in deps_outdated if dep.Name in mod_list
+    ]
 
-    if len(deps_install) != len(deps):
-        echo(f'{len(deps)-len(deps_install)} mods could not be resolved.')
+    unresolved = (len(deps_missing) + len(deps_outdated)) - (len(deps_install) + len(deps_update))
+    if unresolved != 0:
+        echo(f'{unresolved} mods could not be resolved.')
 
     echo('\tTo Install:')
     for mod in deps_install:
         echo(mod.Meta)
+    echo('\tTo Update:')
+    for mod in deps_update:
+        echo(f'{mod.Old.Name}: {mod.New}')
 
     download_size_ref = [0]
     def download_size_key(mod: Union[UpdateInfo, ModDownload]):
@@ -498,7 +512,7 @@ def resolve(userinfo: UserInfo, name, all, enabled):
         download_size_ref[0] += size
         return size
 
-    sorted_dep_downloads = sorted(deps_install, key = download_size_key)
+    sorted_dep_downloads = sorted(itertools.chain(deps_install, deps_update), key = download_size_key)
 
     download_size = download_size_ref[0]
     if download_size >= 0:
