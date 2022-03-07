@@ -19,7 +19,7 @@ class CatchErrorsGroup(click.Group):
                 sys.argv.remove('--debug')
             super().main(args=args, prog_name=prog_name, complete_var=complete_var, standalone_mode=standalone_mode, windows_expand_args=windows_expand_args, **extra)
         except Exception as e:
-            if debug:
+            if debug or os.environ.get("MONS_DEBUG", 'false') == 'true':
                 click.echo('\033[0;31m', nl=False)
                 raise
             else:
@@ -154,56 +154,3 @@ class CommandWithDefaultOptions(DefaultArgsCommand):
                 args[i] = a[0] + '_default'
 
         return super(CommandWithDefaultOptions, self).parse_args(ctx, args)
-
-if os.name == "nt":
-    BEFORE_BAR = "\r"
-    CLEAR_BAR = "\r"
-else:
-    BEFORE_BAR = "\r\033[?25l"
-    CLEAR_BAR = "\033[?25h\r"
-
-class TempProgressBar(ProgressBar):
-    def render_finish(self) -> None:
-        if self.is_hidden:
-            return
-
-        self.file.write(BEFORE_BAR)
-        self.file.write(" " * (shutil.get_terminal_size().columns - len(CLEAR_BAR)))
-        self.file.write(CLEAR_BAR)
-        self.file.flush()
-
-def tempprogressbar(
-    iterable = None,
-    length = None,
-    label = None,
-    show_eta: bool = True,
-    show_percent = None,
-    show_pos: bool = False,
-    item_show_func = None,
-    fill_char: str = "#",
-    empty_char: str = "-",
-    bar_template: str = "%(label)s  [%(bar)s]  %(info)s",
-    info_sep: str = "  ",
-    width: int = 36,
-    file = None,
-    color = None,
-    update_min_steps: int = 1,
-) -> TempProgressBar:
-    color = click.globals.resolve_color_default(color)
-    return TempProgressBar(
-        iterable=iterable,
-        length=length,
-        show_eta=show_eta,
-        show_percent=show_percent,
-        show_pos=show_pos,
-        item_show_func=item_show_func,
-        fill_char=fill_char,
-        empty_char=empty_char,
-        bar_template=bar_template,
-        info_sep=info_sep,
-        file=file,
-        label=label,
-        width=width,
-        color=color,
-        update_min_steps=update_min_steps,
-    )
