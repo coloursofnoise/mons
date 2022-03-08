@@ -4,6 +4,7 @@ import atexit
 import configparser
 import json
 import tempfile
+from urllib.error import HTTPError
 import yaml
 from yaml.scanner import ScannerError
 
@@ -123,7 +124,7 @@ def unpack(zip: zipfile.ZipFile, root: str, prefix='', label='Extracting'):
         if not prefix or zipinfo.filename.startswith(prefix):
             totalSize += zipinfo.file_size
 
-    with tqdm(total=totalSize, desc=label) as bar:
+    with tqdm(total=totalSize, desc=label, leave=False) as bar:
         for zipinfo in zip.infolist():
             if not zipinfo.filename or zipinfo.filename.endswith('/'):
                 continue
@@ -423,6 +424,15 @@ def getLatestBuild(branch: str):
     except:
         pass
     return None
+
+def build_exists(build: int):
+    try:
+        urllib.request.urlopen('https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/' + str(build - 700))
+        return True
+    except HTTPError as err:
+        if err.code == 404:
+            return False
+        raise
 
 def getBuildDownload(build: int, artifactName: str='olympus-build'):
     return urllib.request.urlopen(f'https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts?artifactName={artifactName}&api-version=6.0&%24format=zip')

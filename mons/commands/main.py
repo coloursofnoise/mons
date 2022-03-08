@@ -162,6 +162,11 @@ def install(userinfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
             )
             success = True
 
+    elif versionspec and all(urllib.parse.urlparse(versionspec)[:3]):
+        echo('Downloading artifact from ' + versionspec)
+        artifactPath = os.path.join(installDir, urllib.parse.urlparse(versionspec).path.split('/')[-1])
+        download_with_progress(versionspec, artifactPath, atomic=True, clear=True)
+
     elif zip:
         artifactPath = zip
     elif versionspec and versionspec.startswith('file://'):
@@ -184,6 +189,9 @@ def install(userinfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
         build = parseVersionSpec(versionspec)
         if not build:
             raise click.ClickException(f'Build number could not be retrieved for `{versionspec}`.')
+
+        if not build_exists(build):
+            raise click.ClickException(f'Build artifacts could not be found for build {build}.')
 
         echo(f'Installing Everest build {build}')
         echo('Downloading build metadata...')
