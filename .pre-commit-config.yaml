@@ -1,0 +1,6 @@
+repos:
+  - repo: https://github.com/netromdk/vermin
+    rev: 55f159a
+    hooks:
+      - id: vermin-all
+        args: ['-t=3.7', '--violations']
