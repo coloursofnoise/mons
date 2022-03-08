@@ -400,6 +400,7 @@ def parseVersionSpec(string: str):
 def getLatestBuild(branch: str):
     base_URL = 'https://dev.azure.com/EverestAPI/Everest/_apis/build/builds?'
     filters = [
+        'definitions=3',
         'statusFilter=completed',
         'resultFilter=succeeded',
         'branchName={0}'.format(branch
