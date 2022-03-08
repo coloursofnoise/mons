@@ -37,7 +37,7 @@ def format_mod_info(meta: ModMeta):
     return out
 
 @cli.command(name='list', help='List installed mods.')
-@click.argument('name', type=Install(), required=False, callback=default_primary)
+@click.argument('name', type=Install())
 @click.option('--enabled/--disabled', help='Filter by enabled/disabled mods.', default=None)
 @click.option('--valid/--invalid', help='Filter mods with valid everest.yaml.', default=None)
 @click.option('--dll/--no-dll', help='List mods that register DLLs.', default=None)
@@ -216,8 +216,8 @@ def resolve_mods(mods: Sequence[str]) -> Tuple[List[ModDownload], List[str]]:
     return resolved, unresolved
 
 
-@cli.command(no_args_is_help=True, cls=DefaultArgsCommand)
-@click.argument('name', type=Install(), required=False, callback=default_primary)
+@cli.command(no_args_is_help=True)
+@click.argument('name', type=Install())
 @click.argument('mods', nargs=-1)
 @click.option('--search', is_flag=True, help='Use the Celeste mod search API to find a mod.')
 @click.option('--random', is_flag=True, hidden=True)
@@ -381,14 +381,14 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
 
 
 @cli.command(hidden=True)
-@click.argument('name', type=Install(resolve_install=True), required=False, callback=default_primary)
+@click.argument('name', type=Install(resolve_install=True))
 @click.argument('mod')
 def remove(name, mod):
     pass
 
 
 @cli.command()
-@click.argument('name', type=Install(resolve_install=True), required=False, callback=default_primary)
+@click.argument('name', type=Install(resolve_install=True))
 #@click.argument('mod', required=False)
 @click.option('--all', is_flag=True, help='Update all installed mods.')
 @click.option('--enabled', is_flag=True, help='Update currently enabled mods.', default=None)

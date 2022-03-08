@@ -13,9 +13,8 @@ from ..clickExt import *
 @cli.command(no_args_is_help=True)
 @click.argument('name', type=Install(exist=False))
 @click.argument('path', type=click.Path(exists=True, resolve_path=True))
-@click.option('--set-primary', is_flag=True, help='Set as default install for commands.')
 @pass_userinfo
-def add(userInfo: UserInfo, name, path, set_primary):
+def add(userInfo: UserInfo, name, path):
     '''Add a Celeste Install'''
     if os.path.basename(path) == 'Celeste.app':
         path = os.path.join(path, 'Resources')
@@ -28,18 +27,6 @@ def add(userInfo: UserInfo, name, path, set_primary):
         echo(f'Found Celeste.exe: {installPath}')
         echo('Caching install info...')
         echo(buildVersionString(getInstallInfo(userInfo, name)))
-        if set_primary:
-            userInfo.config['user']['PrimaryInstall'] = name
-            echo(f'Primary install is now `{name}`.')
-
-
-@cli.command()
-@click.argument('name', type=Install())
-@pass_userinfo
-def set_primary(userInfo: UserInfo, name):
-    '''Set the primary install used by commands'''
-    userInfo.config['user']['PrimaryInstall'] = name
-    echo(f'Primary install is now `{name}`.')
 
 
 @cli.command(no_args_is_help=True)
@@ -72,9 +59,6 @@ def remove(userInfo: UserInfo, name):
     if click.confirm('Are you sure?', abort=True):
         userInfo.installs.remove_section(name)
         userInfo.cache.remove_section(name)
-        if userInfo.config.has_option('user', 'PrimaryInstall'):
-            echo(f'Un-setting primary install (was {name}).')
-            userInfo.config.remove_option('user', 'PrimaryInstall')
 
 
 @cli.command(no_args_is_help=True)
@@ -90,33 +74,26 @@ def set_branch(name, branch):
 @pass_userinfo
 def list(userInfo: UserInfo):
     '''List existing installs'''
-    primary = userInfo.config['user'].get('PrimaryInstall', fallback='')
     for install in userInfo.installs.sections():
         info = buildVersionString(getInstallInfo(userInfo, install))
-        name = install + (' (primary)' if install == primary else '')
-        echo('{}:\t{}'.format(name, info))
+        echo('{}:\t{}'.format(install, info))
 
 
 @cli.command()
-@click.argument('name', type=Install(), required=False, callback=default_primary)
+@click.argument('name', type=Install())
 @click.option('-v', '--verbose', is_flag=True)
 @pass_userinfo
 def show(userInfo: UserInfo, name, verbose):
     '''Display information for a specific install'''
     info = getInstallInfo(userInfo, name)
-    primary = name == userInfo.config['user'].get('PrimaryInstall', fallback='')
     if verbose:
-        if primary:
-            echo('--Primary install--')
         echo('\n'.join('{}:\t{}'.format(k, v) for k, v in info.items()))
     else:
-        if primary:
-            name = name + ' (primary)'
         echo('{}:\t{}'.format(name, buildVersionString(info)))
 
 
 @cli.command(no_args_is_help=True, cls=CommandWithDefaultOptions)
-@click.argument('name', type=Install(), required=False, callback=default_primary)
+@click.argument('name', type=Install())
 @click.argument('versionSpec', required=False)
 @click.option('-v', '--verbose', is_flag=True, help='Be verbose.')
 @click.option('--latest', is_flag=True, help='Install latest available build, branch-ignorant.')
@@ -285,12 +262,11 @@ def install(userinfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
 
 
 @cli.command(
-    cls=DefaultArgsCommand,
     context_settings=dict(
         ignore_unknown_options=True,
         allow_extra_args=True,
     ))
-@click.argument('name', type=Install(), required=False, callback=default_primary)
+@click.argument('name', type=Install())
 @click.pass_context
 def launch(ctx, name):
     '''Launch the game associated with an install'''
