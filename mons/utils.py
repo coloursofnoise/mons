@@ -561,6 +561,7 @@ def read_mod_info(mod: Union[str, IO[bytes]], with_size=False, with_hash=False):
 
 mod_list = None
 def get_mod_list() -> Dict[str, Dict]:
+    global mod_list
     if mod_list:
         return mod_list
 
@@ -569,12 +570,12 @@ def get_mod_list() -> Dict[str, Dict]:
         'User-Agent': 'mons/' + '; gzip',
         'Accept-Encoding': 'gzip'
     })
-    global mod_list
     mod_list =  yaml.safe_load(download_with_progress(request, None, 'Downloading Update List', clear=True, response_handler=gzip.open))
     return mod_list
 
 dependency_graph = None
 def get_dependency_graph() -> Dict[str, Dict]:
+    global dependency_graph
     if dependency_graph:
         return dependency_graph
 
@@ -582,7 +583,6 @@ def get_dependency_graph() -> Dict[str, Dict]:
         'User-Agent': 'mons/' + '; gzip',
         'Accept-Encoding': 'gzip',
     })
-    global dependency_graph
     dependency_graph = yaml.safe_load(download_with_progress(request, None, 'Downloading Dependency Graph', clear=True, response_handler=gzip.open))
     return dependency_graph
 
