@@ -31,6 +31,7 @@ class Install(click.ParamType):
         self.validate_path = check_path
 
     def convert(self, value, param, ctx):
+        if not ctx: return value
         installs: configparser.ConfigParser = ctx.obj.installs
 
         if self.exist:
@@ -75,8 +76,19 @@ class ExplicitOption(click.Option):
         if help:
             return (help[0].replace(' ', '[=', 1) + ']',) + help[1:]
 
-class CommandWithDefaultOptions(click.Command):
-    """ Command implementation for `DefaultOption` and `ExplicitOption` option types """
+class PlaceHolder(click.Argument):
+    """ Mark this argument as a placeholder that isn't processed """
+    register_placeholder = True
+
+class CommandExt(click.Command):
+    """ Command implementation for extended option and argument types """
+
+    def make_parser(self, ctx):
+        ''' Strip placeholder params '''
+        self.params = [a for a in self.params if not getattr(a, 'register_placeholder', None)]
+        return super().make_parser(ctx)
+
+
     def parse_args(self, ctx, args):
         """ Translate any opt to opt_default as needed """
         options = [o for o in ctx.command.params
@@ -89,4 +101,4 @@ class CommandWithDefaultOptions(click.Command):
             if a[0] in prefixes and len(a) == 1:
                 args[i] = a[0] + '_default'
 
-        return super(CommandWithDefaultOptions, self).parse_args(ctx, args)
+        return super(CommandExt, self).parse_args(ctx, args)

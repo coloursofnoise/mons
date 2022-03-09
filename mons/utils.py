@@ -83,21 +83,18 @@ def tryExec(func, *params):
     except:
         pass
 
-def fileExistsInFolder(path: str, filename: str, forceName=True, log=False) -> Union[str,None]:
-    installPath = None
-    if os.path.isfile(path):
-        if not forceName or os.path.basename(path) == filename:
-            installPath = path
-        elif log:
-            echo(f'Error: file `{installPath}` must be called {filename}')
-    elif os.path.isdir(path):
-        if os.path.isfile(os.path.join(path, filename)):
-            installPath = os.path.join(path, filename)
-        elif log:
-            echo(f'Error: {filename} file could not be found in `{installPath}`')
-    elif log:
-        echo(f'Error: `{path}` could not be resolved')
-    return installPath
+def find_celeste_file(path: str, file: str, force_name=True):
+    if os.path.basename(path) == 'Celeste.app':
+        path = os.path.join(path, 'Resources')
+
+    ret = path
+    if os.path.isdir(path):
+        ret = os.path.join(path, file)
+        if not os.path.exists(ret):
+            raise FileNotFoundError(f'File `{file}` could not be found in `{path}`')
+    elif force_name and not os.path.basename(path) == file:
+        raise FileNotFoundError(f'File `{file}` not found at `{path}`')
+    return ret
 
 def find(iter:Iterable[T], matches:Iterable[T]):
     return next((match for match in iter if match in matches), None)
@@ -296,7 +293,7 @@ def getCelesteVersion(path, hash=None):
     return None, False
 
 def parseExeInfo(path):
-    echo('Loading exe...\r', nl=False)
+    echo('Reading exe...\r', nl=False)
     pe = dnfile.dnPE(path, fast_load=True)
     pe.parse_data_directories(directories=DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR'])
     stringHeap: dnfile.stream.StringsHeap = pe.net.metadata.streams_list[1]
@@ -562,20 +559,32 @@ def read_mod_info(mod: Union[str, IO[bytes]], with_size=False, with_hash=False):
         meta.Path = mod if isinstance(mod, str) else ''
     return meta
 
+mod_list = None
 def get_mod_list() -> Dict[str, Dict]:
+    if mod_list:
+        return mod_list
+
     update_url = urllib.request.urlopen('https://everestapi.github.io/modupdater.txt').read()
     request = urllib.request.Request(update_url.decode(), headers={
         'User-Agent': 'mons/' + '; gzip',
         'Accept-Encoding': 'gzip'
     })
-    return yaml.safe_load(download_with_progress(request, None, 'Downloading Update List', clear=True, response_handler=gzip.open))
+    global mod_list
+    mod_list =  yaml.safe_load(download_with_progress(request, None, 'Downloading Update List', clear=True, response_handler=gzip.open))
+    return mod_list
 
+dependency_graph = None
 def get_dependency_graph() -> Dict[str, Dict]:
+    if dependency_graph:
+        return dependency_graph
+
     request = urllib.request.Request('https://max480-random-stuff.appspot.com/celeste/mod_dependency_graph.yaml?format=everestyaml', headers={
         'User-Agent': 'mons/' + '; gzip',
         'Accept-Encoding': 'gzip',
     })
-    return yaml.safe_load(download_with_progress(request, None, 'Downloading Dependency Graph', clear=True, response_handler=gzip.open))
+    global dependency_graph
+    dependency_graph = yaml.safe_load(download_with_progress(request, None, 'Downloading Dependency Graph', clear=True, response_handler=gzip.open))
+    return dependency_graph
 
 def search_mods(search):
     search = urllib.parse.quote_plus(search)

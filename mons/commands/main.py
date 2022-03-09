@@ -16,17 +16,16 @@ from ..clickExt import *
 @pass_userinfo
 def add(userInfo: UserInfo, name, path):
     '''Add a Celeste Install'''
-    if os.path.basename(path) == 'Celeste.app':
-        path = os.path.join(path, 'Resources')
-    installPath = fileExistsInFolder(path, 'Celeste.exe', forceName=False, log=True)
+    try:
+        install_path = find_celeste_file(path, 'Celeste.exe')
+    except FileNotFoundError as err:
+        raise click.UsageError(str(err))
 
-    if installPath:
-        userInfo.installs[name] = {
-            'Path': installPath,
-        }
-        echo(f'Found Celeste.exe: {installPath}')
-        echo('Caching install info...')
-        echo(buildVersionString(getInstallInfo(userInfo, name)))
+    userInfo.installs[name] = {
+        'Path': install_path,
+    }
+    echo(f'Found Celeste.exe: {install_path}')
+    echo(buildVersionString(getInstallInfo(userInfo, name)))
 
 
 @cli.command(no_args_is_help=True)
@@ -44,11 +43,14 @@ def rename(userInfo: UserInfo, old, new):
 @pass_userinfo
 def set_path(userInfo: UserInfo, name, path):
     '''Change the path of an existing install'''
-    installPath = fileExistsInFolder(path, 'Celeste.exe', forceName=False, log=True)
-    if installPath:
-        userInfo.installs[name]['Path'] = installPath
-        echo(f'Found Celeste.exe: {installPath}')
-        echo(buildVersionString(getInstallInfo(userInfo, name)))
+    try:
+        install_path = find_celeste_file(path, 'Celeste.exe')
+    except FileNotFoundError as err:
+        raise click.UsageError(str(err))
+
+    userInfo.installs[name]['Path'] = install_path
+    echo(f'Found Celeste.exe: {install_path}')
+    echo(buildVersionString(getInstallInfo(userInfo, name)))
 
 
 @cli.command(no_args_is_help=True, )
@@ -79,7 +81,7 @@ def list(userInfo: UserInfo):
         echo('{}:\t{}'.format(install, info))
 
 
-@cli.command()
+@cli.command(no_args_is_help=True)
 @click.argument('name', type=Install())
 @click.option('-v', '--verbose', is_flag=True)
 @pass_userinfo
@@ -87,12 +89,16 @@ def show(userInfo: UserInfo, name, verbose):
     '''Display information for a specific install'''
     info = getInstallInfo(userInfo, name)
     if verbose:
-        echo('\n'.join('{}:\t{}'.format(k, v) for k, v in info.items()))
+        echo(name + ':')
+        for k, v in info.items():
+            echo(f'\t{k}:\t{v}')
+        echo(f'\tpath:\t{userInfo.installs[name]["Path"]}')
     else:
         echo('{}:\t{}'.format(name, buildVersionString(info)))
+        echo(userInfo.installs[name]["Path"])
 
 
-@cli.command(no_args_is_help=True, cls=CommandWithDefaultOptions)
+@cli.command(no_args_is_help=True, cls=CommandExt)
 @click.argument('name', type=Install())
 @click.argument('versionSpec', required=False)
 @click.option('-v', '--verbose', is_flag=True, help='Be verbose.')
@@ -219,8 +225,7 @@ def install(userinfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
             response = getBuildDownload(build, 'main')
             artifactPath = os.path.join(installDir, 'main.zip')
             echo(f' to file {artifactPath}')
-            with open(artifactPath, 'wb') as file:
-                file.write(response.read())
+            download_with_progress(response, artifactPath, label='Downloading', clear=True)
             echo('Unzipping main.zip')
             with zipfile.ZipFile(artifactPath) as artifact:
                 unpack(artifact, installDir, 'main/', label='Extracting')
@@ -270,11 +275,15 @@ def install(userinfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
 
 
 @cli.command(
+    no_args_is_help=True,
     context_settings=dict(
         ignore_unknown_options=True,
         allow_extra_args=True,
-    ))
+    ),
+    cls=CommandExt,
+)
 @click.argument('name', type=Install())
+@click.argument('args', required=False, cls=PlaceHolder)
 @click.pass_context
 def launch(ctx, name):
     '''Launch the game associated with an install'''
@@ -287,7 +296,7 @@ def launch(ctx, name):
     subprocess.Popen([path] + ctx.args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
-@cli.command()
+@cli.command(no_args_is_help=True)
 @click.option('-e', '--edit', is_flag=True)
 @click.option('--open', is_flag=True, hidden=True)
 @pass_userinfo
