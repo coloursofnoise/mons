@@ -1,6 +1,5 @@
 import itertools
 import time
-from typing import Iterable, Sequence, Tuple, Any, cast
 from urllib.parse import ParseResult
 import click
 from click import echo_via_pager, echo
@@ -18,6 +17,8 @@ from ..utils import *
 from ..downloading import download_threaded
 from ..version import Version
 from ..formatting import format_bytes
+
+import typing as t
 
 @click.group(name='mods', help='Manage Everest mods')
 @click.pass_context
@@ -69,7 +70,7 @@ def list_mods(userinfo: UserInfo, enabled, valid, name, dll, dir, dependency, se
         gen = filter(lambda meta: not dll ^ bool(meta.DLL), gen)
 
     if dependency:
-        gen = filter(lambda meta: next(filter(lambda d: dependency == d.Name, meta.Dependencies), cast(Any, None)), gen)
+        gen = filter(lambda meta: next(filter(lambda d: dependency == d.Name, meta.Dependencies), t.cast(t.Any, None)), gen)
 
     if search:
         pattern = re.compile(search, flags=re.I)
@@ -101,7 +102,7 @@ def search(search):
         if len(match) < 1:
             raise click.UsageError('Entry not found: ' + str(item['itemid']))
 
-def prompt_mod_selection(options: Dict, max: int=-1) -> Union[ModDownload,None]:
+def prompt_mod_selection(options: t.Dict, max: int=-1) -> t.Union[ModDownload,None]:
     matchKeys = sorted(options.keys(), key=lambda key: options[key]['LastUpdate'], reverse=True)
     selection = None
     if len(matchKeys) == 1:
@@ -128,7 +129,7 @@ def prompt_mod_selection(options: Dict, max: int=-1) -> Union[ModDownload,None]:
 
     return selection
 
-def resolve_dependencies(mods: Iterable[ModMeta]):
+def resolve_dependencies(mods: t.Iterable[ModMeta]):
     dependency_graph = get_dependency_graph()
     deps = combined_dependencies(mods, dependency_graph)
     sorted_deps = sorted(deps.values(), key=lambda dep: dep.Name)
@@ -140,7 +141,7 @@ def get_mod_download(mod, mod_list):
     mod_info['Name'] = mod
     return ModDownload(ModMeta(mod_info), mod_info['URL'], mod_info['MirrorURL'])
 
-def resolve_mods(mods: Sequence[str]) -> Tuple[List[ModDownload], List[str]]:
+def resolve_mods(mods: t.Sequence[str]) -> t.Tuple[t.List[ModDownload], t.List[str]]:
     resolved = list()
     unresolved = list()
     mod_list = get_mod_list()
@@ -224,7 +225,7 @@ def resolve_mods(mods: Sequence[str]) -> Tuple[List[ModDownload], List[str]]:
 @click.option('--deps/--no-deps', is_flag=True, default=True, hidden=True)
 @click.option('--optional-deps/--no-optional-deps', is_flag=True, default=False, hidden=True)
 @pass_userinfo
-def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, optional_deps):
+def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps, optional_deps):
     '''Add one or more mods.
 
     MODS can be one or more of: mod ID, local path, zip file, GameBanana page, or GameBanana submission ID.'''
@@ -239,8 +240,8 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
         for meta in tqdm(installed_list, desc='Reading Installed Mods', leave=False, unit='')
     }
 
-    resolved: List[ModDownload] = list()
-    unresolved: List[str] = list()
+    resolved: t.List[ModDownload] = list()
+    unresolved: t.List[str] = list()
 
     if random:
         mods = (urllib.request.urlopen('https://max480-random-stuff.appspot.com/celeste/random-map').url,)
@@ -307,7 +308,7 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
         echo('Resolving dependencies...')
         dependencies = resolve_dependencies(map(lambda d: d.Meta, resolved))
         special, dependencies = partition(lambda mod: mod.Name in ('Celeste', 'Everest'), dependencies)
-        deps_install: List = []; deps_update: List[UpdateInfo] = []; deps_blacklisted: List[ModMeta] = []
+        deps_install: t.List = []; deps_update: t.List[UpdateInfo] = []; deps_blacklisted: t.List[ModMeta] = []
         for dep in dependencies:
             if dep.Name in installed_list:
                 installed_mod = installed_list[dep.Name]
@@ -345,7 +346,7 @@ def add(userinfo: UserInfo, name, mods: Tuple[str, ...], search, random, deps, o
 
         # Hack to allow assigning to a variable out of scope
         download_size_ref = [0]
-        def download_size_key(mod: Union[UpdateInfo, ModDownload]):
+        def download_size_key(mod: t.Union[UpdateInfo, ModDownload]):
             size = get_download_size(mod.Url, mod.Old.Size) if isinstance(mod, UpdateInfo) else mod.Meta.Size
             download_size_ref[0] += size
             return size
@@ -400,7 +401,7 @@ def update(userinfo, name, all, enabled, upgrade_only):
         raise click.UsageError('this command can currently only be used with the --all option')
 
     mod_list = get_mod_list()
-    updates: List[UpdateInfo] = []
+    updates: t.List[UpdateInfo] = []
     has_updates = False
     total_size = 0 
     if all:
@@ -507,7 +508,7 @@ def resolve(userinfo: UserInfo, name, all, enabled, update):
         echo(f'{mod.Old.Name}: {mod.New}')
 
     download_size_ref = [0]
-    def download_size_key(mod: Union[UpdateInfo, ModDownload]):
+    def download_size_key(mod: t.Union[UpdateInfo, ModDownload]):
         size = get_download_size(mod.Url, mod.Old.Size) if isinstance(mod, UpdateInfo) else mod.Meta.Size
         download_size_ref[0] += size
         return size

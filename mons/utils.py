@@ -34,23 +34,23 @@ from .config import *
 from .version import Version
 from .errors import *
 
-from typing import IO, Generic, Iterable, Iterator, Tuple, Union, List, Dict, cast, TypeVar, Optional
+import typing as t
 
 VANILLA_HASH = {
     'f1c4967fa8f1f113858327590e274b69': ('1.4.0.0', 'FNA'),
     '107cd146973f2c5ec9fb0b4f81c1588a': ('1.4.0.0', 'XNA'),
 }
 
-T = TypeVar('T')
+T = t.TypeVar('T')
 
-def flip(b:Optional[T]) -> Optional[T]:
+def flip(b:t.Optional[T]) -> t.Optional[T]:
     if b is None:
         return None
-    return cast(Optional[T], not b)
+    return t.cast(t.Optional[T], not b)
 
-def partition(pred, iterable:Iterable[T]) -> Tuple[List[T], List[T]]:
-    trues: List[T] = []
-    falses: List[T] = []
+def partition(pred, iterable:t.Iterable[T]) -> t.Tuple[t.List[T], t.List[T]]:
+    trues: t.List[T] = []
+    falses: t.List[T] = []
     for item in iterable:
         if pred(item):
             trues.append(item)
@@ -58,8 +58,8 @@ def partition(pred, iterable:Iterable[T]) -> Tuple[List[T], List[T]]:
             falses.append(item)
     return trues, falses
 
-def multi_partition(*predicates, iterable:Iterable[T]) -> Tuple[List[T], ...]:
-    results: List[List[T]] = [[] for _ in predicates]
+def multi_partition(*predicates, iterable:t.Iterable[T]) -> t.Tuple[t.List[T], ...]:
+    results: t.List[t.List[T]] = [[] for _ in predicates]
     results.append([])
 
     for item in iterable:
@@ -96,11 +96,11 @@ def find_celeste_file(path: str, file: str, force_name=True):
         raise FileNotFoundError(f'File `{file}` not found at `{path}`')
     return ret
 
-def find(iter:Iterable[T], matches:Iterable[T]):
+def find(iter:t.Iterable[T], matches:t.Iterable[T]):
     return next((match for match in iter if match in matches), None)
 
 
-def find_file(path:str, files:Iterable[str]):
+def find_file(path:str, files:t.Iterable[str]):
     for file in files:
         if os.path.isfile(os.path.join(path, file)):
             return file
@@ -181,8 +181,8 @@ def read_with_progress(
     output,
     size=0,
     blocksize=4096,
-    label: Optional[str]='',
-    clear_progress: Optional[bool]=False,
+    label: t.Optional[str]='',
+    clear_progress: t.Optional[bool]=False,
 ):
     with tqdm(total=size, desc=label, leave=(not clear_progress), unit_scale=True, unit='b', delay=0.4, disable=False) as bar:
         while True:
@@ -196,11 +196,11 @@ def read_with_progress(
             bar.update(len(buf))
 
 def download_with_progress(
-    src: Union[str, urllib.request.Request, HTTPResponse],
-    dest: Optional[str],
-    label: Optional[str]=None,
-    atomic: Optional[bool]=False,
-    clear: Optional[bool]=False,
+    src: t.Union[str, urllib.request.Request, HTTPResponse],
+    dest: t.Optional[str],
+    label: t.Optional[str]=None,
+    atomic: t.Optional[bool]=False,
+    clear: t.Optional[bool]=False,
     *,
     response_handler=None,
 ):
@@ -222,10 +222,10 @@ def download_with_progress(
                 return io
         
         if atomic:
-            dest = cast(str, dest)
+            dest = t.cast(str, dest)
             if os.path.isfile(dest):
                 os.remove(dest)
-            shutil.move(cast(str, file), dest)
+            shutil.move(t.cast(str, file), dest)
 
     return BytesIO()
 
@@ -259,11 +259,11 @@ def temporary_file(persist=False):
 
 
 @contextmanager
-def nullcontext(ret: T) -> Iterator[T]:
+def nullcontext(ret: T) -> t.Iterator[T]:
     yield ret
 
-class GeneratorWithLen(Generic[T]):
-    def __init__(self, gen:Iterator[T], length: int):
+class GeneratorWithLen(t.Generic[T]):
+    def __init__(self, gen:t.Iterator[T], length: int):
         self.gen = gen
         self.length = length
     
@@ -319,7 +319,7 @@ def parseExeInfo(path):
             bar.update(inc)
 
     assemRef = pe.net.mdtables.AssemblyRef
-    framework = 'FNA' if any(cast(AssemblyRefRow, row).Name == 'FNA' for row in assemRef.rows) else 'XNA'
+    framework = 'FNA' if any(t.cast(AssemblyRefRow, row).Name == 'FNA' for row in assemRef.rows) else 'XNA'
 
     return hasEverest, everestBuild, framework
 
@@ -435,7 +435,7 @@ def getBuildDownload(build: int, artifactName: str='olympus-build'):
     return urllib.request.urlopen(f'https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts?artifactName={artifactName}&api-version=6.0&%24format=zip')
 
 class _ModMeta_Base():
-    def __init__(self, name:str, version:Union[str, Version]):
+    def __init__(self, name:str, version:t.Union[str, Version]):
         self.Name = name
         if isinstance(version, str):
             version = Version.parse(version)
@@ -451,12 +451,12 @@ class _ModMeta_Base():
 class _ModMeta_Deps():
     def __init__(
         self,
-        dependencies:List[_ModMeta_Base],
-        optionals:List[_ModMeta_Base],
+        dependencies:t.List[_ModMeta_Base],
+        optionals:t.List[_ModMeta_Base],
     ):
         self.Dependencies = dependencies
         self.OptionalDependencies = optionals
-        assert isinstance(self.Dependencies, List)
+        assert isinstance(self.Dependencies, t.List)
 
     @classmethod
     def fromDict(cls, data):
@@ -466,11 +466,11 @@ class _ModMeta_Deps():
         )
 
 class ModMeta(_ModMeta_Base,_ModMeta_Deps):
-    Hash: Optional[str]
+    Hash: t.Optional[str]
     Path: str
-    Blacklisted: Optional[bool]=False
+    Blacklisted: t.Optional[bool]=False
 
-    def __init__(self, data: Dict):
+    def __init__(self, data: t.Dict):
         _ModMeta_Base.__init__(self, str(data['Name']), str(data['Version']))
         _ModMeta_Deps.__init__(self,
             [_ModMeta_Base.fromDict(dep) for dep in data.get('Dependencies', [])],
@@ -480,8 +480,8 @@ class ModMeta(_ModMeta_Base,_ModMeta_Deps):
         self.Size = int(data['Size']) if 'Size' in data else 0
 
 class ModDownload():
-    def __init__(self, meta: Union[ModMeta, Dict], url: str, mirror: Optional[str]=None):
-        if isinstance(meta, Dict):
+    def __init__(self, meta: t.Union[ModMeta, t.Dict], url: str, mirror: t.Optional[str]=None):
+        if isinstance(meta, t.Dict):
             meta = ModMeta(meta)
         self.Meta = meta
         self.Url = url
@@ -497,13 +497,13 @@ def _merge_dependencies(dict, dep: _ModMeta_Base):
     else:
         dict[dep.Name] = dep
 
-def recurse_dependencies(mods: Iterable[_ModMeta_Base], dependency_graph, dict):
+def recurse_dependencies(mods: t.Iterable[_ModMeta_Base], dependency_graph, dict):
     for mod in mods:
         _merge_dependencies(dict, mod)
         if mod.Name in dependency_graph:
             recurse_dependencies(_ModMeta_Deps.fromDict(dependency_graph[mod.Name]).Dependencies, dependency_graph, dict)
 
-def combined_dependencies(mods: Iterable[_ModMeta_Base], dependency_graph) -> Dict[str, _ModMeta_Base]:
+def combined_dependencies(mods: t.Iterable[_ModMeta_Base], dependency_graph) -> t.Dict[str, _ModMeta_Base]:
     deps = {}
     for mod in mods:
         dependencies = None
@@ -516,13 +516,13 @@ def combined_dependencies(mods: Iterable[_ModMeta_Base], dependency_graph) -> Di
     return deps
 
 class UpdateInfo():
-    def __init__(self, old: ModMeta, new: Version, url: str, mirror: Optional[str]=None):
+    def __init__(self, old: ModMeta, new: Version, url: str, mirror: t.Optional[str]=None):
         self.Old = old
         self.New = new
         self.Url = url
         self.Mirror = mirror if mirror else url
 
-def read_mod_info(mod: Union[str, IO[bytes]], with_size=False, with_hash=False):
+def read_mod_info(mod: t.Union[str, t.IO[bytes]], with_size=False, with_hash=False):
     meta = None
     try:
         if not isinstance(mod, str) or os.path.isfile and zipfile.is_zipfile(mod):
@@ -560,7 +560,7 @@ def read_mod_info(mod: Union[str, IO[bytes]], with_size=False, with_hash=False):
     return meta
 
 mod_list = None
-def get_mod_list() -> Dict[str, Dict]:
+def get_mod_list() -> t.Dict[str, t.Dict]:
     global mod_list
     if mod_list:
         return mod_list
@@ -570,11 +570,11 @@ def get_mod_list() -> Dict[str, Dict]:
         'User-Agent': 'mons/' + '; gzip',
         'Accept-Encoding': 'gzip'
     })
-    mod_list =  yaml.safe_load(download_with_progress(request, None, 'Downloading Update List', clear=True, response_handler=gzip.open))
+    mod_list =  yaml.safe_load(download_with_progress(request, None, 'Downloading Update t.List', clear=True, response_handler=gzip.open))
     return mod_list
 
 dependency_graph = None
-def get_dependency_graph() -> Dict[str, Dict]:
+def get_dependency_graph() -> t.Dict[str, t.Dict]:
     global dependency_graph
     if dependency_graph:
         return dependency_graph
@@ -621,12 +621,12 @@ def mod_placeholder(path: str):
 def installed_mods(
     path: str,
     *,
-    dirs: Optional[bool]=None,
-    valid: Optional[bool]=None,
-    blacklisted: Optional[bool]=None,
+    dirs: t.Optional[bool]=None,
+    valid: t.Optional[bool]=None,
+    blacklisted: t.Optional[bool]=None,
     with_size: bool=False,
     with_hash: bool=False,
-) -> Iterator[ModMeta]:
+) -> t.Iterator[ModMeta]:
     files = os.listdir(path)
     blacklist = None
     if os.path.isfile(os.path.join(path, 'blacklist.txt')):

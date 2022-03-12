@@ -1,7 +1,6 @@
 import os
 import shutil
 from tempfile import TemporaryDirectory
-from typing import Sequence, Union
 from concurrent.futures import ThreadPoolExecutor, wait
 from urllib.error import URLError
 
@@ -10,6 +9,8 @@ from click import Abort
 
 from .utils import ModDownload, UpdateInfo, download_with_progress, nullcontext
 from . import utils
+
+import typing as t
 
 def downloader(src, dest, name, mirror=None):
     mirror = mirror or src
@@ -25,7 +26,7 @@ def downloader(src, dest, name, mirror=None):
         if isinstance(e, (TimeoutError, URLError)) and src != mirror:
             downloader(mirror, dest, name)
 
-def mod_downloader(mod_folder, download:Union[ModDownload, UpdateInfo]):
+def mod_downloader(mod_folder, download:t.Union[ModDownload, UpdateInfo]):
     if isinstance(download, ModDownload):
         src, mirror, dest, name = download.Url, download.Mirror, os.path.join(mod_folder, download.Meta.Name + '.zip'), str(download.Meta)
     else:
@@ -33,7 +34,7 @@ def mod_downloader(mod_folder, download:Union[ModDownload, UpdateInfo]):
 
     downloader(src, dest, name, mirror)
 
-def download_threaded(mod_folder, downloads: Sequence[Union[ModDownload, UpdateInfo]], late_downloads=None, thread_count=8):
+def download_threaded(mod_folder, downloads: t.Sequence[t.Union[ModDownload, UpdateInfo]], late_downloads=None, thread_count=8):
     with ThreadPoolExecutor(max_workers=thread_count, thread_name_prefix='download_') as pool:
         futures = [pool.submit(mod_downloader, mod_folder, download) for download in downloads]
         with TemporaryDirectory('_mons') if late_downloads else nullcontext('') as temp_dir:
