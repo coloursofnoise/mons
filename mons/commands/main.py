@@ -92,6 +92,9 @@ def show(userInfo: UserInfo, name, verbose):
         echo(name + ':')
         for k, v in info.items():
             echo(f'\t{k}:\t{v}')
+        orig_exe = os.path.join(os.path.dirname(userInfo.installs[name]['Path']), 'orig', 'Celeste.exe')
+        if os.path.isfile(orig_exe):
+            echo(f'\torighash:\t{getMD5Hash(orig_exe)}')
         echo(f'\tpath:\t{userInfo.installs[name]["Path"]}')
     else:
         echo('{}:\t{}'.format(name, buildVersionString(info)))
