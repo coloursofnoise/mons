@@ -52,9 +52,9 @@ def list_mods(userinfo: UserInfo, enabled, valid, name, dll, dir, dependency, se
     '''List installed mods.'''
     if valid == False:
         if dll == True:
-            raise click.UsageError('--invalid and --dll options are incompatible.')
+            raise click.BadOptionUsage('--dll', '--dll cannot be used with the --invalid flag.')
         if dependency:
-            raise click.UsageError('--invalid and --dependency options are incompatible.')
+            raise click.BadOptionUsage('--dependency', '--dependency cannot be used with the --invalid flag.')
 
     basePath = os.path.join(os.path.dirname(userinfo.installs[name]['path']), 'Mods')
 
@@ -235,8 +235,9 @@ def resolve_mods(mods: t.Sequence[str]) -> t.Tuple[t.List[ModDownload], t.List[s
 @click.option('--random', is_flag=True, hidden=True)
 @click.option('--deps/--no-deps', is_flag=True, default=True, hidden=True)
 @click.option('--optional-deps/--no-optional-deps', is_flag=True, default=False, hidden=True)
+@click.option('--yes', '-y', is_flag=True, default=None, help='Skip confirmation prompts.')
 @pass_userinfo
-def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps, optional_deps):
+def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps, optional_deps, yes):
     '''Add one or more mods.
 
     MODS can be one or more of: mod ID, local path, zip file, GameBanana page, or GameBanana submission ID.'''
@@ -256,6 +257,23 @@ def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps,
 
     if random:
         mods = (urllib.request.urlopen('https://max480-random-stuff.appspot.com/celeste/random-map').url,)
+
+    def process_zip(zip, name):
+        meta = read_mod_info(zip)
+        if meta:
+            if meta.Name in installed_list:
+                if os.path.isdir(installed_list[meta.Name].Path):
+                    raise IsADirectoryError("Could not overwrite non-zipped mod.")
+                shutil.move(zip, installed_list[meta.Name].Path)
+            else:
+                resolved.append(ModDownload(meta, f'file:{urllib.request.pathname2url(zip)}'))
+        elif click.confirm(f'\'{name}\' does not seem to be an Everest mod.\nInstall anyways?'):
+            filename = click.prompt('Save as file')
+            if filename:
+                filename = filename if filename.endswith('.zip') else filename + '.zip'
+                shutil.move(zip, os.path.join(mod_folder, filename))
+        else:
+            echo(f'Skipped install for {name}.')
 
     if not mods:
         raise click.UsageError('Missing argument \'MODS\'')
@@ -277,6 +295,16 @@ def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps,
             raise click.Abort()
         resolved = [match]
 
+    # Read from stdin
+    elif mods == ('-',):
+        with click.open_file('-', mode='rb') as stdin:
+            with temporary_file(persist=True) as temp:
+                if stdin.isatty():
+                    raise click.exceptions.FileError('stdin', 'No input.')
+                with click.open_file(temp, mode='wb') as file:
+                    read_with_progress(stdin, file, label='Reading from stdin', clear_progress=True)
+                process_zip(temp, 'stdin')
+
     else:
         resolved, unresolved = resolve_mods(mods)
 
@@ -286,25 +314,11 @@ def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps,
             echo(f'\t{s}')
         download_size = sum(get_download_size(url) for url in unresolved)
         echo(f'Downloading them all will use up to {format_bytes(download_size)} disk space.')
-        if click.confirm('Download and attempt to resolve them before continuing?', True):
+        if confirm_ext('Download and attempt to resolve them before continuing?', True, skip=yes):
             for url in unresolved:
                 with temporary_file(persist=True) as file:
                     download_with_progress(url, file, f"Downloading {url}", clear=True)
-                    meta = read_mod_info(file)
-                    if meta:
-                        if meta.Name in installed_list:
-                            if os.path.isdir(installed_list[meta.Name].Path):
-                                raise IsADirectoryError("Could not overwrite non-zipped mod.")
-                            shutil.move(file, installed_list[meta.Name].Path)
-                        else:
-                            resolved.append(ModDownload(meta, f'file:{urllib.request.pathname2url(file)}'))
-                    elif click.confirm('This file does not seem to be an Everest mod. Install anyways?'):
-                        filename = click.prompt('Save as file')
-                        if filename:
-                            filename = filename if filename.endswith('.zip') else filename + '.zip'
-                            shutil.move(file, os.path.join(mod_folder, filename))
-                    else:
-                        echo(f'Skipped install for {url}.')
+                    process_zip(file, url)
 
             unresolved = []
 
@@ -374,7 +388,7 @@ def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps,
         else:
             echo(f'After this operation, {format_bytes(abs(download_size))} disk space will be freed')
 
-        click.confirm('Continue?', default=True, abort=True)
+        confirm_ext('Continue?', default=True, abort=True, skip=yes)
 
         start = time.perf_counter()
         for mod in itertools.chain((mod.Old for mod in deps_update), deps_blacklisted):
@@ -388,7 +402,7 @@ def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps,
         current_everest = Version(1, install_cache.getint('everestbuild', fallback=0), 0)
         if not current_everest.satisfies(everest_min):
             echo(f'Installed Everest ({current_everest}) does not satisfy minimum requirement ({everest_min}).')
-            if click.confirm('Update Everest?', True):
+            if confirm_ext('Update Everest?', True, skip=yes):
                 mons_cli.main(args=['install', install.name, str(everest_min)])
 
 

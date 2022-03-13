@@ -7,14 +7,24 @@ import sys
 import configparser
 from urllib import parse
 
+from mons.errors import TTYError
+
+def confirm_ext(*params, skip=None, **attrs):
+    if skip != None:
+        return skip
+    if not os.isatty(sys.stdin.fileno()):
+        raise TTYError('Could not read from stdin: not a tty.\nUse \'--yes\' to skip confirmation prompts.')
+
+    return click.confirm(*params, **attrs)
+
 class CatchErrorsGroup(click.Group):
-    def main(self, args=None, prog_name=None, complete_var=None, standalone_mode=True, windows_expand_args=True, **extra):
+    def main(self, args=None, *params, **extra):
         debug = False
         try:
             debug = '--debug' in sys.argv
             if debug and not args:
                 sys.argv.remove('--debug')
-            super().main(args=args, prog_name=prog_name, complete_var=complete_var, standalone_mode=standalone_mode, windows_expand_args=windows_expand_args, **extra)
+            super().main(args=args, *params, **extra)
         except Exception as e:
             if debug or os.environ.get("MONS_DEBUG", 'false') == 'true':
                 click.echo(f'\033[0;31mAn unhandled exception has occurred.\033[0m')
