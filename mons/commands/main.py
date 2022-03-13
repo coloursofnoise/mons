@@ -55,12 +55,12 @@ def set_path(userInfo: UserInfo, name, path):
 
 @cli.command(no_args_is_help=True, )
 @click.argument('name', type=Install())
+@click.confirmation_option(prompt='Are you sure you want to remove this install?')
 @pass_userinfo
 def remove(userInfo: UserInfo, name):
     '''Remove an existing install'''
-    if click.confirm('Are you sure?', abort=True):
-        userInfo.installs.remove_section(name)
-        userInfo.cache.remove_section(name)
+    userInfo.installs.remove_section(name)
+    userInfo.cache.remove_section(name)
 
 
 @cli.command(no_args_is_help=True)
