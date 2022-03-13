@@ -106,18 +106,19 @@ def show(userInfo: UserInfo, name, verbose):
 @click.argument('versionSpec', required=False)
 @click.option('-v', '--verbose', is_flag=True, help='Be verbose.')
 @click.option('--latest', is_flag=True, help='Install latest available build, branch-ignorant.')
-@click.option('--zip', 
-    type=click.Path(exists=True, dir_okay=False, resolve_path=True), 
-    help='Install from local zip artifact.')
+@click.option('--zip',
+    type=click.File(mode='rb'), 
+    help='Install from zip artifact.')
+@click.option('--url',
+    type=URL(require_path=True))
 @click.option('--src',
-    cls=ExplicitOption,
     type=click.Path(exists=True, file_okay=False, resolve_path=True),
     help='Build and install from source folder.')
 @click.option('--src', cls=DefaultOption, is_flag=True)
 @click.option('--no-build', is_flag=True, help='Use with --src to install without building.')
 @click.option('--launch', is_flag=True, help='Launch Celeste after installing.')
 @pass_userinfo
-def install(userinfo: UserInfo, name, versionspec, verbose, latest, zip, src, src_default, no_build, launch):
+def install(userinfo: UserInfo, name, versionspec, verbose, latest, zip: io.BufferedReader, url, src, src_default, no_build, launch):
     '''Install Everest
 
     VERSIONSPEC can be a branch name, build number, or version number.'''
@@ -171,18 +172,21 @@ def install(userinfo: UserInfo, name, versionspec, verbose, latest, zip, src, sr
             )
             success = True
 
-    elif versionspec and all(urllib.parse.urlparse(versionspec)[:3]):
-        echo('Downloading artifact from ' + versionspec)
-        artifactPath = os.path.join(installDir, urllib.parse.urlparse(versionspec).path.split('/')[-1])
-        download_with_progress(versionspec, artifactPath, atomic=True, clear=True)
+    elif url:
+        download_url = urllib.parse.urlunparse(url)
+        echo('Downloading artifact from ' + download_url)
+        artifactPath = os.path.join(installDir, url.path.split('/')[-1])
+        download_with_progress(download_url, artifactPath, atomic=True, clear=True)
 
     elif zip:
         artifactPath = zip
-    elif versionspec and versionspec.startswith('file://'):
-        artifactPath = versionspec[len('file://'):]
 
     if artifactPath:
-        label = f'Unzipping {os.path.basename(artifactPath)}'
+        label = f'Unzipping {os.path.basename(artifactPath) if isinstance(artifactPath, str) else zip.name}'
+        if zip and zip.fileno() == 0: #stdin
+            if zip.isatty():
+                raise click.exceptions.FileError(zip.name, 'File is empty.')
+            artifactPath = io.BytesIO(artifactPath.read())
         with zipfile.ZipFile(artifactPath) as wrapper:
             try:
                 entry = wrapper.open('olympus-build/build.zip') # Throws KeyError if not present

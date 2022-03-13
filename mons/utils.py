@@ -3,6 +3,7 @@ import os
 import atexit
 import configparser
 import json
+import re
 import tempfile
 from urllib.error import HTTPError
 import yaml
@@ -18,9 +19,6 @@ from contextlib import contextmanager
 import urllib.request
 import urllib.parse
 import urllib.response
-opener=urllib.request.build_opener()
-opener.addheaders=[('User-Agent','Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1941.0 Safari/537.36')]
-urllib.request.install_opener(opener)
 from http.client import HTTPResponse
 
 from click import echo, Abort
@@ -169,6 +167,18 @@ def folder_size(start_path = '.'):
                 total_size += os.path.getsize(fp)
 
     return total_size
+
+class EverestHandler(urllib.request.BaseHandler):
+    def everest_open(self, req: urllib.request.Request):
+        parsed_url = urllib.parse.urlparse(req.full_url)
+        gb_url = re.match('^(https://gamebanana.com/mmdl/.*),.*,.*$', parsed_url.path)
+        download_url = gb_url[1] if gb_url else parsed_url.path
+        req.full_url = download_url
+        return self.parent.open(req)
+
+opener=urllib.request.build_opener(EverestHandler)
+opener.addheaders=[('User-Agent','Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1941.0 Safari/537.36')]
+urllib.request.install_opener(opener)
 
 def get_download_size(url: str, initial_size: int=0):
     request = urllib.request.Request(url, method='HEAD')

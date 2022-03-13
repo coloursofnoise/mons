@@ -1,8 +1,11 @@
 import click
 
+from traceback import format_exception_only, format_tb
+
 import os
 import sys
 import configparser
+from urllib import parse
 
 class CatchErrorsGroup(click.Group):
     def main(self, args=None, prog_name=None, complete_var=None, standalone_mode=True, windows_expand_args=True, **extra):
@@ -14,11 +17,12 @@ class CatchErrorsGroup(click.Group):
             super().main(args=args, prog_name=prog_name, complete_var=complete_var, standalone_mode=standalone_mode, windows_expand_args=windows_expand_args, **extra)
         except Exception as e:
             if debug or os.environ.get("MONS_DEBUG", 'false') == 'true':
-                click.echo('\033[0;31m', nl=False)
-                raise
+                click.echo(f'\033[0;31mAn unhandled exception has occurred.\033[0m')
+                click.echo(''.join(format_tb(e.__traceback__)), nl=False)
+                click.echo(f'\033[0;31m{"".join(format_exception_only(type(e), e))}', nl=False)
             else:
                 click.echo(f'\033[0;31m{type(e).__name__}: {e}\033[0m')
-                click.echo(f'''An unhandled exception was encountered.
+                click.echo(f'''An unhandled exception has occurred.
 Use the --debug flag to disable clean exception handling.''')
 
 class Install(click.ParamType):
@@ -59,6 +63,33 @@ Use the `set-path` command to assign a new path.''', ctx)
                 self.fail(f'Install {value} already exists.', param, ctx)
 
         return value
+
+class URL(click.ParamType):
+    name = 'URL'
+
+    def __init__(self, default_scheme=None, valid_schemes=None, require_path=False) -> None:
+        super().__init__()
+        self.default_scheme=default_scheme
+        self.valid_schemes=valid_schemes
+        self.require_path=require_path
+
+    def convert(self, value, param, ctx):
+        if isinstance(value, parse.ParseResult):
+            return value
+
+        try:
+            parsed_url = parse.urlparse(value)
+
+            if self.require_path and not parsed_url.path:
+                self.fail('Path component required for URL.', param, ctx)
+            if not parsed_url.scheme and self.default_scheme:
+                parsed_url._replace(scheme=self.default_scheme)
+            if self.valid_schemes and parsed_url.scheme not in self.valid_schemes:
+                self.fail(f'URI scheme \'{parsed_url.scheme}\' not allowed.', param, ctx)
+
+            return parsed_url
+        except ValueError:
+            self.fail(f'{value} is not a valid URL.', param, ctx)
 
 class DefaultOption(click.Option):
     """ Mark this option as being a _default option """

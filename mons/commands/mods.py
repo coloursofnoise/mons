@@ -145,15 +145,26 @@ def resolve_mods(mods: t.Sequence[str]) -> t.Tuple[t.List[ModDownload], t.List[s
     resolved = list()
     unresolved = list()
     mod_list = get_mod_list()
+
     for mod in mods:
         parsed_url = urllib.parse.urlparse(mod)
         download = None
         url = None
 
+        # Special case to try to resolve 1-Click install links through mod database
+        if parsed_url.scheme == 'everest':
+            match = re.match('^(https://gamebanana.com/mmdl/.*),.*,.*$', parsed_url.path)
+            if match:
+                gb_url = match[1]
+                matches = {key: val for key, val in mod_list.items() if gb_url == val['URL']}
+                if len(matches) > 0:
+                    download = prompt_mod_selection(matches)
+                else:
+                    parsed_url = urllib.parse.urlparse(gb_url)
+
         # Install from local filesystem
-        if (mod.endswith('.zip') and os.path.exists(mod)) or (parsed_url.scheme == 'file' and parsed_url.path.endswith('.zip')):
-            if not parsed_url.scheme == 'file':
-                parsed_url = ParseResult('file', '', os.path.abspath(mod), '', '', '')
+        if (mod.endswith('.zip') and os.path.exists(mod)):
+            parsed_url = ParseResult('file', '', os.path.abspath(mod), '', '', '')
             meta = read_mod_info(parsed_url.path)
             if meta:
                 download = ModDownload(meta, urllib.parse.urlunparse(parsed_url))
@@ -197,7 +208,7 @@ def resolve_mods(mods: t.Sequence[str]) -> t.Tuple[t.List[ModDownload], t.List[s
             file_id = parsed_url.path[len('/file/d/'):].split('/')[0]
             url = 'https://drive.google.com/uc?export=download&id=' + file_id
 
-        elif parsed_url.scheme in ('http', 'https') and parsed_url.path.endswith('.zip'):
+        elif parsed_url.scheme and parsed_url.path:
             url = mod
 
         # Possible GameBanana Submission ID
