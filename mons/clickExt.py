@@ -13,7 +13,7 @@ def confirm_ext(*params, skip=None, **attrs):
     if skip != None:
         return skip
     if not os.isatty(sys.stdin.fileno()):
-        raise TTYError('Could not read from stdin: not a tty.\nUse \'--yes\' to skip confirmation prompts.')
+        raise TTYError('not a tty.\nUse \'--yes\' to skip confirmation prompts.')
 
     return click.confirm(*params, **attrs)
 

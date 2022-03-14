@@ -300,7 +300,7 @@ def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps,
         with click.open_file('-', mode='rb') as stdin:
             with temporary_file(persist=True) as temp:
                 if stdin.isatty():
-                    raise click.exceptions.FileError('stdin', 'No input.')
+                    raise TTYError('no input.')
                 with click.open_file(temp, mode='wb') as file:
                     read_with_progress(stdin, file, label='Reading from stdin', clear_progress=True)
                 process_zip(temp, 'stdin')

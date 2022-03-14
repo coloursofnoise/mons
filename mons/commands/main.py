@@ -185,7 +185,7 @@ def install(userinfo: UserInfo, name, versionspec, verbose, latest, zip: io.Buff
         label = f'Unzipping {os.path.basename(artifactPath) if isinstance(artifactPath, str) else zip.name}'
         if zip and zip.fileno() == 0: #stdin
             if zip.isatty():
-                raise click.exceptions.FileError(zip.name, 'File is empty.')
+                raise TTYError('no input.')
             artifactPath = io.BytesIO(artifactPath.read())
         with zipfile.ZipFile(artifactPath) as wrapper:
             try:
