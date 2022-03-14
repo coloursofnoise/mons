@@ -452,7 +452,7 @@ class _ModMeta_Base():
         self.Version = version
 
     @classmethod
-    def fromDict(cls, data):
+    def _from_dict(cls, data):
         return _ModMeta_Base(str(data['Name']), str(data['Version']))
 
     def __repr__(self) -> str:
@@ -469,10 +469,21 @@ class _ModMeta_Deps():
         assert isinstance(self.Dependencies, t.List)
 
     @classmethod
-    def fromDict(cls, data):
+    def parse(cls, data):
+        if isinstance(data, _ModMeta_Deps):
+            return data
+        elif isinstance(data, t.Dict):
+            return cls._from_dict(data)
+        elif isinstance(data, t.List):
+            return _ModMeta_Deps(data, [])
+        else:
+            raise ValueError()
+
+    @classmethod
+    def _from_dict(cls, data):
         return _ModMeta_Deps(
-            [_ModMeta_Base.fromDict(dep) for dep in data['Dependencies']],
-            [_ModMeta_Base.fromDict(dep) for dep in data['OptionalDependencies']]
+            [_ModMeta_Base._from_dict(dep) for dep in data['Dependencies']],
+            [_ModMeta_Base._from_dict(dep) for dep in data['OptionalDependencies']]
         )
 
 class ModMeta(_ModMeta_Base,_ModMeta_Deps):
@@ -483,8 +494,8 @@ class ModMeta(_ModMeta_Base,_ModMeta_Deps):
     def __init__(self, data: t.Dict):
         _ModMeta_Base.__init__(self, str(data['Name']), str(data['Version']))
         _ModMeta_Deps.__init__(self,
-            [_ModMeta_Base.fromDict(dep) for dep in data.get('Dependencies', [])],
-            [_ModMeta_Base.fromDict(dep) for dep in data.get('OptionalDependencies', [])]
+            [_ModMeta_Base._from_dict(dep) for dep in data.get('Dependencies', [])],
+            [_ModMeta_Base._from_dict(dep) for dep in data.get('OptionalDependencies', [])]
         )
         self.DLL = str(data['DLL']) if 'DLL' in data else None
         self.Size = int(data['Size']) if 'Size' in data else 0
@@ -507,22 +518,22 @@ def _merge_dependencies(dict, dep: _ModMeta_Base):
     else:
         dict[dep.Name] = dep
 
-def recurse_dependencies(mods: t.Iterable[_ModMeta_Base], dependency_graph, dict):
+def recurse_dependencies(mods: t.Iterable[_ModMeta_Base], database, dict):
     for mod in mods:
         _merge_dependencies(dict, mod)
-        if mod.Name in dependency_graph:
-            recurse_dependencies(_ModMeta_Deps.fromDict(dependency_graph[mod.Name]).Dependencies, dependency_graph, dict)
+        if mod.Name in database:
+            recurse_dependencies(_ModMeta_Deps.parse(database[mod.Name]).Dependencies, database, dict)
 
-def combined_dependencies(mods: t.Iterable[_ModMeta_Base], dependency_graph) -> t.Dict[str, _ModMeta_Base]:
+def combined_dependencies(mods: t.Iterable[_ModMeta_Base], database) -> t.Dict[str, _ModMeta_Base]:
     deps = {}
     for mod in mods:
         dependencies = None
-        if mod.Name in dependency_graph:
-            dependencies = _ModMeta_Deps.fromDict(dependency_graph[mod.Name]).Dependencies
+        if mod.Name in database:
+            dependencies = _ModMeta_Deps.parse(database[mod.Name]).Dependencies
         elif isinstance(mod, _ModMeta_Deps):
             dependencies = mod.Dependencies
         if dependencies:
-            recurse_dependencies(dependencies, dependency_graph, deps)
+            recurse_dependencies(dependencies, database, deps)
     return deps
 
 class UpdateInfo():

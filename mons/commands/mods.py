@@ -129,9 +129,9 @@ def prompt_mod_selection(options: t.Dict, max: int=-1) -> t.Union[ModDownload,No
 
     return selection
 
-def resolve_dependencies(mods: t.Iterable[ModMeta]):
-    dependency_graph = get_dependency_graph()
-    deps = combined_dependencies(mods, dependency_graph)
+def resolve_dependencies(mods: t.Iterable[ModMeta], database = None):
+    database = database or get_dependency_graph()
+    deps = combined_dependencies(mods, database)
     sorted_deps = sorted(deps.values(), key=lambda dep: dep.Name)
 
     return sorted_deps
@@ -233,7 +233,7 @@ def resolve_mods(mods: t.Sequence[str]) -> t.Tuple[t.List[ModDownload], t.List[s
 @click.argument('mods', nargs=-1)
 @click.option('--search', is_flag=True, help='Use the Celeste mod search API to find a mod.')
 @click.option('--random', is_flag=True, hidden=True)
-@click.option('--deps/--no-deps', is_flag=True, default=True, hidden=True)
+@click.option('--deps/--no-deps', is_flag=True, default=True, help='Install dependencies (default=true).')
 @click.option('--optional-deps/--no-optional-deps', is_flag=True, default=False, hidden=True)
 @click.option('--yes', '-y', is_flag=True, default=None, help='Skip confirmation prompts.')
 @pass_userinfo
@@ -330,29 +330,32 @@ def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps,
                 echo(installed_list[mod.Meta.Name])
 
     if len(resolved) > 0:
-        echo('Resolving dependencies...')
-        dependencies = resolve_dependencies(map(lambda d: d.Meta, resolved))
-        special, dependencies = partition(lambda mod: mod.Name in ('Celeste', 'Everest'), dependencies)
-        deps_install: t.List = []; deps_update: t.List[UpdateInfo] = []; deps_blacklisted: t.List[ModMeta] = []
-        for dep in dependencies:
-            if dep.Name in installed_list:
-                installed_mod = installed_list[dep.Name]
-                if installed_mod.Version.satisfies(dep.Version):
-                    if installed_mod.Blacklisted:
-                        deps_blacklisted.append(installed_mod)
+        if deps:
+            echo('Resolving dependencies...')
+            dependencies = resolve_dependencies(map(lambda d: d.Meta, resolved))
+            special, dependencies = partition(lambda mod: mod.Name in ('Celeste', 'Everest'), dependencies)
+            deps_install: t.List = []; deps_update: t.List[UpdateInfo] = []; deps_blacklisted: t.List[ModMeta] = []
+            for dep in dependencies:
+                if dep.Name in installed_list:
+                    installed_mod = installed_list[dep.Name]
+                    if installed_mod.Version.satisfies(dep.Version):
+                        if installed_mod.Blacklisted:
+                            deps_blacklisted.append(installed_mod)
+                    else:
+                        deps_update.append(UpdateInfo(installed_mod, dep.Version, mod_list[dep.Name]['URL']))
                 else:
-                    deps_update.append(UpdateInfo(installed_mod, dep.Version, mod_list[dep.Name]['URL']))
-            else:
-                deps_install.append(dep)
+                    deps_install.append(dep)
 
-        deps_install, unregistered = partition(lambda mod: mod.Name in mod_list, deps_install)
-        if len(unregistered) > 0:
-            echo(f'{len(unregistered)} dependencies could not be found:')
-            for mod in unregistered:
-                echo(mod)
-            click.confirm('Skip missing dependencies?', default=True, abort=True)
+            deps_install, unregistered = partition(lambda mod: mod.Name in mod_list, deps_install)
+            if len(unregistered) > 0:
+                echo(f'{len(unregistered)} dependencies could not be found:')
+                for mod in unregistered:
+                    echo(mod)
+                click.confirm('Skip missing dependencies?', default=True, abort=True)
 
-        deps_install = [get_mod_download(mod.Name, mod_list) for mod in deps_install]
+            deps_install = [get_mod_download(mod.Name, mod_list) for mod in deps_install]
+        else:
+            deps_install = deps_update = deps_blacklisted = []
         count = len(deps_install) + len(resolved)
         if count > 0:
             echo(f"\t{count} To Install:")
@@ -398,6 +401,9 @@ def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps,
         end = time.perf_counter()
         tqdm.write(str.format('Downloaded files in {:.3f} seconds.', end-start))
 
+        if not deps:
+            exit()
+
         everest_min = next((dep.Version for dep in special if dep.Name == 'Everest'), Version(1, 0, 0))
         current_everest = Version(1, install_cache.getint('everestbuild', fallback=0), 0)
         if not current_everest.satisfies(everest_min):
@@ -405,12 +411,56 @@ def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps,
             if confirm_ext('Update Everest?', True, skip=yes):
                 mons_cli.main(args=['install', install.name, str(everest_min)])
 
-
 @cli.command(hidden=True)
 @click.argument('name', type=Install(resolve_install=True))
-@click.argument('mod')
-def remove(name, mod):
-    pass
+@click.argument('mods', nargs=-1)
+@click.option('--trim-dependencies', '--trim', is_flag=True)
+@click.option('--force', '-f', is_flag=True, default=False)
+def remove(name, mods, trim_dependencies, force):
+    mod_folder = os.path.join(os.path.dirname(name['Path']), 'Mods')
+    installed_list = installed_mods(mod_folder, valid=True, with_size=True)
+    installed_list = t.cast(t.Dict[str, ModMeta], {
+        meta.Name: meta
+        for meta in tqdm(installed_list, desc='Reading Installed Mods', leave=False, unit='')
+    })
+
+    resolved, unresolved = partition(lambda mod: mod in installed_list, mods)
+
+    if len(unresolved) > 0:
+        echo('The following mods could not be found:')
+        for mod in unresolved:
+            echo(f'\t{mod}')
+        confirm_ext('Continue anyways?', skip=force, abort=True)
+
+    metas = [installed_list[mod] for mod in resolved]
+
+    echo(str(len(metas)) + ' mods will be removed:')
+    for mod in metas:
+        echo(f'\t{mod}')
+
+    removable = []
+    if trim_dependencies:
+        all_dependencies = resolve_dependencies([meta for meta in installed_list.values() if not meta.Name in mods], installed_list)
+
+        dependencies = resolve_dependencies(metas, {mod: meta for mod, meta in installed_list.items() if mod in mods})
+
+        removable = set(dep.Name for dep in dependencies).difference(set(dep.Name for dep in all_dependencies))
+        removable = [installed_list[dep] for dep in removable if dep in installed_list]
+
+        echo(str(len(removable)) + ' dependencies will also be removed:')
+        for dep in removable:
+            echo(f'\t{dep}')
+
+    total_size = sum((mod.Size for mod in itertools.chain(metas, removable)))
+    echo(f'After this operation, {format_bytes(total_size)} disk space will be freed.')
+
+    if not force:
+        click.confirm('Remove mods?', abort=True)
+
+    with click.progressbar(label='Deleting files', length=len(removable) + len(metas)) as progress:
+        for mod in itertools.chain(removable, metas):
+            os.remove(mod.Path)
+            progress.update(1)
 
 
 @cli.command()
