@@ -365,7 +365,7 @@ def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps,
         if count > 0:
             echo(f"\t{count} To Update:")
             for mod in deps_update:
-                echo(f"{mod.Old.Name}: {mod.New}")
+                echo(f"{mod.Old} -> {mod.New}")
         count = len(deps_blacklisted)
         if count > 0:
             echo(f"\t{count} To Enable:")
@@ -415,7 +415,7 @@ def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps,
 @click.argument('name', type=Install(resolve_install=True))
 @click.argument('mods', nargs=-1)
 @click.option('--trim-dependencies', '--trim', is_flag=True)
-@click.option('--force', '-f', is_flag=True, default=False)
+@click.option('--force', '-f', is_flag=True, default=False, help='Ignore errors and confirmation prompts.')
 def remove(name, mods, trim_dependencies, force):
     mod_folder = os.path.join(os.path.dirname(name['Path']), 'Mods')
     installed_list = installed_mods(mod_folder, valid=True, with_size=True)
@@ -457,10 +457,20 @@ def remove(name, mods, trim_dependencies, force):
     if not force:
         click.confirm('Remove mods?', abort=True)
 
+    folders = []
     with click.progressbar(label='Deleting files', length=len(removable) + len(metas)) as progress:
         for mod in itertools.chain(removable, metas):
-            os.remove(mod.Path)
+            # This should be handled by catching IsADirectoryError but for some reason it raises PermissionError instead so...
+            if os.path.isdir(mod.Path):
+                folders.append(mod)
+            else:
+                os.remove(mod.Path)
             progress.update(1)
+
+    if len(folders) > 0:
+        echo('The following unzipped mods were not removed:')
+        for mod in folders:
+            echo(f'\t{mod} ({os.path.basename(mod.Path)}/)')
 
 
 @cli.command()
@@ -498,7 +508,7 @@ def update(userinfo, name, all, enabled, upgrade_only):
                     if not has_updates:
                         echo('Updates available:')
                         has_updates = True
-                    echo(f'  {update.Old.Name}: {update.Old.Version} -> {update.New}')
+                    echo(f'\t{update.Old} -> {update.New}')
                     updates.append(update)
                     total_size += server['Size'] - update.Old.Size
 
@@ -532,7 +542,7 @@ def update(userinfo, name, all, enabled, upgrade_only):
 #@click.argument('mod', required=False)
 @click.option('--all', is_flag=True, help='Resolve all installed mods.')
 @click.option('--enabled', is_flag=True, help='Resolve currently enabled mods.', default=None)
-@click.option('--update/--no-update', help='Update outdated dependencies.', default=True)
+@click.option('--update/--no-update', help='Update outdated dependencies (default=true).', default=True)
 @pass_userinfo
 def resolve(userinfo: UserInfo, name, all, enabled, update):
     if not all:
@@ -556,13 +566,13 @@ def resolve(userinfo: UserInfo, name, all, enabled, update):
 
     deps_outdated = [
         dep for dep in deps_installed 
-        if not dep.Version.satisfies(installed_dict[dep.Name].Version)
+        if not installed_dict[dep.Name].Version.satisfies(dep.Version)
     ] if update else []
 
     if len(deps_missing) + len(deps_outdated) < 1:
         return
 
-    echo(f'{len(deps_missing) + len(deps_outdated)} dependencies missing {"or outdated" if update else ""}, attempting to resolve...')
+    echo(f'{len(deps_missing) + len(deps_outdated)} dependencies missing{" or outdated" if len(deps_outdated) else ""}, attempting to resolve...')
 
     mod_list = get_mod_list()
     deps_install = [get_mod_download(mod.Name, mod_list) for mod in deps_missing if mod.Name in mod_list]
@@ -575,12 +585,14 @@ def resolve(userinfo: UserInfo, name, all, enabled, update):
     if unresolved != 0:
         echo(f'{unresolved} mods could not be resolved.')
 
-    echo('\tTo Install:')
+    if len(deps_install) > 0:
+        echo('\tTo Install:')
     for mod in deps_install:
         echo(mod.Meta)
-    echo('\tTo Update:')
+    if len(deps_update) > 0:
+        echo('\tTo Update:')
     for mod in deps_update:
-        echo(f'{mod.Old.Name}: {mod.New}')
+        echo(f'{mod.Old} -> {mod.New}')
 
     download_size_ref = [0]
     def download_size_key(mod: t.Union[UpdateInfo, ModDownload]):
