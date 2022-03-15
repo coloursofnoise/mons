@@ -15,7 +15,7 @@ from ..clickExt import *
 @click.argument('path', type=click.Path(exists=True, resolve_path=True))
 @pass_userinfo
 def add(userInfo: UserInfo, name, path):
-    '''Add a Celeste Install'''
+    '''Add a Celeste install'''
     try:
         install_path = find_celeste_file(path, 'Celeste.exe')
     except FileNotFoundError as err:
@@ -55,7 +55,9 @@ def set_path(userInfo: UserInfo, name, path):
 
 @cli.command(no_args_is_help=True, )
 @click.argument('name', type=Install())
-@click.confirmation_option(prompt='Are you sure you want to remove this install?')
+@click.confirmation_option('--force',
+    prompt='Are you sure you want to remove this install?',
+    help='Skip confirmation prompt.')
 @pass_userinfo
 def remove(userInfo: UserInfo, name):
     '''Remove an existing install'''
@@ -83,7 +85,7 @@ def list(userInfo: UserInfo):
 
 @cli.command(no_args_is_help=True)
 @click.argument('name', type=Install())
-@click.option('-v', '--verbose', is_flag=True)
+@click.option('-v', '--verbose', is_flag=True, help='Enable verbose logging.')
 @pass_userinfo
 def show(userInfo: UserInfo, name, verbose):
     '''Display information for a specific install'''
@@ -104,13 +106,14 @@ def show(userInfo: UserInfo, name, verbose):
 @cli.command(no_args_is_help=True, cls=CommandExt)
 @click.argument('name', type=Install())
 @click.argument('versionSpec', required=False)
-@click.option('-v', '--verbose', is_flag=True, help='Be verbose.')
+@click.option('-v', '--verbose', is_flag=True, help='Enable verbose logging.')
 @click.option('--latest', is_flag=True, help='Install latest available build, branch-ignorant.')
 @click.option('--zip',
     type=click.File(mode='rb'), 
     help='Install from zip artifact.')
 @click.option('--url',
-    type=URL(require_path=True))
+    type=URL(require_path=True),
+    help='Download and install from a URL.')
 @click.option('--src',
     type=click.Path(exists=True, file_okay=False, resolve_path=True),
     help='Build and install from source folder.')
@@ -290,10 +293,12 @@ def install(userinfo: UserInfo, name, versionspec, verbose, latest, zip: io.Buff
     cls=CommandExt,
 )
 @click.argument('name', type=Install())
-@click.argument('args', required=False, cls=PlaceHolder)
+@click.argument('args', nargs=-1, required=False, cls=PlaceHolder)
 @click.pass_context
 def launch(ctx, name):
-    '''Launch the game associated with an install'''
+    '''Launch the game associated with an install
+
+    Any additional arguments are passed to the launched process.'''
     path = ctx.obj.installs[name]['Path']
     if os.name != 'nt':
         if os.uname().sysname == 'Darwin':
@@ -304,8 +309,8 @@ def launch(ctx, name):
 
 
 @cli.command(no_args_is_help=True)
-@click.option('-e', '--edit', is_flag=True)
-@click.option('--open', is_flag=True, hidden=True)
+@click.option('-e', '--edit', is_flag=True, help='Open the global config file for editing.')
+@click.option('--open', is_flag=True, help='Show the mons config folder.')
 @pass_userinfo
 def config(userinfo, edit, open):
     '''Manage the global config'''
@@ -314,5 +319,5 @@ def config(userinfo, edit, open):
     elif open:
         click.launch(os.path.join(config_dir, CONFIG_FILE), locate=True)
     else:
-        echo('''Managing config directly via commandline is not currently supported.
-Use --edit to edit the config the default editor.''')
+        raise click.UsageError('''Managing config directly via commandline is not currently supported.
+Use --edit to edit the config using the default editor.''')

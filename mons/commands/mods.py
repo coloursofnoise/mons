@@ -37,16 +37,16 @@ def format_mod_info(meta: ModMeta):
     out += '\n'
     return out
 
-@cli.command(name='list', help='List installed mods.')
+@cli.command(name='list', help='List installed mods.', no_args_is_help=True)
 @click.argument('name', type=Install())
 @click.option('--enabled/--disabled', help='Filter by enabled/disabled mods.', default=None)
 @click.option('--valid/--invalid', help='Filter mods with valid everest.yaml.', default=None)
-@click.option('--dll/--no-dll', help='List mods that register DLLs.', default=None)
-@click.option('--dir/--zip', 'dir', flag_value=True, help='List mods in folders/zips.', default=None)
+@click.option('--dll/--no-dll', help='Filter mods that register DLLs.', default=None)
+@click.option('--dir/--zip', 'dir', flag_value=True, help='Filter mods in folders/zips.', default=None)
 @click.option('--no-zip/--no-dir', 'dir', flag_value=False, hidden=True, default=None)
 @click.option('-d', '--dependency', help='Filter mods by dependency.', metavar='MODID')
 @click.option('-s', '--search', help='Filter mods with a regex pattern.', metavar='QUERY')
-@click.option('-v', '--verbose', is_flag=True, help='Be verbose.')
+@click.option('-v', '--verbose', is_flag=True, help='Enable verbose logging.')
 @pass_userinfo
 def list_mods(userinfo: UserInfo, enabled, valid, name, dll, dir, dependency, search, verbose):
     '''List installed mods.'''
@@ -232,15 +232,15 @@ def resolve_mods(mods: t.Sequence[str]) -> t.Tuple[t.List[ModDownload], t.List[s
 @click.argument('name', type=Install())
 @click.argument('mods', nargs=-1)
 @click.option('--search', is_flag=True, help='Use the Celeste mod search API to find a mod.')
-@click.option('--random', is_flag=True, hidden=True)
-@click.option('--deps/--no-deps', is_flag=True, default=True, help='Install dependencies (default=true).')
-@click.option('--optional-deps/--no-optional-deps', is_flag=True, default=False, hidden=True)
+@click.option('--random', is_flag=True, help='Install a random mod.')
+@click.option('--no-deps', is_flag=True, default=False, help='Skip installing dependencies.')
+@click.option('--optional-deps', is_flag=True, default=False, hidden=True)
 @click.option('--yes', '-y', is_flag=True, default=None, help='Skip confirmation prompts.')
 @pass_userinfo
-def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps, optional_deps, yes):
+def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, no_deps, optional_deps, yes):
     '''Add one or more mods.
 
-    MODS can be one or more of: mod ID, local path, zip file, GameBanana page, or GameBanana submission ID.'''
+    MODS can be one or more of: mod ID, local zip, zip URL, 1-Click install link, Google Drive share link, GameBanana page, or GameBanana submission ID.'''
     install = userinfo.installs[name]
     install_cache = userinfo.cache[name]
     mod_folder = os.path.join(os.path.dirname(install['path']), 'Mods')
@@ -330,7 +330,7 @@ def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps,
                 echo(installed_list[mod.Meta.Name])
 
     if len(resolved) > 0:
-        if deps:
+        if not no_deps:
             echo('Resolving dependencies...')
             dependencies = resolve_dependencies(map(lambda d: d.Meta, resolved))
             special, dependencies = partition(lambda mod: mod.Name in ('Celeste', 'Everest'), dependencies)
@@ -401,7 +401,7 @@ def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps,
         end = time.perf_counter()
         tqdm.write(str.format('Downloaded files in {:.3f} seconds.', end-start))
 
-        if not deps:
+        if no_deps:
             exit()
 
         everest_min = next((dep.Version for dep in special if dep.Name == 'Everest'), Version(1, 0, 0))
@@ -411,12 +411,13 @@ def add(userinfo: UserInfo, name, mods: t.Tuple[str, ...], search, random, deps,
             if confirm_ext('Update Everest?', True, skip=yes):
                 mons_cli.main(args=['install', install.name, str(everest_min)])
 
-@cli.command(hidden=True)
+@cli.command(no_args_is_help=True)
 @click.argument('name', type=Install(resolve_install=True))
 @click.argument('mods', nargs=-1)
-@click.option('--trim-dependencies', '--trim', is_flag=True)
+@click.option('--trim-deps', is_flag=True, help='Also remove any exclusive dependencies.')
 @click.option('--force', '-f', is_flag=True, default=False, help='Ignore errors and confirmation prompts.')
 def remove(name, mods, trim_dependencies, force):
+    '''Remove installed mods.'''
     mod_folder = os.path.join(os.path.dirname(name['Path']), 'Mods')
     installed_list = installed_mods(mod_folder, valid=True, with_size=True)
     installed_list = t.cast(t.Dict[str, ModMeta], {
@@ -473,12 +474,12 @@ def remove(name, mods, trim_dependencies, force):
             echo(f'\t{mod} ({os.path.basename(mod.Path)}/)')
 
 
-@cli.command()
+@cli.command(no_args_is_help=True)
 @click.argument('name', type=Install(resolve_install=True))
 #@click.argument('mod', required=False)
 @click.option('--all', is_flag=True, help='Update all installed mods.')
 @click.option('--enabled', is_flag=True, help='Update currently enabled mods.', default=None)
-@click.option('--upgrade-only', is_flag=True, help='Only update if latest file is a higher version')
+@click.option('--upgrade-only', is_flag=True, help='Only update if new file has a higher version.')
 @pass_userinfo
 def update(userinfo, name, all, enabled, upgrade_only):
     '''Update installed mods.'''
@@ -537,14 +538,15 @@ def update(userinfo, name, all, enabled, upgrade_only):
     end = time.perf_counter()
     tqdm.write(str.format('Downloaded files in {:.3f} seconds.', end-start))
 
-@cli.command()
+@cli.command(no_args_is_help=True)
 @click.argument('name', type=Install())
 #@click.argument('mod', required=False)
 @click.option('--all', is_flag=True, help='Resolve all installed mods.')
 @click.option('--enabled', is_flag=True, help='Resolve currently enabled mods.', default=None)
-@click.option('--update/--no-update', help='Update outdated dependencies (default=true).', default=True)
+@click.option('--no-update', is_flag=True, help='Don\'t update outdated dependencies.')
 @pass_userinfo
-def resolve(userinfo: UserInfo, name, all, enabled, update):
+def resolve(userinfo: UserInfo, name, all, enabled, no_update):
+    '''Resolve any missing or outdated dependencies.'''
     if not all:
         raise click.UsageError('this command can currently only be used with the --all option')
 
@@ -567,7 +569,7 @@ def resolve(userinfo: UserInfo, name, all, enabled, update):
     deps_outdated = [
         dep for dep in deps_installed 
         if not installed_dict[dep.Name].Version.satisfies(dep.Version)
-    ] if update else []
+    ] if not no_update else []
 
     if len(deps_missing) + len(deps_outdated) < 1:
         return
