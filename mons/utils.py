@@ -453,7 +453,7 @@ class _ModMeta_Base():
 
     @classmethod
     def _from_dict(cls, data):
-        return _ModMeta_Base(str(data['Name']), str(data['Version']))
+        return _ModMeta_Base(str(data['Name']), str(data.get('Version', 'NoVersion')))
 
     def __repr__(self) -> str:
         return f'{self.Name}: {self.Version}'
@@ -492,7 +492,7 @@ class ModMeta(_ModMeta_Base,_ModMeta_Deps):
     Blacklisted: t.Optional[bool]=False
 
     def __init__(self, data: t.Dict):
-        _ModMeta_Base.__init__(self, str(data['Name']), str(data['Version']))
+        _ModMeta_Base.__init__(self, str(data['Name']), str(data.get('Version', 'NoVersion')))
         _ModMeta_Deps.__init__(self,
             [_ModMeta_Base._from_dict(dep) for dep in data.get('Dependencies', [])],
             [_ModMeta_Base._from_dict(dep) for dep in data.get('OptionalDependencies', [])]
