@@ -1,9 +1,14 @@
 # MONS - CommandLine Celeste Mod Manager
-**Work In Progress**
 
 [![PyPI](https://img.shields.io/pypi/v/mons.svg)](https://pypi.python.org/pypi/mons)
 
 ## Install:
+### Using [pipx](https://pypa.github.io/pipx/) (recommended):
+```console
+pipx install mons
+```
+
+### Using pip:
 ```console
 python3 -m pip install mons
 ```
