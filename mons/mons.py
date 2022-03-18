@@ -1,9 +1,8 @@
 #!/usr/bin/env python
-
 import click
 
-from .config import *
 from .clickExt import *
+from .config import *
 
 pass_userinfo = click.make_pass_decorator(UserInfo)
 

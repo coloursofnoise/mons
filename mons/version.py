@@ -42,11 +42,11 @@ class Version:
         return True
 
     def __str__(self):
-        out = "{0}.{1}".format(self.Major, self.Minor)
+        out = "{}.{}".format(self.Major, self.Minor)
         if self.Build != -1:
-            out += ".{0}".format(self.Build)
+            out += ".{}".format(self.Build)
             if self.Revision != -1:
-                out += ".{0}".format(self.Revision)
+                out += ".{}".format(self.Revision)
         return out
 
     def __gt__(self, other: "Version"):

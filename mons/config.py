@@ -1,8 +1,9 @@
 import configparser
 import os
-
-from click import get_app_dir, edit
 from contextlib import AbstractContextManager
+
+from click import edit
+from click import get_app_dir
 
 config_dir = get_app_dir("mons", roaming=False)
 

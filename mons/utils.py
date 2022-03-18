@@ -1,38 +1,35 @@
-from io import BytesIO
-import os
 import atexit
 import configparser
-import json
-import re
-import tempfile
-from urllib.error import HTTPError
-import yaml
-from yaml.scanner import ScannerError
-
-import hashlib
-import xxhash
-import zipfile
 import gzip
+import hashlib
+import json
+import os
+import re
 import shutil
-from contextlib import contextmanager
-
-import urllib.request
+import tempfile
+import typing as t
 import urllib.parse
+import urllib.request
 import urllib.response
+import zipfile
+from contextlib import contextmanager
 from http.client import HTTPResponse
-
-from click import echo, Abort
-from tqdm import tqdm
+from io import BytesIO
+from urllib.error import HTTPError
 
 import dnfile  # https://github.com/malwarefrank/dnfile
+import xxhash
+import yaml
+from click import Abort
+from click import echo
 from dnfile.mdtable import AssemblyRefRow
 from pefile import DIRECTORY_ENTRY  # https://github.com/erocarrera/pefile
+from tqdm import tqdm
+from yaml.scanner import ScannerError
 
 from .config import *
-from .version import Version
 from .errors import *
-
-import typing as t
+from .version import Version
 
 VANILLA_HASH = {
     "f1c4967fa8f1f113858327590e274b69": ("1.4.0.0", "FNA"),
@@ -465,7 +462,7 @@ def getLatestBuild(branch: str):
         "definitions=3",
         "statusFilter=completed",
         "resultFilter=succeeded",
-        "branchName={0}".format(
+        "branchName={}".format(
             branch
             if branch == "" or branch.startswith(("refs/heads/", "refs/pull/"))
             else "refs/heads/" + branch
@@ -478,7 +475,7 @@ def getLatestBuild(branch: str):
     if response["count"] < 1:
         return None
     elif response["count"] > 1:
-        raise Exception("Unexpected number of builds: {0}".format(response["count"]))
+        raise Exception("Unexpected number of builds: {}".format(response["count"]))
 
     build = response["value"][0]
     id = build["id"]

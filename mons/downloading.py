@@ -1,16 +1,19 @@
 import os
 import shutil
+import typing as t
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import wait
 from tempfile import TemporaryDirectory
-from concurrent.futures import ThreadPoolExecutor, wait
 from urllib.error import URLError
 
-from tqdm import tqdm
 from click import Abort
+from tqdm import tqdm
 
-from .utils import ModDownload, UpdateInfo, download_with_progress, nullcontext
 from . import utils
-
-import typing as t
+from .utils import download_with_progress
+from .utils import ModDownload
+from .utils import nullcontext
+from .utils import UpdateInfo
 
 
 def downloader(src, dest, name, mirror=None):

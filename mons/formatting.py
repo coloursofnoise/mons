@@ -1,4 +1,5 @@
-from typing import List, Union
+from typing import List
+from typing import Union
 
 # https://stackoverflow.com/a/63839503
 METRIC_LABELS: List[str] = ["B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]

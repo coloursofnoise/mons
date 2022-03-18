@@ -1,11 +1,11 @@
-import click
-
-from traceback import format_exception_only, format_tb
-
+import configparser
 import os
 import sys
-import configparser
+from traceback import format_exception_only
+from traceback import format_tb
 from urllib import parse
+
+import click
 
 from mons.errors import TTYError
 
@@ -161,7 +161,7 @@ class CommandExt(click.Command):
         ]
         prefixes = {
             p.replace("_default", "")
-            for p in sum([o.opts for o in options], [])
+            for p in sum((o.opts for o in options), [])
             if p.startswith("--")
         }
         for i, a in enumerate(args):

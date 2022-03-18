@@ -1,24 +1,24 @@
 import itertools
-import time
-from urllib.parse import ParseResult
-import click
-from click import echo_via_pager, echo
-
 import os
-import shutil
-
-from gettext import ngettext
 import re
+import shutil
+import time
+import typing as t
+from gettext import ngettext
+from urllib.parse import ParseResult
+
+import click
+from click import echo
+from click import echo_via_pager
 
 from ..clickExt import *
-from ..mons import UserInfo, pass_userinfo
-from ..mons import cli as mons_cli
-from ..utils import *
 from ..downloading import download_threaded
-from ..version import Version
 from ..formatting import format_bytes
-
-import typing as t
+from ..mons import cli as mons_cli
+from ..mons import pass_userinfo
+from ..mons import UserInfo
+from ..utils import *
+from ..version import Version
 
 
 @click.group(name="mods", help="Manage Everest mods")
@@ -610,8 +610,8 @@ def remove(name, mods, trim_dependencies, force):
             metas, {mod: meta for mod, meta in installed_list.items() if mod in mods}
         )
 
-        removable = set(dep.Name for dep in dependencies).difference(
-            set(dep.Name for dep in all_dependencies)
+        removable = {dep.Name for dep in dependencies}.difference(
+            {dep.Name for dep in all_dependencies}
         )
         removable = [installed_list[dep] for dep in removable if dep in installed_list]
 
@@ -619,7 +619,7 @@ def remove(name, mods, trim_dependencies, force):
         for dep in removable:
             echo(f"\t{dep}")
 
-    total_size = sum((mod.Size for mod in itertools.chain(metas, removable)))
+    total_size = sum(mod.Size for mod in itertools.chain(metas, removable))
     echo(f"After this operation, {format_bytes(total_size)} disk space will be freed.")
 
     if not force:
