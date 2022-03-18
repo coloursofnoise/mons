@@ -1,6 +1,11 @@
 repos:
+  - repo: https://github.com/psf/black
+    rev: 22.1.0
+    hooks:
+      - id: black
+
   - repo: https://github.com/netromdk/vermin
     rev: 55f159a
     hooks:
       - id: vermin-all
-        args: ['-t=3.7', '--violations']
+        args: ['-t=3.7-', '--violations', 'mons']
