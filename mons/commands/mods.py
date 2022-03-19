@@ -571,7 +571,7 @@ def add(
     default=False,
     help="Ignore errors and confirmation prompts.",
 )
-def remove(name, mods, trim_dependencies, force):
+def remove(name, mods, trim_deps, force):
     """Remove installed mods."""
     mod_folder = os.path.join(os.path.dirname(name["Path"]), "Mods")
     installed_list = installed_mods(mod_folder, valid=True, with_size=True)
@@ -595,12 +595,16 @@ def remove(name, mods, trim_dependencies, force):
 
     metas = [installed_list[mod] for mod in resolved]
 
+    if len(metas) < 1:
+        echo("No mods to remove.")
+        exit()
+
     echo(str(len(metas)) + " mods will be removed:")
     for mod in metas:
         echo(f"\t{mod}")
 
     removable = []
-    if trim_dependencies:
+    if trim_deps:
         all_dependencies = resolve_dependencies(
             [meta for meta in installed_list.values() if not meta.Name in mods],
             installed_list,
