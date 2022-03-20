@@ -252,7 +252,7 @@ def install(
         echo(f"Installing Everest build {build}")
         echo("Downloading build metadata...")
         try:
-            meta = getBuildDownload(build, "olympus-meta")
+            meta = fetch_build_artifact(build, "olympus-meta")
             with zipfile.ZipFile(io.BytesIO(meta.read())) as file:
                 size = int(file.read("olympus-meta/size.txt"))
         except:
@@ -260,8 +260,8 @@ def install(
 
         if size > 0:
             echo("Downloading olympus-build.zip", nl=False)
-            response = getBuildDownload(build, "olympus-build")
-            response.headers["Content-Length"] = size
+            response = fetch_build_artifact(build, "olympus-build")
+            response.headers["Content-Length"] = str(size)
             artifactPath = os.path.join(installDir, "olympus-build.zip")
             echo(f" to file {artifactPath}")
             download_with_progress(
@@ -276,7 +276,7 @@ def install(
 
         else:
             echo("Downloading main.zip", nl=False)
-            response = getBuildDownload(build, "main")
+            response = fetch_build_artifact(build, "main")
             artifactPath = os.path.join(installDir, "main.zip")
             echo(f" to file {artifactPath}")
             download_with_progress(

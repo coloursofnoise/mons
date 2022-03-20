@@ -1,6 +1,5 @@
 import atexit
 import configparser
-import gzip
 import hashlib
 import json
 import os
@@ -10,14 +9,13 @@ import tempfile
 import typing as t
 import urllib.parse
 import urllib.request
-import urllib.response
 import zipfile
 from contextlib import contextmanager
-from http.client import HTTPResponse
 from io import BytesIO
 from urllib.error import HTTPError
 
 import dnfile  # https://github.com/malwarefrank/dnfile
+import urllib3
 import xxhash
 import yaml
 from click import Abort
@@ -195,9 +193,9 @@ opener.addheaders = [
 urllib.request.install_opener(opener)
 
 
-def get_download_size(url: str, initial_size: int = 0):
-    request = urllib.request.Request(url, method="HEAD")
-    return int(urllib.request.urlopen(request).headers["Content-Length"]) - initial_size
+def get_download_size(url: str, initial_size: int = 0, http_pool=None):
+    http = http_pool or urllib3.PoolManager()
+    return int(http.request("HEAD", url).headers["Content-Length"]) - initial_size
 
 
 _download_interrupt = False
@@ -232,24 +230,33 @@ def read_with_progress(
 
 
 def download_with_progress(
-    src: t.Union[str, urllib.request.Request, HTTPResponse],
+    src: t.Union[str, urllib.request.Request, urllib3.HTTPResponse],
     dest: t.Optional[str],
     label: t.Optional[str] = None,
     atomic: t.Optional[bool] = False,
     clear: t.Optional[bool] = False,
     *,
     response_handler=None,
+    pool_manager=None,
 ):
     if not dest and atomic:
         raise ValueError("atomic download cannot be used without destination file")
 
+    http = pool_manager or urllib3.PoolManager()
+
     response = (
-        urllib.request.urlopen(src, timeout=5)
+        http.request(
+            "GET",
+            src,
+            preload_content=False,
+            timeout=urllib3.Timeout(connect=3, read=10),
+        )
         if isinstance(src, (str, urllib.request.Request))
         else src
     )
+
     content = response_handler(response) if response_handler else response
-    size = int(response.headers.get("Content-Length") or 100)
+    size = int(response.headers.get("Content-Length", None) or 100)
     blocksize = 8192
 
     with temporary_file(persist=False) if atomic else nullcontext(dest) as file:
@@ -451,31 +458,31 @@ def parseVersionSpec(string: str):
     if string.isdigit():
         buildnumber = int(string)
     else:
-        buildnumber = getLatestBuild(string)
+        buildnumber = latest_build(string)
 
     return buildnumber
 
 
-def getLatestBuild(branch: str):
-    base_URL = "https://dev.azure.com/EverestAPI/Everest/_apis/build/builds?"
-    filters = [
-        "definitions=3",
-        "statusFilter=completed",
-        "resultFilter=succeeded",
-        "branchName={}".format(
-            branch
+def latest_build(branch: str):
+    response = urllib3.PoolManager().request(
+        "GET",
+        "https://dev.azure.com/EverestAPI/Everest/_apis/build/builds",
+        fields={
+            "definitions": 3,
+            "statusFilter": "completed",
+            "resultFilter": "succeeded",
+            "branchName": branch
             if branch == "" or branch.startswith(("refs/heads/", "refs/pull/"))
-            else "refs/heads/" + branch
-        ),
-        "api-version=6.0",
-        "$top=1",
-    ]
-    request = base_URL + "&".join(filters)
-    response = json.load(urllib.request.urlopen(request))
+            else "refs/heads/" + branch,
+            "api-version": 6.0,
+            "$top": 1,
+        },
+    )
+    response = json.loads(response.data.decode())
     if response["count"] < 1:
         return None
     elif response["count"] > 1:
-        raise Exception("Unexpected number of builds: {}".format(response["count"]))
+        raise Exception("Unexpected number of builds: " + str(response["count"]))
 
     build = response["value"][0]
     id = build["id"]
@@ -499,9 +506,16 @@ def build_exists(build: int):
         raise
 
 
-def getBuildDownload(build: int, artifactName: str = "olympus-build"):
-    return urllib.request.urlopen(
-        f"https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts?artifactName={artifactName}&api-version=6.0&%24format=zip"
+def fetch_build_artifact(build: int, artifactName: str = "olympus-build"):
+    return urllib3.PoolManager().request(
+        "GET",
+        f"https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts",
+        fields={
+            "artifactName": artifactName,
+            "api-version": 6.0,
+            "$format": "zip",
+        },
+        preload_content=False,
     )
 
 
@@ -676,20 +690,18 @@ def get_mod_list() -> t.Dict[str, t.Dict]:
     if mod_list:
         return mod_list
 
-    update_url = urllib.request.urlopen(
-        "https://everestapi.github.io/modupdater.txt"
-    ).read()
-    request = urllib.request.Request(
-        update_url.decode(),
-        headers={"User-Agent": "mons/" + "; gzip", "Accept-Encoding": "gzip"},
+    update_url = (
+        urllib.request.urlopen("https://everestapi.github.io/modupdater.txt")
+        .read()
+        .decode()
+        .strip()
     )
     mod_list = yaml.safe_load(
         download_with_progress(
-            request,
+            update_url,
             None,
-            "Downloading Update t.List",
+            "Downloading Update List",
             clear=True,
-            response_handler=gzip.open,
         )
     )
     return mod_list
@@ -703,20 +715,12 @@ def get_dependency_graph() -> t.Dict[str, t.Dict]:
     if dependency_graph:
         return dependency_graph
 
-    request = urllib.request.Request(
-        "https://max480-random-stuff.appspot.com/celeste/mod_dependency_graph.yaml?format=everestyaml",
-        headers={
-            "User-Agent": "mons/" + "; gzip",
-            "Accept-Encoding": "gzip",
-        },
-    )
     dependency_graph = yaml.safe_load(
         download_with_progress(
-            request,
+            "https://max480-random-stuff.appspot.com/celeste/mod_dependency_graph.yaml?format=everestyaml",
             None,
             "Downloading Dependency Graph",
             clear=True,
-            response_handler=gzip.open,
         )
     )
     return dependency_graph
