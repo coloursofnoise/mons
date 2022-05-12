@@ -334,7 +334,7 @@ def install(
                 echo("Install info cached")
             if launch:
                 echo("Launching Celeste...")
-                subprocess.Popen(path)
+                cli.main(args=["launch", name])
             return
 
     # If we got this far, something went wrong
