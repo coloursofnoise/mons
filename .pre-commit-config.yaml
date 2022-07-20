@@ -1,20 +1,24 @@
+
 repos:
   - repo: https://github.com/asottile/reorder_python_imports
     rev: v3.0.1
     hooks:
       - id: reorder-python-imports
         args: ['--application-directories', 'mons']
+        exclude: '^docs/'
 
   - repo: https://github.com/psf/black
     rev: 22.1.0
     hooks:
       - id: black
+        exclude: '^docs/'
 
   - repo: https://github.com/netromdk/vermin
     rev: 55f159a
     hooks:
       - id: vermin-all
         args: ['-t=3.7-', '--violations', 'mons']
+        exclude: '^docs/'
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.1.0
@@ -22,4 +26,5 @@ repos:
       - id: end-of-file-fixer
       - id: fix-byte-order-marker
       - id: trailing-whitespace
-        args: ['--markdown-linebreak-ext=md']
+        args: ['--markdown-linebreak-ext="md"']
+        exclude: '^docs/.*\.rst'

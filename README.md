@@ -2,6 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/mons.svg)](https://pypi.python.org/pypi/mons)
 
+<!-- sphinx start -->
 ## Install:
 ### Using [pipx](https://pypa.github.io/pipx/) (recommended):
 ```console
@@ -17,6 +18,7 @@ python3 -m pip install mons
 ```console
 mons --help
 ```
+<!-- sphinx end -->
 
 **[Everest Website](https://everestapi.github.io/)**
 

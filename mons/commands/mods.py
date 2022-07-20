@@ -21,9 +21,12 @@ from ..utils import *
 from ..version import Version
 
 
-@click.group(name="mods", help="Manage Everest mods")
+@click.group(name="mods")
 @click.pass_context
 def cli(ctx):
+    """Manage Everest Mods
+    \f
+    |full_reference-mods|"""
     pass
 
 

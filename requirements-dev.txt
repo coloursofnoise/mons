@@ -1,2 +1,5 @@
-wheel
-pre-commit
+wheel==0.37.1
+pre-commit==2.17.0
+sphinx==5.0.2
+git+https://github.com/coloursofnoise/sphinx-click
+myst_parser==0.18.0
