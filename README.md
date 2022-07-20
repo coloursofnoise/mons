@@ -6,19 +6,73 @@
 ## Install:
 ### Using [pipx](https://pypa.github.io/pipx/) (recommended):
 ```console
-pipx install mons
+$ pipx install mons
 ```
 
 ### Using pip:
 ```console
-python3 -m pip install mons
+$ python3 -m pip install --user mons
 ```
 
 ## Usage:
+
+At any time, add the `--help` flag to print usage information for the current command.
+
+A copy of this documentation is hosted online at [mons.coloursofnoise.ca](https://mons.coloursofnoise.ca).
+
 ```console
-mons --help
+$ mons --help
+$ mons install --help
 ```
+
+### Setup
+The first step is to add a reference for your Celeste install. **For the purposes of this documentation, it will be assumed that the install is named `main`.**
+
+```console
+$ mons add main path/to/Celeste/install
+```
+
+Every command that operates on a Celeste install (pretty much everything except `list` and `config`) will require the install name as the first argument.
+
+### Everest
+Installing Everest can be done with a variety of options, including branch name (`stable`/`beta`/`dev`), build number (`3366`), or zip artifact (`--zip /path/to/zip/archive`).
+
+Using the `--latest` flag will always install the most recent build available.
+
+```console
+$ mons install main stable
+$ mons install main --latest
+```
+
+### Everest from source
+`mons` was created with Everest development in mind, and tries to make the process as streamlined as possible. Passing the `--src` option with the path to a copy of the Everest repo to `mons install` will, by default:
+
+1. Run `dotnet build` or `msbuild` in the project folder.
+2. Copy updated build artifacts from the build output into the Celeste install folder.
+3. Run `miniinstaller.exe` to install Everest from the build artifacts.
+
+On GNU/Linux and macOS, `mons` will use the [MonoKickstart](https://github.com/flibitijibibo/MonoKickstart) executable bundled with Celeste to run `miniinstaller`, so a system install of [mono](https://www.mono-project.com/) is not required.
+
+```console
+$ mons install main --src /path/to/Everest/repo --launch
+```
+
+### Mods
+`mons` supports Celeste mods that have been posted on [GameBanana](https://gamebanana.com/games/6460), but can also attempt to install from local or remote zip files, including Google Drive share links.
+
+Dependencies will be automatically resolved where possible, and missing dependencies can be resolved at any point using `mons mods resolve`.
+
+The `--search` option when adding mods uses the [GameBanana Search API](https://github.com/max4805/RandomStuffWebsite/blob/main/README.md#gamebanana-search-api) to provide a list of possible matches to install.
+
+```console
+$ mons mods add SpringCollab2022
+$ mons mods add https://gamebanana.com/mods/53697 # Communal Helper
+$ mons mods add --search Helper
+$ mons mods update --all
+```
+
 <!-- sphinx end -->
+-----
 
 **[Everest Website](https://everestapi.github.io/)**
 
