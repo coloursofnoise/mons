@@ -124,6 +124,7 @@ def show(userInfo: UserInfo, name, verbose):
 )
 @click.option(
     "--src",
+    cls=ExplicitOption,
     type=click.Path(exists=True, file_okay=False, resolve_path=True),
     help="Build and install from source folder.",
 )

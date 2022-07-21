@@ -62,7 +62,7 @@ $ mons install main --latest
 On GNU/Linux and macOS, `mons` will use the [MonoKickstart](https://github.com/flibitijibibo/MonoKickstart) executable bundled with Celeste to run `miniinstaller`, so a system install of [mono](https://www.mono-project.com/) is not required.
 
 ```console
-$ mons install main --src /path/to/Everest/repo --launch
+$ mons install main --src=/path/to/Everest/repo --launch
 ```
 
 ### Mods
