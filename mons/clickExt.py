@@ -137,6 +137,10 @@ class ExplicitOption(click.Option):
         if help:
             return (help[0].replace(" ", "[=", 1) + "]",) + help[1:]
 
+    def sphinx_get_help_record(self, help_func):
+        help = help_func(self)
+        return (help[0].replace(" ", "[=", 1) + "]",) + help[1:]
+
 
 class PlaceHolder(click.Argument):
     """Mark this argument as a placeholder that isn't processed"""
