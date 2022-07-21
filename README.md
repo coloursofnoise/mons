@@ -2,6 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/mons.svg)](https://pypi.python.org/pypi/mons)
 [![Documentation Status](https://readthedocs.org/projects/mons/badge/?version=latest)](https://mons.coloursofnoise.ca/en/latest/?badge=latest)
+[![GameBanana](https://img.shields.io/static/v1?label=GameBanana&message=9963&color=yellow)](https://gamebanana.com/tools/9963)
 
 <!-- sphinx start -->
 `mons` is a commandline [Everest](https://everestapi.github.io/) installer and mod manager for [Celeste](http://www.celestegame.com/).
