@@ -6,6 +6,8 @@ QuickStart
    :end-before: <!-- sphinx end -->
    :parser: myst_parser.sphinx_
 
+Table of Contents
+-----------------
 
 .. toctree::
 
