@@ -1,8 +1,15 @@
 # MONS - CommandLine Celeste Mod Manager
 
 [![PyPI](https://img.shields.io/pypi/v/mons.svg)](https://pypi.python.org/pypi/mons)
+[![Documentation Status](https://readthedocs.org/projects/mons/badge/?version=latest)](https://mons.coloursofnoise.ca/en/latest/?badge=latest)
 
 <!-- sphinx start -->
+`mons` is a commandline [Everest](https://everestapi.github.io/) installer and mod manager for [Celeste](http://www.celestegame.com/).
+
+It was originally built for productivity when working on Everest, but can be used by players and developers alike.
+
+**This program requires basic competency using the [commandline](https://en.wikipedia.org/wiki/Command-line_interface) for your operating system.** For a graphical installer, please use [Olympus](https://everestapi.github.io/#installing-everest) instead.
+
 ## Install:
 ### Using [pipx](https://pypa.github.io/pipx/) (recommended):
 ```console
