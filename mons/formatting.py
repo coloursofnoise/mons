@@ -1,11 +1,20 @@
-from typing import List
-from typing import Union
+import typing as t
 
 # https://stackoverflow.com/a/63839503
-METRIC_LABELS: List[str] = ["B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
-BINARY_LABELS: List[str] = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB"]
-PRECISION_OFFSETS: List[float] = [0.5, 0.05, 0.005, 0.0005]  # PREDEFINED FOR SPEED.
-PRECISION_FORMATS: List[str] = [
+METRIC_LABELS: t.List[str] = ["B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
+BINARY_LABELS: t.List[str] = [
+    "B",
+    "KiB",
+    "MiB",
+    "GiB",
+    "TiB",
+    "PiB",
+    "EiB",
+    "ZiB",
+    "YiB",
+]
+PRECISION_OFFSETS: t.List[float] = [0.5, 0.05, 0.005, 0.0005]  # PREDEFINED FOR SPEED.
+PRECISION_FORMATS: t.List[str] = [
     "{}{:.0f} {}",
     "{}{:.1f} {}",
     "{}{:.2f} {}",
@@ -14,7 +23,7 @@ PRECISION_FORMATS: List[str] = [
 
 
 def format_bytes(
-    num: Union[int, float], metric: bool = False, precision: int = 1
+    num: t.Union[int, float], metric: bool = False, precision: int = 1
 ) -> str:
     """
     Human-readable formatting of bytes, using binary (powers of 1024)
@@ -53,3 +62,17 @@ def format_bytes(
             num /= unit_step
 
     return PRECISION_FORMATS[precision].format("-" if is_negative else "", num, unit)  # type: ignore
+
+
+def format_columns(data):
+    if isinstance(data, t.Dict):
+        return _format_columns_dict(data)
+
+    raise NotImplementedError(format_columns, data, type(data))
+
+
+def _format_columns_dict(dict: t.Dict):
+    c1_width = max(len(k) for k in dict.keys())
+    return "\n".join(
+        "{:<{c1_width}}\t{}".format(k, v, c1_width=c1_width) for k, v in dict.items()
+    ).strip("\n")

@@ -60,24 +60,14 @@ class Install(click.ParamType):
 
         if self.exist:
             if not isinstance(value, configparser.SectionProxy):
-                if not installs.has_section(value):
-                    self.fail(f"Install {value} does not exist.", param, ctx)
-
-                path = installs[value]["Path"]
-                if self.validate_path:
-                    error = None
-                    if not os.path.exists(path):
-                        error = "does not exist."
-                    elif not os.path.basename(path) == "Celeste.exe":
-                        error = "does not point to Celeste.exe"
-
-                    if error:
-                        raise click.UsageError(
-                            f"""Install {value} does not have a valid path:
-\033[0;31m{path} {error}\033[0m
-Use the `set-path` command to assign a new path.""",
-                            ctx,
-                        )
+                try:
+                    Install.validate_install(
+                        value, validate_path=self.validate_path, ctx=ctx
+                    )
+                except ValueError as err:
+                    self.fail(err, param, ctx)
+                except FileNotFoundError as err:
+                    raise click.UsageError(err, ctx)
 
                 if self.resolve_install:
                     value = installs[value]
@@ -86,6 +76,28 @@ Use the `set-path` command to assign a new path.""",
                 self.fail(f"Install {value} already exists.", param, ctx)
 
         return value
+
+    @classmethod
+    def validate_install(cls, install: str, validate_path=True, ctx=None):
+        ctx = ctx or click.get_current_context()
+        installs = ctx.obj.installs
+        if not installs.has_section(install):
+            raise ValueError(f"Install {install} does not exist")
+
+        path = installs[install]["Path"]
+        if validate_path:
+            error = None
+            if not os.path.exists(path):
+                error = "does not exist."
+            elif not os.path.basename(path) == "Celeste.exe":
+                error = "does not point to Celeste.exe"
+
+            if error:
+                raise FileNotFoundError(
+                    f"""Install {install} does not have a valid path:
+\033[0;31m{path} {error}\033[0m
+Use `set-path` to assign a new path."""
+                )
 
 
 class URL(click.ParamType):

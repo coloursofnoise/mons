@@ -6,6 +6,7 @@ import click
 from click import echo
 
 from ..clickExt import *
+from ..formatting import format_columns
 from ..mons import cli
 from ..mons import pass_userinfo
 from ..mons import UserInfo
@@ -58,7 +59,7 @@ def set_path(userInfo: UserInfo, name, path):
 @cli.command(
     no_args_is_help=True,
 )
-@click.argument("name", type=Install())
+@click.argument("name", type=Install(check_path=False))
 @click.confirmation_option(
     "--force",
     prompt="Are you sure you want to remove this install?",
@@ -84,9 +85,16 @@ def set_branch(name, branch):
 @pass_userinfo
 def list(userInfo: UserInfo):
     """List existing installs"""
+    installs = {}
     for install in userInfo.installs.sections():
-        info = buildVersionString(getInstallInfo(userInfo, install))
-        echo("{}:\t{}".format(install, info))
+        try:
+            Install.validate_install(install, validate_path=True)
+            info = buildVersionString(getInstallInfo(userInfo, install))
+            installs[install] = info
+        except Exception as err:
+            raise click.UsageError(err)
+
+    click.echo(format_columns(installs) or "No installs found, use `add` to add one.")
 
 
 @cli.command(no_args_is_help=True)
