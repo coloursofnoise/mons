@@ -431,7 +431,7 @@ def buildVersionString(installInfo: configparser.SectionProxy) -> str:
     if everestBuild:
         versionStr += f" + 1.{everestBuild}.0"
     else:
-        hasEverest = installInfo.get("Everest", None)
+        hasEverest = installInfo.getboolean("Everest", None)
         if hasEverest:
             versionStr += " + Everest(unknown version)"
     return versionStr
