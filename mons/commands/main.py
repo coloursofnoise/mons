@@ -365,7 +365,9 @@ def launch(ctx, name):
             )
         else:
             path = os.path.splitext(path)[0]  # drop the .exe
-    subprocess.Popen([path] + ctx.args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    subprocess.Popen(
+        [path] + ctx.args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
+    )
 
 
 @cli.command(no_args_is_help=True)
