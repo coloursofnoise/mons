@@ -73,10 +73,10 @@ Dependencies will be automatically resolved where possible, and missing dependen
 The `--search` option when adding mods uses the [GameBanana Search API](https://github.com/max4805/RandomStuffWebsite/blob/main/README.md#gamebanana-search-api) to provide a list of possible matches to install.
 
 ```console
-$ mons mods add SpringCollab2022
-$ mons mods add https://gamebanana.com/mods/53697 # Communal Helper
-$ mons mods add --search Helper
-$ mons mods update --all
+$ mons mods add main SpringCollab2022
+$ mons mods add main https://gamebanana.com/mods/53697 # Communal Helper
+$ mons mods add main --search Helper
+$ mons mods update main --all
 ```
 
 <!-- sphinx end -->
