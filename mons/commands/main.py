@@ -373,7 +373,9 @@ def launch(ctx, name):
             )
         else:
             path = os.path.splitext(path)[0]  # drop the .exe
+
     redirect = None if "--console" in ctx.args else subprocess.PIPE
+
     subprocess.Popen([path] + ctx.args, stdout=redirect, stderr=redirect, shell=True)
 
 
