@@ -1,10 +1,12 @@
 import io
 import os
+import shutil
 import subprocess
 
 import click
 from click import echo
 
+import mons.fs as fs
 from ..clickExt import *
 from ..formatting import format_columns
 from ..mons import cli
@@ -198,18 +200,18 @@ def install(
 
         if build_success == 0:
             echo("Copying files...")
-            copy_recursive_force(
+            fs.copy_recursive_force(
                 os.path.join(src, "Celeste.Mod.mm", "bin", "Debug", "net452"),
                 installDir,
                 ignore=lambda path, names: [
-                    name for name in names if isUnchanged(path, installDir, name)
+                    name for name in names if fs.isUnchanged(path, installDir, name)
                 ],
             )
-            copy_recursive_force(
+            fs.copy_recursive_force(
                 os.path.join(src, "MiniInstaller", "bin", "Debug", "net452"),
                 installDir,
                 ignore=lambda path, names: [
-                    name for name in names if isUnchanged(path, installDir, name)
+                    name for name in names if fs.isUnchanged(path, installDir, name)
                 ],
             )
             success = True
@@ -310,7 +312,7 @@ def install(
             uname = os.uname()
             if uname.sysname == "Darwin":
                 kickstart_dir = os.path.join(installDir, "..", "MacOS")
-                with copied_file(
+                with fs.copied_file(
                     os.path.join(kickstart_dir, "Celeste"),
                     os.path.join(kickstart_dir, "MiniInstaller"),
                 ) as miniinstaller:
@@ -319,7 +321,7 @@ def install(
                     )
             else:
                 suffix = "x86_64" if uname.machine == "x86_64" else "x86"
-                with copied_file(
+                with fs.copied_file(
                     os.path.join(os.path.join(installDir, f"Celeste.bin.{suffix}")),
                     os.path.join(installDir, f"MiniInstaller.bin.{suffix}"),
                 ) as miniinstaller:

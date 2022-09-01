@@ -11,14 +11,23 @@ import click
 from click import echo
 from click import echo_via_pager
 
+import mons.fs as fs
 from ..clickExt import *
 from ..downloading import download_threaded
+from ..downloading import get_download_size
 from ..formatting import format_bytes
 from ..mons import cli as mons_cli
 from ..mons import pass_userinfo
 from ..mons import UserInfo
 from ..utils import *
 from ..version import Version
+from mons.baseUtils import flip
+from mons.baseUtils import multi_partition
+from mons.baseUtils import partition
+from mons.baseUtils import read_with_progress
+from mons.modmeta import combined_dependencies
+from mons.modmeta import ModDownload
+from mons.modmeta import UpdateInfo
 
 
 @click.group(name="mods")
@@ -408,7 +417,7 @@ def add(
     # Read from stdin
     elif mods == ("-",):
         with click.open_file("-", mode="rb") as stdin:
-            with temporary_file(persist=True) as temp:
+            with fs.temporary_file(persist=True) as temp:
                 if stdin.isatty():
                     raise TTYError("no input.")
                 with click.open_file(temp, mode="wb") as file:
@@ -432,7 +441,7 @@ def add(
             "Download and attempt to resolve them before continuing?", True, skip=yes
         ):
             for url in unresolved:
-                with temporary_file(persist=True) as file:
+                with fs.temporary_file(persist=True) as file:
                     download_with_progress(url, file, f"Downloading {url}", clear=True)
                     process_zip(file, url)
 

@@ -1,19 +1,76 @@
 import os
 import shutil
 import typing as t
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import wait
+from contextlib import nullcontext
+from io import BytesIO
 from tempfile import TemporaryDirectory
 
 import urllib3
 from click import Abort
 from tqdm import tqdm
+from urllib3.exceptions import HTTPError
 
-from . import utils
-from .utils import download_with_progress
-from .utils import ModDownload
-from .utils import nullcontext
-from .utils import UpdateInfo
+from mons import baseUtils
+from mons import fs
+from mons.baseUtils import read_with_progress
+from mons.modmeta import ModDownload
+from mons.modmeta import UpdateInfo
+
+
+def get_download_size(url: str, initial_size: int = 0, http_pool=None):
+    http = http_pool or urllib3.PoolManager()
+    return int(http.request("HEAD", url).headers["Content-Length"]) - initial_size
+
+
+def download_with_progress(
+    src: t.Union[str, urllib.request.Request, urllib3.HTTPResponse],
+    dest: t.Optional[str],
+    label: t.Optional[str] = None,
+    atomic: t.Optional[bool] = False,
+    clear: t.Optional[bool] = False,
+    *,
+    response_handler=None,
+    pool_manager=None,
+):
+    if not dest and atomic:
+        raise ValueError("atomic download cannot be used without destination file")
+
+    http = pool_manager or urllib3.PoolManager()
+
+    response = (
+        http.request(
+            "GET",
+            src,
+            preload_content=False,
+            timeout=urllib3.Timeout(connect=3, read=10),
+        )
+        if isinstance(src, (str, urllib.request.Request))
+        else src
+    )
+
+    content = response_handler(response) if response_handler else response
+    size = int(response.headers.get("Content-Length", None) or 100)
+    blocksize = 8192
+
+    with fs.temporary_file(persist=False) if atomic else nullcontext(dest) as file:
+        with open(file, "wb") if file else nullcontext(BytesIO()) as io:
+            read_with_progress(content, io, size, blocksize, label, clear)
+
+            if dest is None and isinstance(io, BytesIO):
+                # io will not be closed by contextmanager because it used nullcontext
+                io.seek(0)
+                return io
+
+        if atomic:
+            dest = t.cast(str, dest)
+            if os.path.isfile(dest):
+                os.remove(dest)
+            shutil.move(t.cast(str, file), dest)
+
+    return BytesIO()
 
 
 def downloader(src, dest, name, mirror=None, http_pool=None):
@@ -29,7 +86,7 @@ def downloader(src, dest, name, mirror=None, http_pool=None):
         return
     except Exception as e:
         tqdm.write(f"\nError downloading file {os.path.basename(dest)} {src}: {e}")
-        if isinstance(e, (urllib3.exceptions.HTTPError)) and src != mirror:
+        if isinstance(e, (HTTPError)) and src != mirror:
             downloader(mirror, dest, name)
 
 
@@ -82,7 +139,7 @@ def download_threaded(
             except (KeyboardInterrupt, SystemExit):
                 for future in futures:
                     future.cancel()
-                utils._download_interrupt = True
+                baseUtils._download_interrupt = True
                 raise
 
             if late_downloads:
