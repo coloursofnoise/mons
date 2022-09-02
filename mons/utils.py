@@ -257,23 +257,6 @@ def read_blacklist(path: str):
         return [m.strip() for m in file.readlines() if not m.startswith("#")]
 
 
-def mod_placeholder(path: str):
-    basename = os.path.basename(path)
-    meta = None
-    if os.path.isdir(path):
-        meta = ModMeta({"Name": "_dir_" + basename, "Version": Version(0, 0, 0)})
-
-    elif zipfile.is_zipfile(path):
-        name = os.path.splitext(basename)[0]
-        meta = ModMeta({"Name": "_zip_" + name, "Version": Version(0, 0, 0)})
-
-    if meta:
-        meta.Path = path
-        return meta
-
-    return None
-
-
 def installed_mods(
     path: str,
     *,
@@ -303,7 +286,7 @@ def installed_mods(
             if valid is not None:
                 if valid ^ bool(mod):
                     continue
-            mod = mod or mod_placeholder(modpath)
+            mod = mod or ModMeta.placeholder(modpath)
             if not mod:
                 continue
             if blacklist and file in blacklist:

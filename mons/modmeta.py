@@ -77,6 +77,23 @@ class ModMeta(_ModMeta_Base, _ModMeta_Deps):
         self.DLL = str(data["DLL"]) if "DLL" in data else None
         self.Size = int(data["Size"]) if "Size" in data else 0
 
+    @classmethod
+    def placeholder(cls, path: str):
+        basename = os.path.basename(path)
+        meta = None
+        if os.path.isdir(path):
+            meta = ModMeta({"Name": "_dir_" + basename, "Version": Version(0, 0, 0)})
+
+        elif zipfile.is_zipfile(path):
+            name = os.path.splitext(basename)[0]
+            meta = ModMeta({"Name": "_zip_" + name, "Version": Version(0, 0, 0)})
+
+        if meta:
+            meta.Path = path
+            return meta
+
+        return None
+
 
 class ModDownload:
     def __init__(
