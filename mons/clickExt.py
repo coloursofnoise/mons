@@ -8,6 +8,8 @@ import click
 
 from mons.config import UserInfo
 from mons.errors import TTYError
+from mons.formatting import colorize
+from mons.formatting import TERM_COLORS
 from mons.install import Install as T_Install
 
 
@@ -30,17 +32,53 @@ class CatchErrorsGroup(click.Group):
             super().main(args=args, *params, **extra)
         except Exception as e:
             if debug or os.environ.get("MONS_DEBUG", "false") == "true":
-                click.echo(f"\033[0;31mAn unhandled exception has occurred.\033[0m")
+                click.echo(
+                    colorize("An unhandled exception has occurred.", TERM_COLORS.ERROR)
+                )
                 click.echo("".join(format_tb(e.__traceback__)), nl=False)
                 click.echo(
-                    f'\033[0;31m{"".join(format_exception_only(type(e), e))}', nl=False
+                    colorize(
+                        "".join(format_exception_only(type(e), e)), TERM_COLORS.ERROR
+                    ),
+                    nl=False,
                 )
             else:
-                click.echo(f"\033[0;31m{type(e).__name__}: {e}\033[0m")
+                click.echo(colorize(type(e).__name__, TERM_COLORS.ERROR))
                 click.echo(
                     f"""An unhandled exception has occurred.
 Use the --debug flag to disable clean exception handling."""
                 )
+
+
+def color_option():
+    def auto_color():
+        if os.environ.get("NO_COLOR"):
+            return False
+        # TODO: Special cases for pagers not covered by click
+
+        # Default to whatever click decides
+        return None
+
+    def callback(ctx: click.Context, param: click.Parameter, value):
+        if value is None:
+            return auto_color()
+
+        if value == "always":
+            return True
+        if value == "never":
+            return False
+        if value == "auto":
+            return None
+        raise click.BadParameter("Possible values: auto, never, always", ctx, param)
+
+    param_decls = ("--color",)
+
+    attrs = dict()
+    attrs.setdefault("is_eager", True)
+    attrs.setdefault("help", "Specify when to use colored output: auto, always, none")
+    attrs.setdefault("metavar", "WHEN")
+    attrs["callback"] = callback
+    return click.option(*param_decls, **attrs)
 
 
 class Install(click.ParamType):
@@ -98,7 +136,7 @@ class Install(click.ParamType):
             if error:
                 raise FileNotFoundError(
                     f"""Install {install} does not have a valid path:
-\033[0;31m{path} {error}\033[0m
+{TERM_COLORS.ERROR}{path} {error}{TERM_COLORS.RESET}
 Use `set-path` to assign a new path."""
                 )
 

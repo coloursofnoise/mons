@@ -14,7 +14,10 @@ from click import echo_via_pager
 import mons.fs as fs
 from ..downloading import download_threaded
 from ..downloading import get_download_size
+from ..formatting import colorize
 from ..formatting import format_bytes
+from ..formatting import format_columns
+from ..formatting import TERM_COLORS
 from ..mons import cli as mons_cli
 from ..mons import pass_userinfo
 from ..utils import *
@@ -40,13 +43,19 @@ def cli(ctx):
 
 
 def format_mod_info(meta: ModMeta):
-    out = meta.Name
-    if meta.Blacklisted:
-        out += "\t(disabled)"
-    out += "\n\tVersion: {}".format(meta.Version)
-    out += "\n\tFile: {}".format(os.path.basename(meta.Path))
-    if os.path.isdir(meta.Path):
-        out += "/"
+    out = (
+        colorize(f"{meta.Name}\t(disabled)", TERM_COLORS.DISABLED)
+        if meta.Blacklisted
+        else meta.Name
+    ) + "\n"
+    out += format_columns(
+        {
+            "Version": meta.Version,
+            "File": os.path.basename(meta.Path)
+            + ("/" if os.path.isdir(meta.Path) else ""),
+        },
+        prefix="\t",
+    )
     out += "\n"
     return out
 
@@ -73,7 +82,18 @@ def format_mod_info(meta: ModMeta):
     "-s", "--search", help="Filter mods with a regex pattern.", metavar="QUERY"
 )
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
-def list_mods(enabled, valid, name: Install, dll, dir, dependency, search, verbose):
+@clickExt.color_option()
+def list_mods(
+    enabled,
+    valid,
+    name: Install,
+    dll,
+    dir,
+    dependency,
+    search,
+    verbose,
+    color: t.Optional[bool],
+):
     """List installed mods."""
     if valid == False:
         if dll == True:
@@ -117,13 +137,16 @@ def list_mods(enabled, valid, name: Install, dll, dir, dependency, search, verbo
         gen = (format_mod_info(meta) for meta in gen)
     else:
         gen = (
-            f"{meta.Name}\t{meta.Version}"
-            + ("\t(disabled)" if meta.Blacklisted else "")
+            (
+                f"{meta.Name}\t{meta.Version}"
+                if not meta.Blacklisted
+                else colorize(f"{meta.Name}\t(disabled)", TERM_COLORS.DISABLED)
+            )
             + "\n"
             for meta in gen
         )
 
-    echo_via_pager(gen)
+    echo_via_pager(gen, color=color)
 
 
 @cli.command(hidden=True)
