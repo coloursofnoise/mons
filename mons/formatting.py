@@ -64,15 +64,16 @@ def format_bytes(
     return PRECISION_FORMATS[precision].format("-" if is_negative else "", num, unit)  # type: ignore
 
 
-def format_columns(data):
+def format_columns(data, prefix=""):
     if isinstance(data, t.Dict):
-        return _format_columns_dict(data)
+        return _format_columns_dict(data, prefix)
 
     raise NotImplementedError(format_columns, data, type(data))
 
 
-def _format_columns_dict(dict: t.Dict):
+def _format_columns_dict(dict: t.Dict, prefix: str):
     c1_width = max(len(k) for k in dict.keys())
     return "\n".join(
-        "{:<{c1_width}}\t{}".format(k, v, c1_width=c1_width) for k, v in dict.items()
+        "{}{:<{c1_width}}\t{}".format(prefix, k, v, c1_width=c1_width)
+        for k, v in dict.items()
     ).strip("\n")

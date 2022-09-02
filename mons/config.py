@@ -15,13 +15,12 @@ CACHE_FILE = "cache.ini"
 
 # Config, Installs, Cache
 Config_DEFAULT = {}
-Installs_DEFAULT = {
+Install.DEFAULTS = {
     "PreferredBranch": "stable",
 }
-Cache_DEFAULT = {}
 
 
-def loadConfig(file, default):
+def loadConfig(file, default={}):
     config = configparser.ConfigParser()
     config_file = os.path.join(config_dir, file)
     if os.path.isfile(config_file):
@@ -51,13 +50,15 @@ def editConfig(config: configparser.ConfigParser, file):
 class UserInfo(AbstractContextManager):
     def __enter__(self):
         self.config = loadConfig(CONFIG_FILE, Config_DEFAULT)
-        installs = loadConfig(INSTALLS_FILE, Installs_DEFAULT)
-        cache = loadConfig(CACHE_FILE, Cache_DEFAULT)
+        installs = loadConfig(INSTALLS_FILE)
+        cache = loadConfig(CACHE_FILE)
 
         def load_install(name: str):
             if not cache.has_section(name):
                 cache.add_section(name)
-            return Install(installs[name]["Path"], cache[name])
+            return Install(
+                name, installs[name]["Path"], cache=cache[name], data=installs[name]
+            )
 
         self.installs = {name: load_install(name) for name in installs.sections()}
         if not self.config.has_section("user"):

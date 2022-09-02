@@ -1,6 +1,7 @@
 import os
 import typing as t
 from configparser import SectionProxy
+from pydoc import classname
 
 from mons.utils import getMD5Hash
 from mons.utils import parseExeInfo
@@ -8,10 +9,17 @@ from mons.utils import VANILLA_HASH
 
 
 class Install:
-    def __init__(self, path: str, cache: t.Optional[SectionProxy] = None) -> None:
+
+    DEFAULTS: t.Dict[str, str]
+
+    def __init__(
+        self, name: str, path: str, cache: t.Optional[SectionProxy] = None, data=None
+    ) -> None:
+        self.name = name
         assert os.path.exists(path)
         self.path = path
         self.cache = cache or dict()
+        self.data: t.Dict[str, str] = data or dict()
 
     def update_cache(self, read_exe=True):
         hash = getMD5Hash(self.path)
@@ -20,13 +28,13 @@ class Install:
             return
 
         self.cache["Hash"] = hash
-        self.cache["Everest"] = True
-        self.cache["CelesteVersion"] = None
+        self.cache["Everest"] = str(True)
+        self.cache["CelesteVersion"] = ""
 
         version = VANILLA_HASH.get(hash, None)
         if version:
             self.cache["CelesteVersion"], self.cache["Framework"] = version
-            self.cache["Everest"] = False
+            self.cache["Everest"] = str(False)
 
         else:
             orig_path = os.path.join(os.path.dirname(self.path), "orig", "Celeste.exe")
@@ -36,14 +44,14 @@ class Install:
                 if version:
                     self.cache["CelesteVersion"], self.cache["Framework"] = version
                     # If orig_hash is known but hash is not, then Celeste.exe has been modified
-                    self.cache["Everest"] = True
+                    self.cache["Everest"] = str(True)
 
         if read_exe and self.cache["Everest"]:
             (
                 self.cache["Everest"],
                 self.cache["EverestBuild"],
                 self.cache["Framework"],
-            ) = parseExeInfo(self.path)
+            ) = map(str, parseExeInfo(self.path))
 
     def version_string(self):
         self.update_cache(read_exe=False)
@@ -63,5 +71,11 @@ class Install:
         self.update_cache()
         return self.cache
 
+    def __setitem__(self, name, value):
+        self.data[name] = value
+
+    def __getitem__(self, name):
+        return self.data.get(name, "") or Install.DEFAULTS.get(name, "")
+
     def serialize(self):
-        return {"Path": self.path}
+        return {**self.data, "path": self.path}
