@@ -7,16 +7,17 @@ import click
 from click import echo
 
 import mons.fs as fs
-from ..clickExt import *
 from ..formatting import format_columns
 from ..mons import cli
 from ..mons import pass_userinfo
 from ..mons import UserInfo
 from ..utils import *
+from mons import clickExt
+from mons.install import Install
 
 
 @cli.command(no_args_is_help=True)
-@click.argument("name", type=Install(exist=False))
+@click.argument("name", type=clickExt.Install(exist=False))
 @click.argument("path", type=click.Path(exists=True, resolve_path=True))
 @pass_userinfo
 def add(userInfo: UserInfo, name, path):
@@ -26,16 +27,16 @@ def add(userInfo: UserInfo, name, path):
     except FileNotFoundError as err:
         raise click.UsageError(str(err))
 
-    userInfo.installs[name] = {
-        "Path": install_path,
-    }
+    new_install = Install(install_path)
+    userInfo.installs[name] = new_install
+
     echo(f"Found Celeste.exe: {install_path}")
-    echo(buildVersionString(getInstallInfo(userInfo, name)))
+    echo(new_install.version_string())
 
 
 @cli.command(no_args_is_help=True)
-@click.argument("old", type=Install(exist=True))
-@click.argument("new", type=Install(exist=False))
+@click.argument("old", type=clickExt.Install(exist=True))
+@click.argument("new", type=clickExt.Install(exist=False))
 @pass_userinfo
 def rename(userInfo: UserInfo, old, new):
     """Rename a Celeste install"""
@@ -43,7 +44,7 @@ def rename(userInfo: UserInfo, old, new):
 
 
 @cli.command(no_args_is_help=True)
-@click.argument("name", type=Install(check_path=False))
+@click.argument("name", type=clickExt.Install(check_path=False))
 @click.argument("path", type=click.Path(exists=True, resolve_path=True))
 @pass_userinfo
 def set_path(userInfo: UserInfo, name, path):
@@ -53,15 +54,15 @@ def set_path(userInfo: UserInfo, name, path):
     except FileNotFoundError as err:
         raise click.UsageError(str(err))
 
-    userInfo.installs[name]["Path"] = install_path
+    userInfo.installs[name].path = install_path
     echo(f"Found Celeste.exe: {install_path}")
-    echo(buildVersionString(getInstallInfo(userInfo, name)))
+    echo(userInfo.installs[name].version_string())
 
 
 @cli.command(
     no_args_is_help=True,
 )
-@click.argument("name", type=Install(check_path=False))
+@click.argument("name", type=clickExt.Install(check_path=False))
 @click.confirmation_option(
     "--force",
     prompt="Are you sure you want to remove this install?",
@@ -70,12 +71,11 @@ def set_path(userInfo: UserInfo, name, path):
 @pass_userinfo
 def remove(userInfo: UserInfo, name):
     """Remove an existing install"""
-    userInfo.installs.remove_section(name)
-    userInfo.cache.remove_section(name)
+    del userInfo.installs[name]
 
 
 @cli.command(no_args_is_help=True)
-@click.argument("name", type=Install(resolve_install=True))
+@click.argument("name", type=clickExt.Install(resolve_install=True))
 @click.argument("branch")
 def set_branch(name, branch):
     """Set the preferred branch name for an existing install"""
@@ -87,42 +87,39 @@ def set_branch(name, branch):
 @pass_userinfo
 def list(userInfo: UserInfo):
     """List existing installs"""
-    installs = {}
-    for install in userInfo.installs.sections():
+    output = {}
+    for name, install in userInfo.installs.items():
         try:
-            Install.validate_install(install, validate_path=True)
-            info = buildVersionString(getInstallInfo(userInfo, install))
-            installs[install] = info
+            clickExt.Install.validate_install(name, validate_path=True)
+            output[name] = install.version_string()
         except Exception as err:
             raise click.UsageError(err)
 
-    click.echo(format_columns(installs) or "No installs found, use `add` to add one.")
+    click.echo(format_columns(output) or "No installs found, use `add` to add one.")
 
 
 @cli.command(no_args_is_help=True)
-@click.argument("name", type=Install())
+@click.argument("name", type=clickExt.Install())
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
 @pass_userinfo
 def show(userInfo: UserInfo, name, verbose):
     """Display information for a specific install"""
-    info = getInstallInfo(userInfo, name)
+    install = userInfo.installs[name]
     if verbose:
         echo(name + ":")
-        for k, v in info.items():
+        for k, v in install.get_cache().items():
             echo(f"\t{k}:\t{v}")
-        orig_exe = os.path.join(
-            os.path.dirname(userInfo.installs[name]["Path"]), "orig", "Celeste.exe"
-        )
+        orig_exe = os.path.join(os.path.dirname(install.path), "orig", "Celeste.exe")
         if os.path.isfile(orig_exe):
             echo(f"\torighash:\t{getMD5Hash(orig_exe)}")
-        echo(f'\tpath:\t{userInfo.installs[name]["Path"]}')
+        echo(f"\tpath:\t{install.path}")
     else:
-        echo("{}:\t{}".format(name, buildVersionString(info)))
-        echo(userInfo.installs[name]["Path"])
+        echo("{}:\t{}".format(name, install.version_string()))
+        echo(install.path)
 
 
-@cli.command(no_args_is_help=True, cls=CommandExt)
-@click.argument("name", type=Install())
+@cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
+@click.argument("name", type=clickExt.Install())
 @click.argument("versionSpec", required=False)
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
 @click.option(
@@ -130,15 +127,17 @@ def show(userInfo: UserInfo, name, verbose):
 )
 @click.option("--zip", type=click.File(mode="rb"), help="Install from zip artifact.")
 @click.option(
-    "--url", type=URL(require_path=True), help="Download and install from a URL."
+    "--url",
+    type=clickExt.URL(require_path=True),
+    help="Download and install from a URL.",
 )
 @click.option(
     "--src",
-    cls=ExplicitOption,
+    cls=clickExt.ExplicitOption,
     type=click.Path(exists=True, file_okay=False, resolve_path=True),
     help="Build and install from source folder.",
 )
-@click.option("--src", cls=DefaultOption, is_flag=True)
+@click.option("--src", cls=clickExt.DefaultOption, is_flag=True)
 @click.option(
     "--no-build", is_flag=True, help="Use with --src to install without building."
 )
@@ -160,7 +159,7 @@ def install(
     """Install Everest
 
     VERSIONSPEC can be a branch name, build number, or version number."""
-    path = userinfo.installs[name]["Path"]
+    path = userinfo.installs[name].path
     installDir = os.path.dirname(path)
     success = False
 
@@ -333,7 +332,7 @@ def install(
             echo("Install success")
             if build:
                 peHash = getMD5Hash(path)
-                userinfo.cache[name].update(
+                userinfo.installs[name].cache.update(
                     {
                         "Hash": peHash,
                         "Everest": str(True),
@@ -341,7 +340,7 @@ def install(
                     }
                 )
             else:
-                getInstallInfo(userinfo, name)
+                userinfo.installs[name].update_cache()
                 echo("Install info cached")
             if launch:
                 echo("Launching Celeste...")
@@ -358,10 +357,10 @@ def install(
         ignore_unknown_options=True,
         allow_extra_args=True,
     ),
-    cls=CommandExt,
+    cls=clickExt.CommandExt,
 )
-@click.argument("name", type=Install())
-@click.argument("args", nargs=-1, required=False, cls=PlaceHolder)
+@click.argument("name", type=clickExt.Install())
+@click.argument("args", nargs=-1, required=False, cls=clickExt.PlaceHolder)
 @click.pass_context
 def launch(ctx, name):
     """Launch the game associated with an install

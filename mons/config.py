@@ -5,6 +5,8 @@ from contextlib import AbstractContextManager
 from click import edit
 from click import get_app_dir
 
+from mons.install import Install
+
 config_dir = get_app_dir("mons", roaming=False)
 
 CONFIG_FILE = "config.ini"
@@ -49,13 +51,25 @@ def editConfig(config: configparser.ConfigParser, file):
 class UserInfo(AbstractContextManager):
     def __enter__(self):
         self.config = loadConfig(CONFIG_FILE, Config_DEFAULT)
-        self.installs = loadConfig(INSTALLS_FILE, Installs_DEFAULT)
-        self.cache = loadConfig(CACHE_FILE, Cache_DEFAULT)
+        installs = loadConfig(INSTALLS_FILE, Installs_DEFAULT)
+        cache = loadConfig(CACHE_FILE, Cache_DEFAULT)
+
+        def load_install(name: str):
+            if not cache.has_section(name):
+                cache.add_section(name)
+            return Install(installs[name]["Path"], cache[name])
+
+        self.installs = {name: load_install(name) for name in installs.sections()}
         if not self.config.has_section("user"):
             self.config["user"] = {}
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         saveConfig(self.config, CONFIG_FILE)
-        saveConfig(self.installs, INSTALLS_FILE)
-        saveConfig(self.cache, CACHE_FILE)
+        installs = configparser.ConfigParser()
+        cache = configparser.ConfigParser()
+        for k, v in self.installs.items():
+            installs[k] = v.serialize()
+            cache[k] = v.cache
+        saveConfig(installs, INSTALLS_FILE)
+        saveConfig(cache, CACHE_FILE)

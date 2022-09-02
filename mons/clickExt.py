@@ -1,4 +1,3 @@
-import configparser
 import os
 import sys
 from traceback import format_exception_only
@@ -7,7 +6,9 @@ from urllib import parse
 
 import click
 
+from mons.config import UserInfo
 from mons.errors import TTYError
+from mons.install import Install as T_Install
 
 
 def confirm_ext(*params, skip=None, **attrs):
@@ -56,10 +57,11 @@ class Install(click.ParamType):
     def convert(self, value, param, ctx):
         if not ctx:
             return value
-        installs: configparser.ConfigParser = ctx.obj.installs
+        userinfo: UserInfo = ctx.obj
+        installs = userinfo.installs
 
         if self.exist:
-            if not isinstance(value, configparser.SectionProxy):
+            if not isinstance(value, T_Install):
                 try:
                     Install.validate_install(
                         value, validate_path=self.validate_path, ctx=ctx
@@ -72,19 +74,20 @@ class Install(click.ParamType):
                 if self.resolve_install:
                     value = installs[value]
         else:
-            if installs.has_section(value):
+            if value in installs:
                 self.fail(f"Install {value} already exists.", param, ctx)
 
         return value
 
     @classmethod
     def validate_install(cls, install: str, validate_path=True, ctx=None):
-        ctx = ctx or click.get_current_context()
-        installs = ctx.obj.installs
-        if not installs.has_section(install):
+        userinfo: UserInfo = (ctx or click.get_current_context()).obj
+        installs = userinfo.installs
+
+        if install not in installs:
             raise ValueError(f"Install {install} does not exist")
 
-        path = installs[install]["Path"]
+        path = installs[install].path
         if validate_path:
             error = None
             if not os.path.exists(path):

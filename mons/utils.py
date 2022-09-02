@@ -1,4 +1,3 @@
-import configparser
 import hashlib
 import json
 import os
@@ -25,7 +24,8 @@ from mons.downloading import download_with_progress
 from mons.modmeta import ModMeta
 from mons.modmeta import read_mod_info
 
-VANILLA_HASH = {
+
+VANILLA_HASH: t.Dict[str, t.Tuple[str, str]] = {
     "f1c4967fa8f1f113858327590e274b69": ("1.4.0.0", "FNA"),
     "107cd146973f2c5ec9fb0b4f81c1588a": ("1.4.0.0", "XNA"),
 }
@@ -94,22 +94,6 @@ opener.addheaders = [
 urllib.request.install_opener(opener)
 
 
-def getCelesteVersion(path, hash=None):
-    hash = hash or getMD5Hash(path)
-    version = VANILLA_HASH.get(hash, "")
-    if version:
-        return version, True
-
-    orig_path = os.path.join(os.path.dirname(path), "orig", "Celeste.exe")
-    if os.path.isfile(orig_path):
-        hash = getMD5Hash(orig_path)
-        version = VANILLA_HASH.get(hash, "")
-        if version:
-            return version, False
-
-    return None, False
-
-
 def parseExeInfo(path):
     echo("Reading exe...\r", nl=False)
     pe = dnfile.dnPE(path, fast_load=True)
@@ -146,76 +130,6 @@ def parseExeInfo(path):
     )
 
     return hasEverest, everestBuild, framework
-
-
-def getInstallInfo(userInfo: UserInfo, install: str) -> configparser.SectionProxy:
-    path = userInfo.installs[install]["Path"]
-    mainHash = getMD5Hash(path)
-    if (
-        userInfo.cache.has_section(install)
-        and userInfo.cache[install].get("Hash", "") == mainHash
-    ):
-        return userInfo.cache[install]
-
-    if mainHash in VANILLA_HASH:
-        version, framework = VANILLA_HASH[mainHash]
-        info = {
-            "Everest": False,
-            "CelesteVersion": version,
-            "Framework": framework,
-            # EverestBuild: None
-        }
-    else:
-        hasEverest, everestBuild, framework = parseExeInfo(path)
-        info = {}
-        if hasEverest:
-            info["Everest"] = True
-            if everestBuild:
-                info["EverestBuild"] = everestBuild
-
-            origHash = getMD5Hash(
-                os.path.join(os.path.dirname(path), "orig", "Celeste.exe")
-            )
-            if origHash in VANILLA_HASH:
-                info["CelesteVersion"], _ = VANILLA_HASH[origHash]
-        else:
-            info["Everest"] = False
-
-        info["Framework"] = framework
-
-    info["Hash"] = mainHash
-    userInfo.cache[install] = info  # otherwise it makes all keys in info lowercase
-    return userInfo.cache[install]
-
-
-def buildVersionString(installInfo: configparser.SectionProxy) -> str:
-    versionStr = installInfo.get("CelesteVersion", "unknown")
-    framework = installInfo.get("Framework", None)
-    if framework:
-        versionStr += f"-{framework.lower()}"
-    everestBuild = installInfo.get("EverestBuild", None)
-    if everestBuild:
-        versionStr += f" + 1.{everestBuild}.0"
-    else:
-        hasEverest = installInfo.getboolean("Everest", None)
-        if hasEverest:
-            versionStr += " + Everest(unknown version)"
-    return versionStr
-
-
-def updateCache(userInfo: UserInfo, install: str):
-    path = userInfo.installs[install]["Path"]
-    newHash = getMD5Hash(path)
-
-    celesteversion, vanilla = getCelesteVersion(path)
-    userInfo.cache[install] = {
-        "Hash": newHash,
-        "Everest": not vanilla,
-    }
-
-    if celesteversion:
-        userInfo.cache[install]["CelesteVersion"] = celesteversion
-    pass
 
 
 def parseVersionSpec(string: str):

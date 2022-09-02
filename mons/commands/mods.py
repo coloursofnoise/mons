@@ -12,7 +12,6 @@ from click import echo
 from click import echo_via_pager
 
 import mons.fs as fs
-from ..clickExt import *
 from ..downloading import download_threaded
 from ..downloading import get_download_size
 from ..formatting import format_bytes
@@ -21,6 +20,7 @@ from ..mons import pass_userinfo
 from ..mons import UserInfo
 from ..utils import *
 from ..version import Version
+from mons import clickExt
 from mons.baseUtils import flip
 from mons.baseUtils import multi_partition
 from mons.baseUtils import partition
@@ -52,7 +52,7 @@ def format_mod_info(meta: ModMeta):
 
 
 @cli.command(name="list", help="List installed mods.", no_args_is_help=True)
-@click.argument("name", type=Install())
+@click.argument("name", type=clickExt.Install())
 @click.option(
     "--enabled/--disabled", help="Filter by enabled/disabled mods.", default=None
 )
@@ -88,7 +88,7 @@ def list_mods(
                 "--dependency", "--dependency cannot be used with the --invalid flag."
             )
 
-    basePath = os.path.join(os.path.dirname(userinfo.installs[name]["path"]), "Mods")
+    basePath = os.path.join(os.path.dirname(userinfo.installs[name].path), "Mods")
 
     installed = installed_mods(
         basePath, dirs=dir, valid=valid, blacklisted=flip(enabled)
@@ -317,7 +317,7 @@ def resolve_mods(mods: t.Sequence[str]) -> t.Tuple[t.List[ModDownload], t.List[s
 
 
 @cli.command(no_args_is_help=True)
-@click.argument("name", type=Install())
+@click.argument("name", type=clickExt.Install())
 @click.argument("mods", nargs=-1)
 @click.option(
     "--search", is_flag=True, help="Use the Celeste mod search API to find a mod."
@@ -345,8 +345,7 @@ def add(
 
     MODS can be one or more of: mod ID, local zip, zip URL, 1-Click install link, Google Drive share link, GameBanana page, or GameBanana submission ID."""
     install = userinfo.installs[name]
-    install_cache = userinfo.cache[name]
-    mod_folder = os.path.join(os.path.dirname(install["path"]), "Mods")
+    mod_folder = os.path.join(os.path.dirname(install.path), "Mods")
     mod_list = get_mod_list()
 
     installed_list = installed_mods(mod_folder, valid=True, with_size=True)
@@ -437,7 +436,7 @@ def add(
         echo(
             f"Downloading them all will use up to {format_bytes(download_size)} disk space."
         )
-        if confirm_ext(
+        if clickExt.confirm_ext(
             "Download and attempt to resolve them before continuing?", True, skip=yes
         ):
             for url in unresolved:
@@ -538,7 +537,7 @@ def add(
                 f"After this operation, {format_bytes(abs(download_size))} disk space will be freed"
             )
 
-        confirm_ext("Continue?", default=True, abort=True, skip=yes)
+        clickExt.confirm_ext("Continue?", default=True, abort=True, skip=yes)
 
         start = time.perf_counter()
         for mod in itertools.chain((mod.Old for mod in deps_update), deps_blacklisted):
@@ -560,18 +559,18 @@ def add(
             (dep.Version for dep in special if dep.Name == "Everest"), Version(1, 0, 0)
         )
         current_everest = Version(
-            1, install_cache.getint("everestbuild", fallback=0), 0
+            1, int(install.get_cache().get("everestbuild", "0")), 0
         )
         if not current_everest.satisfies(everest_min):
             echo(
                 f"Installed Everest ({current_everest}) does not satisfy minimum requirement ({everest_min})."
             )
-            if confirm_ext("Update Everest?", True, skip=yes):
-                mons_cli.main(args=["install", install.name, str(everest_min)])
+            if clickExt.confirm_ext("Update Everest?", True, skip=yes):
+                mons_cli.main(args=["install", name, str(everest_min)])
 
 
 @cli.command(no_args_is_help=True)
-@click.argument("name", type=Install(resolve_install=True))
+@click.argument("name", type=clickExt.Install(resolve_install=True))
 @click.argument("mods", nargs=-1)
 @click.option(
     "--trim-deps", is_flag=True, help="Also remove any exclusive dependencies."
@@ -603,7 +602,7 @@ def remove(name, mods, trim_deps, force):
         echo("The following mods could not be found:")
         for mod in unresolved:
             echo(f"\t{mod}")
-        confirm_ext("Continue anyways?", skip=force, abort=True)
+        clickExt.confirm_ext("Continue anyways?", skip=force, abort=True)
 
     metas = [installed_list[mod] for mod in resolved]
 
@@ -660,7 +659,7 @@ def remove(name, mods, trim_deps, force):
 
 
 @cli.command(no_args_is_help=True)
-@click.argument("name", type=Install(resolve_install=True))
+@click.argument("name", type=clickExt.Install(resolve_install=True))
 # @click.argument('mod', required=False)
 @click.option("--all", is_flag=True, help="Update all installed mods.")
 @click.option(
@@ -751,7 +750,7 @@ def update(userinfo, name, all, enabled, upgrade_only):
 
 
 @cli.command(no_args_is_help=True)
-@click.argument("name", type=Install())
+@click.argument("name", type=clickExt.Install())
 # @click.argument('mod', required=False)
 @click.option("--all", is_flag=True, help="Resolve all installed mods.")
 @click.option(
@@ -767,9 +766,8 @@ def resolve(userinfo: UserInfo, name, all, enabled, no_update):
         )
 
     install = userinfo.installs[name]
-    install_cache = userinfo.cache[name]
 
-    mods_folder = os.path.join(os.path.dirname(install["path"]), "Mods")
+    mods_folder = os.path.join(os.path.dirname(install.path), "Mods")
     installed = installed_mods(mods_folder, valid=True, blacklisted=flip(enabled))
     installed = list(
         tqdm(installed, desc="Reading Installed Mods", leave=False, unit="")
@@ -863,10 +861,10 @@ def resolve(userinfo: UserInfo, name, all, enabled, no_update):
     everest_min = next(
         (dep.Version for dep in special if dep.Name == "Everest"), Version(1, 0, 0)
     )
-    current_everest = Version(1, install_cache.getint("everestbuild", fallback=0), 0)
+    current_everest = Version(1, int(install.get_cache().get("everestbuild", "0")), 0)
     if not current_everest.satisfies(everest_min):
         echo(
             f"Installed Everest ({current_everest}) does not satisfy minimum requirement ({everest_min})."
         )
         if click.confirm("Update Everest?", True):
-            mons_cli.main(args=["install", install.name, str(everest_min)])
+            mons_cli.main(args=["install", name, str(everest_min)])
