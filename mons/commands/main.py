@@ -35,6 +35,30 @@ def add(userInfo: UserInfo, name, path):
 
 
 @cli.command(no_args_is_help=True)
+@click.argument("name", type=clickExt.Install())
+@click.option(
+    "-e",
+    "--eval",
+    is_flag=True,
+    help="Print `export MONS_DEFAULT_INSTALL={NAME}` to stdout.",
+)
+def use(name: str, eval: bool):
+    """Set the default install for mons commands
+
+    To un-set, run `export MONS_DEFAULT_INSTALL=`"""
+    if eval:
+        echo(f"export MONS_DEFAULT_INSTALL={name}")
+    else:
+        echo(
+            f"""Mons can't set environment variables in the parent shell.
+To circumvent this, run the following:
+
+eval "$(mons use {name} --eval)" """,
+            err=True,
+        )
+
+
+@cli.command(no_args_is_help=True)
 @click.argument("old", type=clickExt.Install(exist=True))
 @click.argument("new", type=clickExt.Install(exist=False))
 @pass_userinfo
@@ -74,8 +98,8 @@ def remove(userInfo: UserInfo, name):
     del userInfo.installs[name]
 
 
-@cli.command(no_args_is_help=True)
-@click.argument("name", type=clickExt.Install(resolve_install=True))
+@cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
+@clickExt.install("name")
 @click.argument("branch")
 def set_branch(name: Install, branch):
     """Set the preferred branch name for an existing install"""
@@ -98,8 +122,8 @@ def list(userInfo: UserInfo):
     click.echo(format_columns(output) or "No installs found, use `add` to add one.")
 
 
-@cli.command(no_args_is_help=True)
-@click.argument("name", type=clickExt.Install(resolve_install=True))
+@cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
+@clickExt.install("name")
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
 def show(name: Install, verbose):
     """Display information for a specific install"""
@@ -118,7 +142,7 @@ def show(name: Install, verbose):
 
 
 @cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
-@click.argument("name", type=clickExt.Install(resolve_install=True))
+@clickExt.install("name")
 @click.argument("versionSpec", required=False)
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
 @click.option(
@@ -141,6 +165,7 @@ def show(name: Install, verbose):
     "--no-build", is_flag=True, help="Use with --src to install without building."
 )
 @click.option("--launch", is_flag=True, help="Launch Celeste after installing.")
+@pass_userinfo
 def install(
     userinfo: UserInfo,
     name: Install,
@@ -354,7 +379,7 @@ def install(
     ),
     cls=clickExt.CommandExt,
 )
-@click.argument("name", type=clickExt.Install(resolve_install=True))
+@clickExt.install("name")
 @click.argument("args", nargs=-1, required=False, cls=clickExt.PlaceHolder)
 @click.pass_context
 def launch(ctx, name: Install):

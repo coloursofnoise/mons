@@ -89,6 +89,9 @@ class TERM_COLORS:
     GREY = "\033[0;90m"
     DISABLED = GREY
 
+    YELLOW = "\033[0;33m"
+    WARNING = YELLOW
+
 
 def colorize(string: str, color: str):
     return color + string + TERM_COLORS.RESET

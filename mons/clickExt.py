@@ -1,11 +1,14 @@
 import os
 import sys
+import typing as t
 from traceback import format_exception_only
 from traceback import format_tb
 from urllib import parse
 
 import click
 
+from mons.baseUtils import *
+from mons.config import get_default_install
 from mons.config import UserInfo
 from mons.errors import TTYError
 from mons.formatting import colorize
@@ -141,6 +144,19 @@ Use `set-path` to assign a new path."""
                 )
 
 
+def install(*param_decls, resolve=True, **attrs):
+    """Alias for a `click.argument` of type `Install` that will use the default provided by `MONS_DEFAULT_INSTALL`
+
+    Requires a command `cls` of `CommandExt`."""
+    return click.argument(
+        *param_decls,
+        type=Install(resolve_install=resolve),
+        cls=OptionalArg,
+        default=get_default_install,
+        warning="mons default install set to {default}",
+    )
+
+
 class URL(click.ParamType):
     name = "URL"
 
@@ -201,8 +217,21 @@ class PlaceHolder(click.Argument):
     register_placeholder = True
 
 
+class OptionalArg(click.Argument):
+    def __init__(
+        self,
+        param_decls: t.Sequence[str],
+        required: t.Optional[bool] = None,
+        **attrs: t.Any,
+    ) -> None:
+        self.warning: t.Optional[str] = attrs.pop("warning", None)
+        super().__init__(param_decls, True, **attrs)
+
+
 class CommandExt(click.Command):
     """Command implementation for extended option and argument types"""
+
+    warnings: t.List[str] = list()
 
     def make_parser(self, ctx):
         """Strip placeholder params"""
@@ -212,7 +241,26 @@ class CommandExt(click.Command):
         return super().make_parser(ctx)
 
     def parse_args(self, ctx, args):
-        """Translate any opt to opt_default as needed"""
+        # Handle any OptionalArgs as needed
+        def handle_optionalarg(o):
+            if isinstance(o, OptionalArg) and o.default:
+                default = (
+                    o.default() if isinstance(o.default, t.Callable) else o.default
+                )
+                if default:
+                    assert o.name
+                    # set value for param directly in the context
+                    ctx.params.update({o.name: o.type_cast_value(ctx, default)})
+                    if o.warning:
+                        self.warnings.append(o.warning.format(default=default))
+                    return True
+            return False
+
+        ctx.command.params = [
+            o for o in ctx.command.params if not handle_optionalarg(o)
+        ]
+
+        # Translate any opt to opt_default as needed
         options = [
             o for o in ctx.command.params if getattr(o, "register_default", None)
         ]
@@ -227,3 +275,9 @@ class CommandExt(click.Command):
                 args[i] = a[0] + "_default"
 
         return super(CommandExt, self).parse_args(ctx, args)
+
+    def invoke(self, ctx: click.Context) -> t.Any:
+        """Emit additional warnings as needed"""
+        for w in self.warnings:
+            click.echo(colorize(w, TERM_COLORS.WARNING))
+        return super().invoke(ctx)

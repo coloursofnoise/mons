@@ -23,10 +23,7 @@ from ..mons import pass_userinfo
 from ..utils import *
 from ..version import Version
 from mons import clickExt
-from mons.baseUtils import flip
-from mons.baseUtils import multi_partition
-from mons.baseUtils import partition
-from mons.baseUtils import read_with_progress
+from mons.baseUtils import *
 from mons.install import Install
 from mons.modmeta import combined_dependencies
 from mons.modmeta import ModDownload
@@ -60,8 +57,13 @@ def format_mod_info(meta: ModMeta):
     return out
 
 
-@cli.command(name="list", help="List installed mods.", no_args_is_help=True)
-@click.argument("name", type=clickExt.Install(resolve_install=True))
+@cli.command(
+    name="list",
+    help="List installed mods.",
+    no_args_is_help=True,
+    cls=clickExt.CommandExt,
+)
+@clickExt.install("name")
 @click.option(
     "--enabled/--disabled", help="Filter by enabled/disabled mods.", default=None
 )
@@ -336,8 +338,8 @@ def resolve_mods(mods: t.Sequence[str]) -> t.Tuple[t.List[ModDownload], t.List[s
     return resolved, unresolved
 
 
-@cli.command(no_args_is_help=True)
-@click.argument("name", type=clickExt.Install(resolve_install=True))
+@cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
+@clickExt.install("name")
 @click.argument("mods", nargs=-1)
 @click.option(
     "--search", is_flag=True, help="Use the Celeste mod search API to find a mod."
@@ -588,8 +590,8 @@ def add(
                 mons_cli.main(args=["install", install.name, str(everest_min)])
 
 
-@cli.command(no_args_is_help=True)
-@click.argument("name", type=clickExt.Install(resolve_install=True))
+@cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
+@clickExt.install("name")
 @click.argument("mods", nargs=-1)
 @click.option(
     "--trim-deps", is_flag=True, help="Also remove any exclusive dependencies."
@@ -677,8 +679,8 @@ def remove(name: Install, mods, trim_deps, force):
             echo(f"\t{mod} ({os.path.basename(mod.Path)}/)")
 
 
-@cli.command(no_args_is_help=True)
-@click.argument("name", type=clickExt.Install(resolve_install=True))
+@cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
+@clickExt.install("name")
 # @click.argument('mod', required=False)
 @click.option("--all", is_flag=True, help="Update all installed mods.")
 @click.option(
@@ -767,8 +769,8 @@ def update(name: Install, all, enabled, upgrade_only):
     tqdm.write(str.format("Downloaded files in {:.3f} seconds.", end - start))
 
 
-@cli.command(no_args_is_help=True)
-@click.argument("name", type=clickExt.Install(resolve_install=True))
+@cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
+@clickExt.install("name")
 # @click.argument('mod', required=False)
 @click.option("--all", is_flag=True, help="Resolve all installed mods.")
 @click.option(

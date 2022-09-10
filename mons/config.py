@@ -20,6 +20,10 @@ Install.DEFAULTS = {
 }
 
 
+def get_default_install():
+    return os.environ.get("MONS_DEFAULT_INSTALL", None)
+
+
 def loadConfig(file, default={}):
     config = configparser.ConfigParser()
     config_file = os.path.join(config_dir, file)
