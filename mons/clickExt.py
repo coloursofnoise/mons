@@ -108,9 +108,9 @@ class Install(click.ParamType):
                         value, validate_path=self.validate_path, ctx=ctx
                     )
                 except ValueError as err:
-                    self.fail(err, param, ctx)
+                    self.fail(str(err), param, ctx)
                 except FileNotFoundError as err:
-                    raise click.UsageError(err, ctx)
+                    raise click.UsageError(str(err), ctx)
 
                 if self.resolve_install:
                     value = installs[value]

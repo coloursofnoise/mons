@@ -117,7 +117,7 @@ def list(userInfo: UserInfo):
             clickExt.Install.validate_install(name, validate_path=True)
             output[name] = install.version_string()
         except Exception as err:
-            raise click.UsageError(err)
+            raise click.UsageError(str(err))
 
     click.echo(format_columns(output) or "No installs found, use `add` to add one.")
 
@@ -253,7 +253,7 @@ def install(
         if zip and zip.fileno() == 0:  # stdin
             if zip.isatty():
                 raise TTYError("no input.")
-            artifactPath = io.BytesIO(artifactPath.read())
+            artifactPath = io.BytesIO(zip.read())
         with zipfile.ZipFile(artifactPath) as wrapper:
             try:
                 entry = wrapper.open(

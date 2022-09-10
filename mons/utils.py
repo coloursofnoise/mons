@@ -100,7 +100,10 @@ def parseExeInfo(path):
     pe.parse_data_directories(
         directories=DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR"]
     )
-    stringHeap: dnfile.stream.StringsHeap = pe.net.metadata.streams_list[1]
+
+    assert pe.net
+
+    stringHeap: dnfile.stream.StringsHeap = pe.net.metadata.streams_list[1]  # type: ignore
 
     hasEverest = False
     everestBuild = None
@@ -112,9 +115,10 @@ def parseExeInfo(path):
             string = stringHeap.get(i)
             if string is None:
                 break
+            string = str(string)
             if string == "EverestModule":
                 hasEverest = True
-            if str(string).startswith("EverestBuild"):
+            if string.startswith("EverestBuild"):
                 everestBuild = string[len("EverestBuild") :]
                 hasEverest = True
                 break
@@ -123,6 +127,7 @@ def parseExeInfo(path):
             bar.update(inc)
 
     assemRef = pe.net.mdtables.AssemblyRef
+    assert assemRef
     framework = (
         "FNA"
         if any(t.cast(AssemblyRefRow, row).Name == "FNA" for row in assemRef.rows)

@@ -577,7 +577,7 @@ def add(
             exit()
 
         everest_min = next(
-            (dep.Version for dep in special if dep.Name == "Everest"), Version(1, 0, 0)
+            (dep.Version for dep in special if dep.Name == "Everest"), Version(1, 0, 0)  # type: ignore
         )
         current_everest = Version(
             1, int(install.get_cache().get("everestbuild", "0")), 0
