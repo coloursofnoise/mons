@@ -12,13 +12,11 @@ import dnfile  # https://github.com/malwarefrank/dnfile
 import urllib3
 import yaml
 from click import echo
-from dnfile.mdtable import AssemblyRefRow
 from pefile import DIRECTORY_ENTRY  # https://github.com/erocarrera/pefile
 from tqdm import tqdm
 
 from .config import *
 from .errors import *
-from .version import Version
 from mons.baseUtils import GeneratorWithLen
 from mons.downloading import download_with_progress
 from mons.modmeta import ModMeta
@@ -45,7 +43,7 @@ def find_celeste_file(path: str, file: str, force_name=True):
     return ret
 
 
-def getMD5Hash(path: str) -> str:
+def getMD5Hash(path: str):
     with open(path, "rb") as f:
         file_hash = hashlib.md5()
         chunk = f.read(8129)
@@ -94,7 +92,7 @@ opener.addheaders = [
 urllib.request.install_opener(opener)
 
 
-def parseExeInfo(path):
+def parseExeInfo(path: str):
     echo("Reading exe...\r", nl=False)
     pe = dnfile.dnPE(path, fast_load=True)
     pe.parse_data_directories(
@@ -128,11 +126,7 @@ def parseExeInfo(path):
 
     assemRef = pe.net.mdtables.AssemblyRef
     assert assemRef
-    framework = (
-        "FNA"
-        if any(t.cast(AssemblyRefRow, row).Name == "FNA" for row in assemRef.rows)
-        else "XNA"
-    )
+    framework = "FNA" if any(row.Name == "FNA" for row in assemRef.rows) else "XNA"
 
     return hasEverest, everestBuild, framework
 
@@ -149,7 +143,7 @@ def parseVersionSpec(string: str):
 
 
 def latest_build(branch: str):
-    response = urllib3.PoolManager().request(
+    response: urllib3.HTTPResponse = urllib3.PoolManager().request(
         "GET",
         "https://dev.azure.com/EverestAPI/Everest/_apis/build/builds",
         fields={
@@ -163,13 +157,14 @@ def latest_build(branch: str):
             "$top": 1,
         },
     )
-    response = json.loads(response.data.decode())
-    if response["count"] < 1:
-        return None
-    elif response["count"] > 1:
-        raise Exception("Unexpected number of builds: " + str(response["count"]))
 
-    build = response["value"][0]
+    data: t.Dict[str, t.Any] = json.loads(response.data.decode())
+    if data["count"] < 1:
+        return None
+    elif data["count"] > 1:
+        raise Exception("Unexpected number of builds: " + str(data["count"]))
+
+    build = data["value"][0]
     id = build["id"]
     try:
         return int(id) + 700
@@ -191,7 +186,9 @@ def build_exists(build: int):
         raise
 
 
-def fetch_build_artifact(build: int, artifactName: str = "olympus-build"):
+def fetch_build_artifact(
+    build: int, artifactName="olympus-build"
+) -> urllib3.HTTPResponse:
     return urllib3.PoolManager().request(
         "GET",
         f"https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts",
@@ -207,7 +204,7 @@ def fetch_build_artifact(build: int, artifactName: str = "olympus-build"):
 mod_list = None
 
 
-def get_mod_list() -> t.Dict[str, t.Dict]:
+def get_mod_list() -> t.Dict[str, t.Any]:
     global mod_list
     if mod_list:
         return mod_list
@@ -232,7 +229,7 @@ def get_mod_list() -> t.Dict[str, t.Dict]:
 dependency_graph = None
 
 
-def get_dependency_graph() -> t.Dict[str, t.Dict]:
+def get_dependency_graph() -> t.Dict[str, t.Any]:
     global dependency_graph
     if dependency_graph:
         return dependency_graph
@@ -248,7 +245,7 @@ def get_dependency_graph() -> t.Dict[str, t.Dict]:
     return dependency_graph
 
 
-def search_mods(search):
+def search_mods(search: str):
     search = urllib.parse.quote_plus(search)
     url = (
         f"https://max480-random-stuff.appspot.com/celeste/gamebanana-search?q={search}"
@@ -268,8 +265,8 @@ def installed_mods(
     dirs: t.Optional[bool] = None,
     valid: t.Optional[bool] = None,
     blacklisted: t.Optional[bool] = None,
-    with_size: bool = False,
-    with_hash: bool = False,
+    with_size=False,
+    with_hash=False,
 ) -> t.Iterator[ModMeta]:
     files = os.listdir(path)
     blacklist = None

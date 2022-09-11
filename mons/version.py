@@ -6,7 +6,7 @@ class Version:
         self.Revision = revision
 
     @classmethod
-    def parse(cls, version: str) -> "Version":
+    def parse(cls, version: str):
         if version == "NoVersion":
             return Version(1, 0)
 

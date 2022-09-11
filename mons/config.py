@@ -1,5 +1,7 @@
-import configparser
 import os
+import typing as t
+from collections.abc import MutableMapping
+from configparser import ConfigParser
 from contextlib import AbstractContextManager
 
 from click import edit
@@ -24,8 +26,8 @@ def get_default_install():
     return os.environ.get("MONS_DEFAULT_INSTALL", None)
 
 
-def loadConfig(file, default={}):
-    config = configparser.ConfigParser()
+def loadConfig(file: str, default: MutableMapping = {}):
+    config = ConfigParser()
     config_file = os.path.join(config_dir, file)
     if os.path.isfile(config_file):
         config.read(config_file)
@@ -37,12 +39,12 @@ def loadConfig(file, default={}):
     return config
 
 
-def saveConfig(config, file):
+def saveConfig(config: ConfigParser, file: str):
     with open(os.path.join(config_dir, file), "w") as f:
         config.write(f)
 
 
-def editConfig(config: configparser.ConfigParser, file):
+def editConfig(config: ConfigParser, file: str):
     saveConfig(config, file)
     edit(
         filename=os.path.join(config_dir, file),
@@ -51,7 +53,7 @@ def editConfig(config: configparser.ConfigParser, file):
     return loadConfig(file, config["DEFAULT"])
 
 
-class UserInfo(AbstractContextManager):
+class UserInfo(AbstractContextManager["UserInfo"]):
     def __enter__(self):
         self.config = loadConfig(CONFIG_FILE, Config_DEFAULT)
         installs = loadConfig(INSTALLS_FILE)
@@ -69,10 +71,10 @@ class UserInfo(AbstractContextManager):
             self.config["user"] = {}
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, *exec_details):
         saveConfig(self.config, CONFIG_FILE)
-        installs = configparser.ConfigParser()
-        cache = configparser.ConfigParser()
+        installs = ConfigParser()
+        cache = ConfigParser()
         for k, v in self.installs.items():
             installs[k] = v.serialize()
             cache[k] = v.cache

@@ -32,7 +32,7 @@ from mons.modmeta import UpdateInfo
 
 @click.group(name="mods")
 @click.pass_context
-def cli(ctx):
+def cli(ctx: click.Context):
     """Manage Everest Mods
     \f
     |full_reference-mods|"""
@@ -86,14 +86,14 @@ def format_mod_info(meta: ModMeta):
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
 @clickExt.color_option()
 def list_mods(
-    enabled,
-    valid,
+    enabled: t.Optional[bool],
+    valid: t.Optional[bool],
     name: Install,
-    dll,
-    dir,
-    dependency,
-    search,
-    verbose,
+    dll: t.Optional[bool],
+    dir: t.Optional[bool],
+    dependency: str,
+    search: str,
+    verbose: bool,
     color: t.Optional[bool],
 ):
     """List installed mods."""
@@ -153,7 +153,7 @@ def list_mods(
 
 @cli.command(hidden=True)
 @click.argument("search")
-def search(search):
+def search(search: str):
     mod_list = get_mod_list()
     if search in mod_list:
         echo(mod_list[search]["GameBananaId"])
@@ -172,7 +172,7 @@ def search(search):
             raise click.UsageError("Entry not found: " + str(item["itemid"]))
 
 
-def prompt_mod_selection(options: t.Dict, max: int = -1) -> t.Union[ModDownload, None]:
+def prompt_mod_selection(options: t.Dict[str, t.Any], max=-1):
     matchKeys = sorted(
         options.keys(), key=lambda key: options[key]["LastUpdate"], reverse=True
     )
@@ -207,7 +207,9 @@ def prompt_mod_selection(options: t.Dict, max: int = -1) -> t.Union[ModDownload,
     return selection
 
 
-def resolve_dependencies(mods: t.Iterable[ModMeta], database=None):
+def resolve_dependencies(
+    mods: t.Iterable[ModMeta], database: t.Optional[t.Dict[str, t.Any]] = None
+):
     database = database or get_dependency_graph()
     deps = combined_dependencies(mods, database)
     sorted_deps = sorted(deps.values(), key=lambda dep: dep.Name)
@@ -215,15 +217,15 @@ def resolve_dependencies(mods: t.Iterable[ModMeta], database=None):
     return sorted_deps
 
 
-def get_mod_download(mod, mod_list):
+def get_mod_download(mod: str, mod_list: t.Dict[str, t.Any]):
     mod_info = mod_list[mod]
     mod_info["Name"] = mod
     return ModDownload(ModMeta(mod_info), mod_info["URL"], mod_info["MirrorURL"])
 
 
-def resolve_mods(mods: t.Sequence[str]) -> t.Tuple[t.List[ModDownload], t.List[str]]:
-    resolved = list()
-    unresolved = list()
+def resolve_mods(mods: t.Sequence[str]):
+    resolved: t.List[ModDownload] = list()
+    unresolved: t.List[str] = list()
     mod_list = get_mod_list()
 
     for mod in mods:
@@ -356,11 +358,11 @@ def resolve_mods(mods: t.Sequence[str]) -> t.Tuple[t.List[ModDownload], t.List[s
 def add(
     name: Install,
     mods: t.Tuple[str, ...],
-    search,
-    random,
-    no_deps,
-    optional_deps,
-    yes,
+    search: bool,
+    random: bool,
+    no_deps: bool,
+    optional_deps: bool,
+    yes: t.Optional[bool],
 ):
     """Add one or more mods.
 
@@ -387,7 +389,7 @@ def add(
             ).url,
         )
 
-    def process_zip(zip, name):
+    def process_zip(zip: str, name: str):
         meta = read_mod_info(zip)
         if meta:
             if meta.Name in installed_list:
@@ -442,7 +444,7 @@ def add(
                     raise TTYError("no input.")
                 with click.open_file(temp, mode="wb") as file:
                     read_with_progress(
-                        stdin, file, label="Reading from stdin", clear_progress=True
+                        stdin, file, label="Reading from stdin", clear_progress=True  # type: ignore
                     )
                 process_zip(temp, "stdin")
 
@@ -483,7 +485,7 @@ def add(
             special, dependencies = partition(
                 lambda mod: mod.Name in ("Celeste", "Everest"), dependencies
             )
-            deps_install: t.List = []
+            deps_install: t.List[t.Any] = []
             deps_update: t.List[UpdateInfo] = []
             deps_blacklisted: t.List[ModMeta] = []
             for dep in dependencies:
@@ -603,19 +605,16 @@ def add(
     default=False,
     help="Ignore errors and confirmation prompts.",
 )
-def remove(name: Install, mods, trim_deps, force):
+def remove(name: Install, mods: t.List[str], trim_deps: bool, force: bool):
     """Remove installed mods."""
     mod_folder = os.path.join(os.path.dirname(name.path), "Mods")
     installed_list = installed_mods(mod_folder, valid=True, with_size=True)
-    installed_list = t.cast(
-        t.Dict[str, ModMeta],
-        {
-            meta.Name: meta
-            for meta in tqdm(
-                installed_list, desc="Reading Installed Mods", leave=False, unit=""
-            )
-        },
-    )
+    installed_list = {
+        meta.Name: meta
+        for meta in tqdm(
+            installed_list, desc="Reading Installed Mods", leave=False, unit=""
+        )
+    }
 
     resolved, unresolved = partition(lambda mod: mod in installed_list, mods)
 
@@ -661,7 +660,7 @@ def remove(name: Install, mods, trim_deps, force):
     if not force:
         click.confirm("Remove mods?", abort=True)
 
-    folders = []
+    folders: t.List[ModMeta] = []
     with click.progressbar(
         label="Deleting files", length=len(removable) + len(metas)
     ) as progress:
@@ -689,7 +688,7 @@ def remove(name: Install, mods, trim_deps, force):
 @click.option(
     "--upgrade-only", is_flag=True, help="Only update if new file has a higher version."
 )
-def update(name: Install, all, enabled, upgrade_only):
+def update(name: Install, all: bool, enabled: t.Optional[bool], upgrade_only: bool):
     """Update installed mods."""
     if not all:
         raise click.UsageError(
@@ -699,7 +698,7 @@ def update(name: Install, all, enabled, upgrade_only):
     mod_list = get_mod_list()
     updates: t.List[UpdateInfo] = []
     has_updates = False
-    total_size = 0
+    total_size: int = 0
     if all:
         mods_folder = os.path.join(os.path.dirname(name.path), "Mods")
         installed = installed_mods(
@@ -777,7 +776,7 @@ def update(name: Install, all, enabled, upgrade_only):
     "--enabled", is_flag=True, help="Resolve currently enabled mods.", default=None
 )
 @click.option("--no-update", is_flag=True, help="Don't update outdated dependencies.")
-def resolve(name: Install, all, enabled, no_update):
+def resolve(name: Install, all: bool, enabled: t.Optional[bool], no_update: bool):
     """Resolve any missing or outdated dependencies."""
     if not all:
         raise click.UsageError(

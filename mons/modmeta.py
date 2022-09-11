@@ -21,7 +21,7 @@ class _ModMeta_Base:
         self.Version = version
 
     @classmethod
-    def _from_dict(cls, data):
+    def _from_dict(cls, data: t.Dict[str, t.Any]):
         return _ModMeta_Base(str(data["Name"]), str(data.get("Version", "NoVersion")))
 
     def __repr__(self) -> str:
@@ -39,7 +39,7 @@ class _ModMeta_Deps:
         assert isinstance(self.Dependencies, t.List)
 
     @classmethod
-    def parse(cls, data):
+    def parse(cls, data: t.Any):
         if isinstance(data, _ModMeta_Deps):
             return data
         elif isinstance(data, t.Dict):
@@ -50,7 +50,7 @@ class _ModMeta_Deps:
             raise ValueError()
 
     @classmethod
-    def _from_dict(cls, data):
+    def _from_dict(cls, data: t.Dict[str, t.Any]):
         return _ModMeta_Deps(
             [_ModMeta_Base._from_dict(dep) for dep in data["Dependencies"]],
             [_ModMeta_Base._from_dict(dep) for dep in data["OptionalDependencies"]],
@@ -62,7 +62,7 @@ class ModMeta(_ModMeta_Base, _ModMeta_Deps):
     Path: str
     Blacklisted: t.Optional[bool] = False
 
-    def __init__(self, data: t.Dict):
+    def __init__(self, data: t.Dict[str, t.Any]):
         _ModMeta_Base.__init__(
             self, str(data["Name"]), str(data.get("Version", "NoVersion"))
         )
@@ -97,7 +97,10 @@ class ModMeta(_ModMeta_Base, _ModMeta_Deps):
 
 class ModDownload:
     def __init__(
-        self, meta: t.Union[ModMeta, t.Dict], url: str, mirror: t.Optional[str] = None
+        self,
+        meta: t.Union[ModMeta, t.Dict[str, t.Any]],
+        url: str,
+        mirror: t.Optional[str] = None,
     ):
         if isinstance(meta, t.Dict):
             meta = ModMeta(meta)
@@ -106,7 +109,7 @@ class ModDownload:
         self.Mirror = mirror if mirror else url
 
 
-def _merge_dependencies(dict, dep: _ModMeta_Base):
+def _merge_dependencies(dict: t.Dict[str, _ModMeta_Base], dep: _ModMeta_Base):
     if dep.Name in dict:
         if dep.Version.Major != dict[dep.Name].Version.Major:
             raise ValueError(
@@ -119,9 +122,13 @@ def _merge_dependencies(dict, dep: _ModMeta_Base):
         dict[dep.Name] = dep
 
 
-def recurse_dependencies(mods: t.Iterable[_ModMeta_Base], database, dict):
+def recurse_dependencies(
+    mods: t.Iterable[_ModMeta_Base],
+    database: t.Dict[str, t.Any],
+    dict: t.Dict[str, ModMeta],
+):
     for mod in mods:
-        _merge_dependencies(dict, mod)
+        _merge_dependencies(dict, mod)  # type: ignore
         if mod.Name in database:
             recurse_dependencies(
                 _ModMeta_Deps.parse(database[mod.Name]).Dependencies, database, dict
@@ -129,7 +136,7 @@ def recurse_dependencies(mods: t.Iterable[_ModMeta_Base], database, dict):
 
 
 def combined_dependencies(
-    mods: t.Iterable[_ModMeta_Base], database
+    mods: t.Iterable[_ModMeta_Base], database: t.Dict[str, t.Any]
 ) -> t.Dict[str, _ModMeta_Base]:
     deps = {}
     for mod in mods:
@@ -156,7 +163,7 @@ class UpdateInfo:
 def read_mod_info(mod: t.Union[str, t.IO[bytes]], with_size=False, with_hash=False):
     meta = None
     try:
-        if not isinstance(mod, str) or os.path.isfile and zipfile.is_zipfile(mod):
+        if not isinstance(mod, str) or os.path.isfile(mod) and zipfile.is_zipfile(mod):
             with zipfile.ZipFile(mod) as zip:
                 everest_file = find(zip.namelist(), ("everest.yaml", "everest.yml"))
                 if everest_file:

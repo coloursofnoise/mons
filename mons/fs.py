@@ -16,7 +16,7 @@ def find_file(path: str, files: t.Iterable[str]):
 
 
 # shutils.copytree(dirs_exist_ok) replacement https://stackoverflow.com/a/15824216
-def copy_recursive_force(src, dest, ignore=None):
+def copy_recursive_force(src: str, dest: str, ignore=None):
     if os.path.isdir(src):
         if not os.path.isdir(dest):
             os.makedirs(dest)
@@ -24,7 +24,7 @@ def copy_recursive_force(src, dest, ignore=None):
         if ignore is not None:
             ignored = ignore(src, files)
         else:
-            ignored = set()
+            ignored: t.Collection[str] = set()
         for f in files:
             if f not in ignored:
                 copy_recursive_force(
@@ -46,7 +46,7 @@ def folder_size(start_path="."):
     return total_size
 
 
-def isUnchanged(src, dest, file):
+def isUnchanged(src: str, dest: str, file: str):
     srcFile = os.path.join(src, file)
     destFile = os.path.join(dest, file)
     if os.path.exists(destFile):
@@ -55,7 +55,7 @@ def isUnchanged(src, dest, file):
 
 
 @contextmanager
-def relocated_file(src, dest):
+def relocated_file(src: str, dest: str):
     file = shutil.move(src, dest)
     try:
         yield file
@@ -64,7 +64,7 @@ def relocated_file(src, dest):
 
 
 @contextmanager
-def copied_file(src, dest):
+def copied_file(src: str, dest: str):
     file = shutil.copy(src, dest)
     try:
         yield file

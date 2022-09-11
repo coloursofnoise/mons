@@ -20,9 +20,12 @@ from mons.modmeta import ModDownload
 from mons.modmeta import UpdateInfo
 
 
-def get_download_size(url: str, initial_size: int = 0, http_pool=None):
+def get_download_size(
+    url: str, initial_size=0, http_pool: t.Optional[urllib3.PoolManager] = None
+):
     http = http_pool or urllib3.PoolManager()
-    return int(http.request("HEAD", url).headers["Content-Length"]) - initial_size
+    response: urllib3.HTTPResponse = http.request("HEAD", url)
+    return int(response.headers.get("Content-Length")) - initial_size
 
 
 def download_with_progress(
@@ -32,15 +35,17 @@ def download_with_progress(
     atomic: t.Optional[bool] = False,
     clear: t.Optional[bool] = False,
     *,
-    response_handler=None,
-    pool_manager=None,
+    response_handler: t.Optional[
+        t.Callable[[urllib3.HTTPResponse], urllib3.HTTPResponse]
+    ] = None,
+    pool_manager: t.Optional[urllib3.PoolManager] = None,
 ):
     if not dest and atomic:
         raise ValueError("atomic download cannot be used without destination file")
 
     http = pool_manager or urllib3.PoolManager()
 
-    response = (
+    response: urllib3.HTTPResponse = (
         http.request(
             "GET",
             src,
@@ -73,7 +78,13 @@ def download_with_progress(
     return BytesIO()
 
 
-def downloader(src, dest, name, mirror=None, http_pool=None):
+def downloader(
+    src: str,
+    dest: str,
+    name: str,
+    mirror: t.Optional[str] = None,
+    http_pool: t.Optional[urllib3.PoolManager] = None,
+):
     mirror = mirror or src
 
     if os.path.isdir(dest):
@@ -90,7 +101,11 @@ def downloader(src, dest, name, mirror=None, http_pool=None):
             downloader(mirror, dest, name)
 
 
-def mod_downloader(mod_folder, download: t.Union[ModDownload, UpdateInfo], http_pool):
+def mod_downloader(
+    mod_folder: str,
+    download: t.Union[ModDownload, UpdateInfo],
+    http_pool: urllib3.PoolManager,
+):
     if isinstance(download, ModDownload):
         src, mirror, dest, name = (
             download.Url,
@@ -110,9 +125,9 @@ def mod_downloader(mod_folder, download: t.Union[ModDownload, UpdateInfo], http_
 
 
 def download_threaded(
-    mod_folder,
+    mod_folder: str,
     downloads: t.Sequence[t.Union[ModDownload, UpdateInfo]],
-    late_downloads=None,
+    late_downloads: t.Optional[t.Sequence[t.Union[ModDownload, UpdateInfo]]] = None,
     thread_count=8,
 ):
     http_pool = urllib3.PoolManager(maxsize=thread_count)

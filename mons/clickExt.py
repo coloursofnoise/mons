@@ -16,7 +16,7 @@ from mons.formatting import TERM_COLORS
 from mons.install import Install as T_Install
 
 
-def confirm_ext(*params, skip=None, **attrs):
+def confirm_ext(*params, skip: t.Optional[bool] = None, **attrs):
     if skip != None:
         return skip
     if not os.isatty(sys.stdin.fileno()):
@@ -62,7 +62,7 @@ def color_option():
         # Default to whatever click decides
         return None
 
-    def callback(ctx: click.Context, param: click.Parameter, value):
+    def callback(ctx, param, value: t.Optional[str]):
         if value is None:
             return auto_color()
 
@@ -87,15 +87,13 @@ def color_option():
 class Install(click.ParamType):
     name = "Install"
 
-    def __init__(
-        self, exist: bool = True, resolve_install: bool = False, check_path: bool = True
-    ) -> None:
+    def __init__(self, exist=True, resolve_install=False, check_path=True) -> None:
         super().__init__()
         self.exist = exist
         self.resolve_install = resolve_install
         self.validate_path = check_path
 
-    def convert(self, value, param, ctx):
+    def convert(self, value: t.Union[str, T_Install], param, ctx):
         if not ctx:
             return value
         userinfo: UserInfo = ctx.obj
@@ -154,6 +152,7 @@ def install(*param_decls, resolve=True, **attrs):
         cls=OptionalArg,
         default=get_default_install,
         warning="mons default install set to {default}",
+        **attrs,
     )
 
 
@@ -161,14 +160,17 @@ class URL(click.ParamType):
     name = "URL"
 
     def __init__(
-        self, default_scheme=None, valid_schemes=None, require_path=False
+        self,
+        default_scheme: t.Optional[str] = None,
+        valid_schemes: t.Optional[t.Collection[str]] = None,
+        require_path=False,
     ) -> None:
         super().__init__()
         self.default_scheme = default_scheme
         self.valid_schemes = valid_schemes
         self.require_path = require_path
 
-    def convert(self, value, param, ctx):
+    def convert(self, value: t.Union[str, parse.ParseResult], param, ctx):
         if isinstance(value, parse.ParseResult):
             return value
 
@@ -192,8 +194,8 @@ class DefaultOption(click.Option):
 
     register_default = True
 
-    def __init__(self, param_decls=[], **attrs):
-        param_decls = [decl + "_default" for decl in param_decls] or None
+    def __init__(self, param_decls: t.Sequence[str], **attrs):
+        param_decls = [decl + "_default" for decl in param_decls]
         super(DefaultOption, self).__init__(param_decls, **attrs)
         self.hidden = True
 
@@ -206,7 +208,9 @@ class ExplicitOption(click.Option):
         if help:
             return (help[0].replace(" ", "[=", 1) + "]",) + help[1:]
 
-    def sphinx_get_help_record(self, help_func):
+    def sphinx_get_help_record(
+        self, help_func: t.Callable[[click.Parameter], t.Tuple[str]]
+    ):
         help = help_func(self)
         return (help[0].replace(" ", "[=", 1) + "]",) + help[1:]
 
@@ -221,8 +225,8 @@ class OptionalArg(click.Argument):
     def __init__(
         self,
         param_decls: t.Sequence[str],
-        required: t.Optional[bool] = None,
-        **attrs: t.Any,
+        required=None,
+        **attrs,
     ) -> None:
         self.warning: t.Optional[str] = attrs.pop("warning", None)
         super().__init__(param_decls, True, **attrs)
@@ -276,7 +280,7 @@ class CommandExt(click.Command):
 
         return super(CommandExt, self).parse_args(ctx, args)
 
-    def invoke(self, ctx: click.Context) -> t.Any:
+    def invoke(self, ctx):
         """Emit additional warnings as needed"""
         for w in self.warnings:
             click.echo(colorize(w, TERM_COLORS.WARNING))

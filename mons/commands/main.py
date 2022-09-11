@@ -6,13 +6,13 @@ import subprocess
 import click
 from click import echo
 
+import mons.clickExt as clickExt
 import mons.fs as fs
 from ..formatting import format_columns
 from ..mons import cli
 from ..mons import pass_userinfo
 from ..mons import UserInfo
 from ..utils import *
-from mons import clickExt
 from mons.install import Install
 
 
@@ -20,7 +20,7 @@ from mons.install import Install
 @click.argument("name", type=clickExt.Install(exist=False))
 @click.argument("path", type=click.Path(exists=True, resolve_path=True))
 @pass_userinfo
-def add(userInfo: UserInfo, name, path):
+def add(userInfo: UserInfo, name: str, path: str):
     """Add a Celeste install"""
     try:
         install_path = find_celeste_file(path, "Celeste.exe")
@@ -62,7 +62,7 @@ eval "$(mons use {name} --eval)" """,
 @click.argument("old", type=clickExt.Install(exist=True))
 @click.argument("new", type=clickExt.Install(exist=False))
 @pass_userinfo
-def rename(userInfo: UserInfo, old, new):
+def rename(userInfo: UserInfo, old: str, new: str):
     """Rename a Celeste install"""
     userInfo.installs[new] = userInfo.installs.pop(old)
     userInfo.installs[new].name = new
@@ -71,7 +71,7 @@ def rename(userInfo: UserInfo, old, new):
 @cli.command(no_args_is_help=True)
 @click.argument("name", type=clickExt.Install(check_path=False, resolve_install=True))
 @click.argument("path", type=click.Path(exists=True, resolve_path=True))
-def set_path(name: Install, path):
+def set_path(name: Install, path: str):
     """Change the path of an existing install"""
     try:
         install_path = find_celeste_file(path, "Celeste.exe")
@@ -93,7 +93,7 @@ def set_path(name: Install, path):
     help="Skip confirmation prompt.",
 )
 @pass_userinfo
-def remove(userInfo: UserInfo, name):
+def remove(userInfo: UserInfo, name: str):
     """Remove an existing install"""
     del userInfo.installs[name]
 
@@ -101,7 +101,7 @@ def remove(userInfo: UserInfo, name):
 @cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
 @clickExt.install("name")
 @click.argument("branch")
-def set_branch(name: Install, branch):
+def set_branch(name: Install, branch: str):
     """Set the preferred branch name for an existing install"""
     name["PreferredBranch"] = branch
     echo(f"Preferred branch for `{name.name}` is now `{branch}`.")
@@ -125,7 +125,7 @@ def list(userInfo: UserInfo):
 @cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
 @clickExt.install("name")
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
-def show(name: Install, verbose):
+def show(name: Install, verbose: bool):
     """Display information for a specific install"""
     install = name
     if verbose:
@@ -169,15 +169,15 @@ def show(name: Install, verbose):
 def install(
     userinfo: UserInfo,
     name: Install,
-    versionspec,
-    verbose,
-    latest,
+    versionspec: str,
+    verbose: bool,
+    latest: bool,
     zip: io.BufferedReader,
-    url,
-    src,
-    src_default,
-    no_build,
-    launch,
+    url: t.Optional[urllib.parse.ParseResult],
+    src: t.Optional[str],
+    src_default: bool,
+    no_build: bool,
+    launch: bool,
 ):
     """Install Everest
 
@@ -382,7 +382,7 @@ def install(
 @clickExt.install("name")
 @click.argument("args", nargs=-1, required=False, cls=clickExt.PlaceHolder)
 @click.pass_context
-def launch(ctx, name: Install):
+def launch(ctx: click.Context, name: Install):
     """Launch the game associated with an install
 
     Any additional arguments are passed to the launched process."""
@@ -406,7 +406,7 @@ def launch(ctx, name: Install):
 )
 @click.option("--open", is_flag=True, help="Show the mons config folder.")
 @pass_userinfo
-def config(userinfo, edit, open):
+def config(userinfo: UserInfo, edit: bool, open: bool):
     """Manage the global config"""
     if edit:
         userinfo.config = editConfig(userinfo.config, CONFIG_FILE)

@@ -1,4 +1,5 @@
 import typing as t
+from io import IOBase
 
 from click import Abort
 from tqdm import tqdm
@@ -13,7 +14,7 @@ def flip(b: t.Optional[T]) -> t.Optional[T]:
     return t.cast(t.Optional[T], not b)
 
 
-def partition(pred, iterable: t.Iterable[T]) -> t.Tuple[t.List[T], t.List[T]]:
+def partition(pred: t.Callable[[T], bool], iterable: t.Iterable[T]):
     trues: t.List[T] = []
     falses: t.List[T] = []
     for item in iterable:
@@ -24,7 +25,7 @@ def partition(pred, iterable: t.Iterable[T]) -> t.Tuple[t.List[T], t.List[T]]:
     return trues, falses
 
 
-def multi_partition(*predicates, iterable: t.Iterable[T]) -> t.Tuple[t.List[T], ...]:
+def multi_partition(*predicates: t.Callable[[T], bool], iterable: t.Iterable[T]):
     results: t.List[t.List[T]] = [[] for _ in predicates]
     results.append([])
 
@@ -43,7 +44,7 @@ def multi_partition(*predicates, iterable: t.Iterable[T]) -> t.Tuple[t.List[T], 
     return tuple(results)
 
 
-def tryExec(func, *params):
+def tryExec(func: t.Callable[..., t.Any], *params: t.Any):
     try:
         func(*params)
     except:
@@ -58,12 +59,12 @@ _download_interrupt = False
 
 
 def read_with_progress(
-    input,
-    output,
+    input: IOBase,
+    output: IOBase,
     size=0,
     blocksize=4096,
-    label: t.Optional[str] = "",
-    clear_progress: t.Optional[bool] = False,
+    label="",
+    clear_progress=False,
 ):
     with tqdm(
         total=size,

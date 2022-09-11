@@ -1,7 +1,7 @@
 import os
 import typing as t
+from collections.abc import MutableMapping
 from configparser import SectionProxy
-from pydoc import classname
 
 from mons.utils import getMD5Hash
 from mons.utils import parseExeInfo
@@ -13,13 +13,17 @@ class Install:
     DEFAULTS: t.Dict[str, str]
 
     def __init__(
-        self, name: str, path: str, cache: t.Optional[SectionProxy] = None, data=None
+        self,
+        name: str,
+        path: str,
+        cache: t.Optional[MutableMapping] = None,
+        data: t.Optional[MutableMapping] = None,
     ) -> None:
         self.name = name
         assert os.path.exists(path)
         self.path = path
-        self.cache = cache or dict()
-        self.data: t.Dict[str, str] = data or dict()
+        self.cache: MutableMapping[str, str] = cache or dict()
+        self.data: MutableMapping[str, str] = data or dict()
 
     def update_cache(self, read_exe=True):
         hash = getMD5Hash(self.path)
@@ -56,11 +60,11 @@ class Install:
     def version_string(self):
         self.update_cache(read_exe=False)
 
-        versionStr = self.cache.get("CelesteVersion", "unknown")
-        framework = self.cache.get("Framework", None)
+        versionStr: str = self.cache.get("CelesteVersion", "unknown")
+        framework: t.Optional[str] = self.cache.get("Framework", None)
         if framework:
             versionStr += f"-{framework.lower()}"
-        everestBuild = self.cache.get("EverestBuild", None)
+        everestBuild: t.Optional[str] = self.cache.get("EverestBuild", None)
         if everestBuild:
             versionStr += f" + 1.{everestBuild}.0"
         elif str(self.cache.get("Everest", None)) == "True":
@@ -71,10 +75,10 @@ class Install:
         self.update_cache()
         return self.cache
 
-    def __setitem__(self, name, value):
+    def __setitem__(self, name: str, value: str):
         self.data[name] = value
 
-    def __getitem__(self, name):
+    def __getitem__(self, name: str):
         return self.data.get(name, "") or Install.DEFAULTS.get(name, "")
 
     def serialize(self):
