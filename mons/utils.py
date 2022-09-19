@@ -143,6 +143,18 @@ def parseVersionSpec(string: str):
 
 
 def latest_build(branch: str):
+    if branch.startswith(("refs/heads/", "refs/pull/")):
+        return latest_build_azure(branch)
+
+    build_list = get_build_list()
+    for build in build_list:
+        if not branch or build["branch"] == branch:
+            return int(build["version"])
+
+    return None
+
+
+def latest_build_azure(branch: str):
     response: urllib3.HTTPResponse = urllib3.PoolManager().request(
         "GET",
         "https://dev.azure.com/EverestAPI/Everest/_apis/build/builds",
@@ -174,6 +186,14 @@ def latest_build(branch: str):
 
 
 def build_exists(build: int):
+    build_list = get_build_list()
+    if build in (int(b["version"]) for b in build_list):
+        return True
+
+    return build_exists_azure(build)
+
+
+def build_exists_azure(build: int):
     try:
         urllib.request.urlopen(
             "https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/"
@@ -186,7 +206,25 @@ def build_exists(build: int):
         raise
 
 
-def fetch_build_artifact(
+updateURLLookup = {
+    "main": "mainDownload",
+    "olympus-meta": "olympusMetaDownload",
+    "olympus-build": "olympusBuildDownload",
+}
+
+
+def fetch_build_artifact(build: int, artifactName: str) -> urllib3.HTTPResponse:
+    build_list = get_build_list()
+    for b in build_list:
+        if build == int(b["version"]):
+            return urllib3.PoolManager().request(
+                "GET", b[updateURLLookup[artifactName]], preload_content=False
+            )
+
+    return fetch_build_artifact_azure(build, artifactName)
+
+
+def fetch_build_artifact_azure(
     build: int, artifactName="olympus-build"
 ) -> urllib3.HTTPResponse:
     return urllib3.PoolManager().request(
@@ -199,6 +237,27 @@ def fetch_build_artifact(
         },
         preload_content=False,
     )
+
+
+build_list = None
+
+
+def get_build_list() -> t.List[t.Dict[str, t.Any]]:
+    global build_list
+    if build_list:
+        return build_list
+
+    update_url = (
+        urllib.request.urlopen("https://everestapi.github.io/everestupdater.txt")
+        .read()
+        .decode()
+        .strip()
+    )
+
+    build_list = yaml.safe_load(
+        download_with_progress(update_url, None, "Downloading Build List", clear=True)
+    )
+    return build_list
 
 
 mod_list = None
