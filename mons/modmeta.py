@@ -22,7 +22,7 @@ class _ModMeta_Base:
 
     @classmethod
     def _from_dict(cls, data: t.Dict[str, t.Any]):
-        return _ModMeta_Base(str(data["Name"]), str(data.get("Version", "NoVersion")))
+        return cls(str(data["Name"]), str(data.get("Version", "NoVersion")))
 
     def __repr__(self) -> str:
         return f"{self.Name}: {self.Version}"
@@ -51,7 +51,7 @@ class _ModMeta_Deps:
 
     @classmethod
     def _from_dict(cls, data: t.Dict[str, t.Any]):
-        return _ModMeta_Deps(
+        return cls(
             [_ModMeta_Base._from_dict(dep) for dep in data["Dependencies"]],
             [_ModMeta_Base._from_dict(dep) for dep in data["OptionalDependencies"]],
         )
