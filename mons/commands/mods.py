@@ -19,7 +19,6 @@ from ..formatting import format_bytes
 from ..formatting import format_columns
 from ..formatting import TERM_COLORS
 from ..mons import cli as mons_cli
-from ..mons import pass_userinfo
 from ..utils import *
 from ..version import Version
 from mons import clickExt
@@ -354,7 +353,6 @@ def resolve_mods(mods: t.Sequence[str]):
 @click.option(
     "--yes", "-y", is_flag=True, default=None, help="Skip confirmation prompts."
 )
-@pass_userinfo
 def add(
     name: Install,
     mods: t.Tuple[str, ...],
