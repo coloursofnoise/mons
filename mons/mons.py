@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 import click
 
-from .clickExt import *
-from .config import *
+import mons.clickExt as clickExt
+from mons.config import UserInfo
 
 pass_userinfo = click.make_pass_decorator(UserInfo)
 
 
-@click.group(cls=CatchErrorsGroup)
+@click.group(cls=clickExt.CatchErrorsGroup)
 @click.pass_context
 @click.version_option()
 def cli(ctx: click.Context):

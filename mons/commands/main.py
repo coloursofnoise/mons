@@ -2,18 +2,31 @@ import io
 import os
 import shutil
 import subprocess
+import typing as t
+import urllib.parse
+import zipfile
 
 import click
 from click import echo
 
 import mons.clickExt as clickExt
 import mons.fs as fs
-from ..formatting import format_columns
-from ..mons import cli
-from ..mons import pass_userinfo
-from ..mons import UserInfo
-from ..utils import *
+from mons.config import config_dir
+from mons.config import CONFIG_FILE
+from mons.config import editConfig
+from mons.config import UserInfo
+from mons.downloading import download_with_progress
+from mons.errors import TTYError
+from mons.formatting import format_columns
 from mons.install import Install
+from mons.mons import cli
+from mons.mons import pass_userinfo
+from mons.utils import build_exists
+from mons.utils import fetch_build_artifact
+from mons.utils import find_celeste_file
+from mons.utils import getMD5Hash
+from mons.utils import parseVersionSpec
+from mons.utils import unpack
 
 
 @cli.command(no_args_is_help=True)

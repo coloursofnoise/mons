@@ -4,12 +4,11 @@ from collections.abc import MutableMapping
 from configparser import ConfigParser
 from contextlib import AbstractContextManager
 
-from click import edit
-from click import get_app_dir
+import click
 
 from mons.install import Install
 
-config_dir = get_app_dir("mons", roaming=False)
+config_dir = click.get_app_dir("mons", roaming=False)
 
 CONFIG_FILE = "config.ini"
 INSTALLS_FILE = "installs.ini"
@@ -46,7 +45,7 @@ def saveConfig(config: ConfigParser, file: str):
 
 def editConfig(config: ConfigParser, file: str):
     saveConfig(config, file)
-    edit(
+    click.edit(
         filename=os.path.join(config_dir, file),
         editor=config.get("user", "editor", fallback=None),
     )

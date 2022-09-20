@@ -13,8 +13,8 @@ from click import Abort
 from tqdm import tqdm
 from urllib3.exceptions import HTTPError
 
-from mons import baseUtils
-from mons import fs
+import mons.fs as fs
+from mons import baseUtils  # required to set module variable
 from mons.baseUtils import read_with_progress
 from mons.modmeta import ModDownload
 from mons.modmeta import UpdateInfo

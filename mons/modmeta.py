@@ -7,7 +7,7 @@ import yaml
 from click import echo
 from yaml.scanner import ScannerError
 
-from mons import fs
+import mons.fs as fs
 from mons.baseUtils import find
 from mons.errors import EmptyFileError
 from mons.version import Version

@@ -15,8 +15,6 @@ from click import echo
 from pefile import DIRECTORY_ENTRY  # https://github.com/erocarrera/pefile
 from tqdm import tqdm
 
-from .config import *
-from .errors import *
 from mons.baseUtils import GeneratorWithLen
 from mons.downloading import download_with_progress
 from mons.modmeta import ModMeta

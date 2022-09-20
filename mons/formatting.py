@@ -79,19 +79,22 @@ def _format_columns_dict(dict, prefix):
     ).strip("\n")
 
 
+Color = t.NewType("Color", str)
+
+
 class TERM_COLORS:
-    NONE = "\033[0m"
-    RESET = NONE
+    NONE = Color("\033[0m")
+    RESET = Color(NONE)
 
-    RED = "\033[0;31m"
-    ERROR = RED
+    RED = Color("\033[0;31m")
+    ERROR = Color(RED)
 
-    GREY = "\033[0;90m"
-    DISABLED = GREY
+    GREY = Color("\033[0;90m")
+    DISABLED = Color(GREY)
 
-    YELLOW = "\033[0;33m"
-    WARNING = YELLOW
+    YELLOW = Color("\033[0;33m")
+    WARNING = Color(YELLOW)
 
 
-def colorize(string: str, color: str):
+def colorize(string: str, color: Color):
     return color + string + TERM_COLORS.RESET

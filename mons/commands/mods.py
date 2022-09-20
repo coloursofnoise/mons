@@ -1,32 +1,42 @@
 import itertools
+import json
 import os
 import re
 import shutil
 import time
 import typing as t
+import urllib.parse
+import urllib.request
 from gettext import ngettext
-from urllib.parse import ParseResult
 
 import click
 from click import echo
-from click import echo_via_pager
 
+import mons.clickExt as clickExt
 import mons.fs as fs
-from ..downloading import download_threaded
-from ..downloading import get_download_size
-from ..formatting import colorize
-from ..formatting import format_bytes
-from ..formatting import format_columns
-from ..formatting import TERM_COLORS
-from ..mons import cli as mons_cli
-from ..utils import *
-from ..version import Version
-from mons import clickExt
 from mons.baseUtils import *
+from mons.downloading import download_threaded
+from mons.downloading import download_with_progress
+from mons.downloading import get_download_size
+from mons.errors import TTYError
+from mons.formatting import colorize
+from mons.formatting import format_bytes
+from mons.formatting import format_columns
+from mons.formatting import TERM_COLORS
 from mons.install import Install
 from mons.modmeta import combined_dependencies
 from mons.modmeta import ModDownload
+from mons.modmeta import ModMeta
+from mons.modmeta import read_mod_info
 from mons.modmeta import UpdateInfo
+from mons.mons import cli as mons_cli
+from mons.utils import enable_mod
+from mons.utils import get_dependency_graph
+from mons.utils import get_mod_list
+from mons.utils import installed_mods
+from mons.utils import read_blacklist
+from mons.utils import search_mods
+from mons.version import Version
 
 
 @click.group(name="mods")
@@ -147,7 +157,7 @@ def list_mods(
             for meta in gen
         )
 
-    echo_via_pager(gen, color=color)
+    click.echo_via_pager(gen, color=color)
 
 
 @cli.command(hidden=True)
@@ -249,7 +259,9 @@ def resolve_mods(mods: t.Sequence[str]):
 
         # Install from local filesystem
         if mod.endswith(".zip") and os.path.exists(mod):
-            parsed_url = ParseResult("file", "", os.path.abspath(mod), "", "", "")
+            parsed_url = urllib.parse.ParseResult(
+                "file", "", os.path.abspath(mod), "", "", ""
+            )
             meta = read_mod_info(parsed_url.path)
             if meta:
                 download = ModDownload(meta, urllib.parse.urlunparse(parsed_url))
