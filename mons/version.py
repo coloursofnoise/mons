@@ -8,7 +8,7 @@ class Version:
     @classmethod
     def parse(cls, version: str):
         if version == "NoVersion":
-            return Version(1, 0)
+            return cls(1, 0)
 
         # discard semver prerelease version
         strArr = version.split("-", maxsplit=1)[0].split(".")
@@ -16,7 +16,7 @@ class Version:
             raise ValueError("%s is not a valid Version string" % version)
         arr = list(map(int, strArr))
         arr += [-1] * (4 - len(arr))
-        return Version(*arr)
+        return cls(*arr)
 
     def satisfies(self, required: "Version"):
         # Special case: Always True if version == 0.0.*

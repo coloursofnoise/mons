@@ -25,7 +25,7 @@ def get_default_install():
     return os.environ.get("MONS_DEFAULT_INSTALL", None)
 
 
-def loadConfig(file: str, default: MutableMapping = {}):
+def loadConfig(file: str, default: MutableMapping[str, str] = {}):
     config = ConfigParser()
     config_file = os.path.join(config_dir, file)
     if os.path.isfile(config_file):

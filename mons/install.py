@@ -16,8 +16,8 @@ class Install:
         self,
         name: str,
         path: str,
-        cache: t.Optional[MutableMapping] = None,
-        data: t.Optional[MutableMapping] = None,
+        cache: t.Optional[MutableMapping[str, str]] = None,
+        data: t.Optional[MutableMapping[str, str]] = None,
     ) -> None:
         self.name = name
         assert os.path.exists(path)

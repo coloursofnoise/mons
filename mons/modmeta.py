@@ -40,20 +40,26 @@ class _ModMeta_Deps:
 
     @classmethod
     def parse(cls, data: t.Any):
-        if isinstance(data, _ModMeta_Deps):
+        if isinstance(data, cls):
             return data
         elif isinstance(data, t.Dict):
             return cls._from_dict(data)
         elif isinstance(data, t.List):
-            return _ModMeta_Deps(data, [])
+            return cls(data, [])
         else:
             raise ValueError()
 
     @classmethod
     def _from_dict(cls, data: t.Dict[str, t.Any]):
         return cls(
-            [_ModMeta_Base._from_dict(dep) for dep in data["Dependencies"]],
-            [_ModMeta_Base._from_dict(dep) for dep in data["OptionalDependencies"]],
+            [
+                _ModMeta_Base._from_dict(dep)  # pyright: ignore[reportPrivateUsage]
+                for dep in data["Dependencies"]
+            ],
+            [
+                _ModMeta_Base._from_dict(dep)  # pyright: ignore[reportPrivateUsage]
+                for dep in data["OptionalDependencies"]
+            ],
         )
 
 
@@ -82,11 +88,11 @@ class ModMeta(_ModMeta_Base, _ModMeta_Deps):
         basename = os.path.basename(path)
         meta = None
         if os.path.isdir(path):
-            meta = ModMeta({"Name": "_dir_" + basename, "Version": Version(0, 0, 0)})
+            meta = cls({"Name": "_dir_" + basename, "Version": Version(0, 0, 0)})
 
         elif zipfile.is_zipfile(path):
             name = os.path.splitext(basename)[0]
-            meta = ModMeta({"Name": "_zip_" + name, "Version": Version(0, 0, 0)})
+            meta = cls({"Name": "_zip_" + name, "Version": Version(0, 0, 0)})
 
         if meta:
             meta.Path = path

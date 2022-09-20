@@ -33,7 +33,7 @@ def download_with_progress(
     dest: t.Optional[str],
     label: t.Optional[str] = None,
     atomic: t.Optional[bool] = False,
-    clear: t.Optional[bool] = False,
+    clear=False,
     *,
     response_handler: t.Optional[
         t.Callable[[urllib3.HTTPResponse], urllib3.HTTPResponse]
@@ -154,7 +154,9 @@ def download_threaded(
             except (KeyboardInterrupt, SystemExit):
                 for future in futures:
                     future.cancel()
-                baseUtils._download_interrupt = True
+                baseUtils._download_interrupt = (  # pyright: ignore[reportPrivateUsage]
+                    True
+                )
                 raise
 
             if late_downloads:

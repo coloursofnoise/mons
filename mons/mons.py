@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import typing as t
+
 import click
 
 import mons.clickExt as clickExt
@@ -17,7 +19,7 @@ def cli(ctx: click.Context):
 @cli.command(context_settings={"ignore_unknown_options": True})
 @click.argument("command", nargs=-1)
 @click.pass_context
-def help(ctx: click.Context, command):
+def help(ctx: click.Context, command: t.List[str]):
     """Display help text for a command"""
     group = cli
     for cmd_name in command:
@@ -36,6 +38,6 @@ def help(ctx: click.Context, command):
             exit(0)
 
 
-from .commands import main, mods
+from .commands import main, mods  # type: ignore
 
 cli.add_command(mods.cli)

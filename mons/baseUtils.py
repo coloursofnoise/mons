@@ -63,7 +63,7 @@ def read_with_progress(
     output: IOBase,
     size=0,
     blocksize=4096,
-    label="",
+    label: t.Optional[str] = "",
     clear_progress=False,
 ):
     with tqdm(
