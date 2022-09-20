@@ -1,12 +1,12 @@
 #!/usr/bin/env python
+import os
 import typing as t
+from importlib import import_module
 
 import click
 
 import mons.clickExt as clickExt
 from mons.config import UserInfo
-
-pass_userinfo = click.make_pass_decorator(UserInfo)
 
 
 @click.group(cls=clickExt.CatchErrorsGroup)
@@ -21,6 +21,11 @@ def cli(ctx: click.Context):
 @click.pass_context
 def help(ctx: click.Context, command: t.List[str]):
     """Display help text for a command"""
+    # No args means print program help
+    if len(command) < 1 and ctx.parent:
+        click.echo(cli.get_help(ctx.parent))
+        exit(0)
+
     group = cli
     for cmd_name in command:
         cmd = group.get_command(ctx, cmd_name)
@@ -38,6 +43,7 @@ def help(ctx: click.Context, command: t.List[str]):
             exit(0)
 
 
-from .commands import main, mods  # type: ignore
-
-cli.add_command(mods.cli)
+cmd_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "commands"))
+for filename in os.listdir(cmd_folder):
+    if filename.endswith(".py") and not filename.startswith("__"):
+        import_module(f"mons.commands.{filename[:-3]}")

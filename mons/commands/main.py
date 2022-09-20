@@ -14,13 +14,13 @@ import mons.fs as fs
 from mons.config import config_dir
 from mons.config import CONFIG_FILE
 from mons.config import editConfig
+from mons.config import pass_userinfo
 from mons.config import UserInfo
 from mons.downloading import download_with_progress
 from mons.errors import TTYError
 from mons.formatting import format_columns
 from mons.install import Install
 from mons.mons import cli
-from mons.mons import pass_userinfo
 from mons.utils import build_exists
 from mons.utils import fetch_build_artifact
 from mons.utils import find_celeste_file

@@ -48,6 +48,9 @@ def cli(ctx: click.Context):
     pass
 
 
+mons_cli.add_command(cli)
+
+
 def format_mod_info(meta: ModMeta):
     out = (
         colorize(f"{meta.Name}\t(disabled)", TERM_COLORS.DISABLED)

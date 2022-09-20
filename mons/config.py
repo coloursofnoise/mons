@@ -79,3 +79,6 @@ class UserInfo(AbstractContextManager["UserInfo"]):
             cache[k] = v.cache
         saveConfig(installs, INSTALLS_FILE)
         saveConfig(cache, CACHE_FILE)
+
+
+pass_userinfo = click.make_pass_decorator(UserInfo)
