@@ -274,6 +274,10 @@ def install(
                 f"Build number could not be retrieved for `{versionspec}`."
             )
 
+        if str(build) == install.cache["EverestBuild"]:
+            echo(f"Build {build} already installed.")
+            exit(0)
+
         if not build_exists(build):
             raise click.ClickException(
                 f"Build artifacts could not be found for build {build}."
