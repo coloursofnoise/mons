@@ -44,6 +44,7 @@ from mons.version import Version
 def cli(ctx: click.Context):
     """Manage Everest Mods
     \f
+
     |full_reference-mods|"""
     pass
 
