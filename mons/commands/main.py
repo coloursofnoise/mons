@@ -414,7 +414,11 @@ def launch(ctx: click.Context, name: Install):
 
     redirect = None if "--console" in ctx.args else subprocess.PIPE
 
-    subprocess.Popen([path] + ctx.args, stdout=redirect, stderr=redirect, shell=True)
+    proc = subprocess.Popen(
+        [path] + ctx.args, stdout=redirect, stderr=redirect, shell=True
+    )
+    if not redirect:
+        proc.wait()
 
 
 @cli.command(no_args_is_help=True)
