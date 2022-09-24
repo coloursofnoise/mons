@@ -14,7 +14,7 @@ TEST_INSTALL = "_mons_testing"
 @pytest.mark.must_pass
 def test_add(runner: "CliRunner", test_install):
     result = runner.invoke(mons_cli, ["add", TEST_INSTALL, test_install])
-    assert result.exit_code != 0, result.output
+    assert result.exit_code == 0, result.output
     assert "Found Celeste.exe" in result.output
 
 
