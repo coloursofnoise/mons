@@ -1,8 +1,6 @@
 import click
-import pytest
 
 
-@pytest.mark.integration_test
 def test_command_help(command: "click.Command"):
     if command.hidden:
         return
@@ -13,7 +11,6 @@ def test_command_help(command: "click.Command"):
     ), f"Command '{command.name}' does is missing short help text"
 
 
-@pytest.mark.integration_test
 def test_option_help(command: "click.Command"):
     if command.hidden:
         return

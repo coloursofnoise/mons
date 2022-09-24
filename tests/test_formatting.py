@@ -25,6 +25,7 @@ foo      \tvalue
 foobarbaz\tvalue
 """.strip(),
         ),
+        ({}, ""),
     ],
 )
 def test_format_columns(input, expected):

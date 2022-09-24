@@ -2,7 +2,6 @@ import typing as t
 
 if t.TYPE_CHECKING:
     import click
-import pytest
 import mons.clickExt as clickExt
 from inspect import signature, unwrap
 
@@ -18,7 +17,6 @@ def unwrap_count(f):
     return unwrap(f, stop=incr), depth
 
 
-@pytest.mark.integration_test
 def test_command_arguments(command: "click.Command"):
     assert command.callback
 

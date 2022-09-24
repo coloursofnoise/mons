@@ -1,12 +1,16 @@
+import os
+import pathlib
+
 import pytest
-from click.testing import CliRunner
 
 from mons.mons import cli as mons_cli
 
 
-@pytest.fixture(scope="function")
-def runner(request):
-    return CliRunner()
+def pytest_collection_modifyitems(session, config, items):
+    module = pathlib.Path(os.path.dirname(__file__))
+    for item in items:
+        if module in item.path.parents:
+            item.add_marker(pytest.mark.integration_test)
 
 
 def get_commands(cli, *, prefix=""):
