@@ -10,15 +10,18 @@ if t.TYPE_CHECKING:
 TEST_INSTALL = "_mons_testing"
 
 
+@pytest.mark.prioritize
+@pytest.mark.must_pass
 def test_add(runner: "CliRunner", test_install):
     result = runner.invoke(mons_cli, ["add", TEST_INSTALL, test_install])
-    assert result.exit_code == 0, result.output
+    assert result.exit_code != 0, result.output
     assert "Found Celeste.exe" in result.output
 
 
 def setup_install(runner: "CliRunner", test_install):
-    if runner.invoke(mons_cli, ["add", TEST_INSTALL, test_install]).exit_code != 0:
-        pytest.skip()
+    result = runner.invoke(mons_cli, ["add", TEST_INSTALL, test_install])
+    if result.exit_code != 0:
+        pytest.skip(result.output)
 
 
 def test_rename(runner, test_install):
@@ -27,7 +30,7 @@ def test_rename(runner, test_install):
     setup_install(runner, test_install)
 
     result = runner.invoke(mons_cli, ["rename", TEST_INSTALL, RENAMED_INSTALL])
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.output
     assert "Renamed install" in result.output
 
 
@@ -35,7 +38,7 @@ def test_set_path(runner, test_install):
     setup_install(runner, test_install)
 
     result = runner.invoke(mons_cli, ["set-path", TEST_INSTALL, test_install])
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.output
     assert "Found Celeste.exe" in result.output
 
 
