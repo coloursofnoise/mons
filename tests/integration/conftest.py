@@ -9,7 +9,7 @@ from mons.mons import cli as mons_cli
 def pytest_collection_modifyitems(session, config, items):
     module = pathlib.Path(os.path.dirname(__file__))
     for item in items:
-        if module in item.path.parents:
+        if module == item.path.parent:
             item.add_marker(pytest.mark.integration_test)
 
 
