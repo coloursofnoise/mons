@@ -1,4 +1,5 @@
 import os
+import shutil
 import urllib.request
 import zipfile
 
@@ -54,6 +55,11 @@ def test_install_zip(runner, test_install):
     assert "Install success" in result.output
 
 
+@pytest.mark.xfail(
+    not (shutil.which("dotnet") or shutil.which("msbuild")),
+    reason="no .NET build tool found",
+    run=False,
+)
 def test_install_src(runner, test_install, tmp_path):
     dest = os.path.join(tmp_path, "stable.zip")
     urllib.request.urlretrieve(f"{GITHUB_REPO}/archive/refs/heads/stable.zip", dest)
