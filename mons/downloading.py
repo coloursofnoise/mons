@@ -7,6 +7,7 @@ from concurrent.futures import wait
 from contextlib import nullcontext
 from io import BytesIO
 from tempfile import TemporaryDirectory
+from urllib.error import URLError
 
 import urllib3
 from click import Abort
@@ -45,16 +46,22 @@ def download_with_progress(
 
     http = pool_manager or urllib3.PoolManager()
 
-    response: urllib3.HTTPResponse = (
-        http.request(
-            "GET",
-            src,
-            preload_content=False,
-            timeout=urllib3.Timeout(connect=3, read=10),
-        )
-        if isinstance(src, (str, urllib.request.Request))
-        else src
-    )
+    if isinstance(src, (str, urllib.request.Request)):
+        try:
+            response: urllib3.HTTPResponse = http.request(
+                "GET",
+                src,
+                preload_content=False,
+                timeout=urllib3.Timeout(connect=3, read=10),
+            )
+        except HTTPError as e:
+            try:
+                # try to fallback to urlopen, notably for file:// scheme
+                response = urllib.request.urlopen(src)
+            except URLError:
+                raise e
+    else:
+        response = src
 
     content = response_handler(response) if response_handler else response
     size = int(response.headers.get("Content-Length", None) or 100)

@@ -79,6 +79,7 @@ def rename(userInfo: UserInfo, old: str, new: str):
     """Rename a Celeste install"""
     userInfo.installs[new] = userInfo.installs.pop(old)
     userInfo.installs[new].name = new
+    echo(f"Renamed install `{old}` to `{new}`")
 
 
 @cli.command(no_args_is_help=True)
@@ -109,6 +110,7 @@ def set_path(name: Install, path: str):
 def remove(userInfo: UserInfo, name: str):
     """Remove an existing install"""
     del userInfo.installs[name]
+    echo(f"Removed install {name}.")
 
 
 @cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
@@ -121,10 +123,14 @@ def set_branch(name: Install, branch: str):
 
 
 @cli.command()
+# @click.option("--json", is_flag=True, hidden=True)
 @pass_userinfo
 def list(userInfo: UserInfo):
     """List existing installs"""
     output = {}
+    if not userInfo.installs:
+        raise click.ClickException("No installs found, use `add` to add one.")
+
     for name, install in userInfo.installs.items():
         try:
             clickExt.Install.validate_install(name, validate_path=True)
@@ -132,7 +138,7 @@ def list(userInfo: UserInfo):
         except Exception as err:
             raise click.UsageError(str(err))
 
-    click.echo(format_columns(output) or "No installs found, use `add` to add one.")
+    click.echo(format_columns(output))
 
 
 @cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
@@ -287,7 +293,7 @@ def install(
                 f"Build number could not be retrieved for `{versionspec}`."
             )
 
-        if str(build) == install.cache["EverestBuild"]:
+        if str(build) == install.cache.get("EverestBuild"):
             echo(f"Build {build} already installed.")
             exit(0)
 
