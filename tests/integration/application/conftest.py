@@ -3,7 +3,6 @@ import os
 import pathlib
 
 import pytest
-from click.testing import CliRunner
 
 
 def pytest_collection_modifyitems(session, config, items):
@@ -38,20 +37,6 @@ def test_install(pytestconfig: pytest.Config, cache: pytest.Cache):
         return install_path
     else:
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), install_path)
-
-
-@pytest.fixture(scope="function")
-def runner():
-    """
-    runner.isolated_filesystem isn't necessary because mons never operates directly on the working directory
-    but if it did:
-
-    ```
-    with runner.isolated_filesystem(temp_dir=tmp_path):
-        yield runner
-    ```
-    """
-    return CliRunner()
 
 
 @pytest.fixture(autouse=True)

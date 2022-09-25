@@ -2,6 +2,7 @@ import os
 import pathlib
 
 import pytest
+from click.testing import CliRunner
 
 from mons.mons import cli as mons_cli
 
@@ -29,3 +30,17 @@ def get_commands(cli, *, prefix=""):
 )
 def command(request):
     yield request.param
+
+
+@pytest.fixture(scope="function")
+def runner():
+    """
+    runner.isolated_filesystem isn't necessary because mons never operates directly on the working directory
+    but if it did:
+
+    ```
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        yield runner
+    ```
+    """
+    return CliRunner()
