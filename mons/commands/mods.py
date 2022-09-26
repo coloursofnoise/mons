@@ -594,7 +594,7 @@ def add(
             thread_count=10,
         )
         end = time.perf_counter()
-        tqdm.write(str.format("Downloaded files in {:.3f} seconds.", end - start))
+        tqdm.write(str.format("\rDownloaded files in {:.3f} seconds.", end - start))
 
         if no_deps:
             exit()
