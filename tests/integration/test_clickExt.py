@@ -1,4 +1,3 @@
-from types import NoneType
 from urllib.parse import urlparse
 
 import click
@@ -105,8 +104,8 @@ class TestCommandExt:
         [
             (None, click.MissingParameter),
             (lambda: None, click.MissingParameter),
-            ("A Value", NoneType),
-            (lambda: "A Value", NoneType),
+            ("A Value", None),
+            (lambda: "A Value", None),
         ],
     )
     def test_optionalarg(self, runner, default, exception):
@@ -115,4 +114,4 @@ class TestCommandExt:
         )
 
         result = runner.invoke(cmd, standalone_mode=False)
-        assert isinstance(result.exception, exception)
+        assert exception is None or isinstance(result.exception, exception)
