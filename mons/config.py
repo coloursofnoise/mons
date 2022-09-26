@@ -1,3 +1,5 @@
+from __future__ import annotations  # ABCs are not generic prior to 3.9
+
 import os
 import typing as t
 from collections.abc import MutableMapping
@@ -7,6 +9,7 @@ from contextlib import AbstractContextManager
 import click
 
 from mons.install import Install
+
 
 config_dir = click.get_app_dir("mons", roaming=False)
 
@@ -52,7 +55,7 @@ def editConfig(config: ConfigParser, file: str):
     return loadConfig(file, config["DEFAULT"])
 
 
-class UserInfo(AbstractContextManager["UserInfo"]):
+class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgument]
     def __enter__(self):
         self.config = loadConfig(CONFIG_FILE, Config_DEFAULT)
         installs = loadConfig(INSTALLS_FILE)

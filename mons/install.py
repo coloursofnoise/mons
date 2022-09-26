@@ -1,3 +1,5 @@
+from __future__ import annotations  # ABCs are not generic prior to 3.9
+
 import os
 import typing as t
 from collections.abc import MutableMapping
