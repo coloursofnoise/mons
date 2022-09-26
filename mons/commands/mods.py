@@ -579,6 +579,10 @@ def add(
         start = time.perf_counter()
         for mod in itertools.chain((mod.Old for mod in deps_update), deps_blacklisted):
             enable_mod(mod_folder, os.path.basename(mod.Path))
+        # blindly attempt to enable any other mods that will be downloaded
+        for mod in deps_install:
+            assert isinstance(mod, ModDownload)
+            enable_mod(mod_folder, f"{mod.Meta.Name}.zip")
 
         download_threaded(
             mod_folder,
