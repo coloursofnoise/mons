@@ -30,7 +30,7 @@ from mons.modmeta import ModMeta
 from mons.modmeta import read_mod_info
 from mons.modmeta import UpdateInfo
 from mons.mons import cli as mons_cli
-from mons.utils import enable_mod
+from mons.utils import enable_mods
 from mons.utils import get_dependency_graph
 from mons.utils import get_mod_list
 from mons.utils import installed_mods
@@ -577,12 +577,15 @@ def add(
         clickExt.confirm_ext("Continue?", default=True, abort=True, skip=yes)
 
         start = time.perf_counter()
-        for mod in itertools.chain((mod.Old for mod in deps_update), deps_blacklisted):
-            enable_mod(mod_folder, os.path.basename(mod.Path))
-        # blindly attempt to enable any other mods that will be downloaded
-        for mod in deps_install:
-            assert isinstance(mod, ModDownload)
-            enable_mod(mod_folder, f"{mod.Meta.Name}.zip")
+        enable_mods(
+            mod_folder,
+            *itertools.chain(
+                (os.path.basename(mod.Path) for mod in deps_blacklisted),
+                (os.path.basename(mod.Old.Path) for mod in deps_update),
+                # blindly attempt to enable any other mods that will be downloaded
+                (f"{mod.Meta.Name}.zip" for mod in deps_install),
+            ),
+        )
 
         download_threaded(
             mod_folder,
