@@ -617,7 +617,10 @@ def add(
 @clickExt.install("name")
 @click.argument("mods", nargs=-1)
 @click.option(
-    "--trim-deps", is_flag=True, help="Also remove any exclusive dependencies."
+    "-r",
+    "--recurse",
+    is_flag=True,
+    help="Remove all exclusive dependencies recursively.",
 )
 @click.option(
     "--force",
@@ -626,7 +629,7 @@ def add(
     default=False,
     help="Ignore errors and confirmation prompts.",
 )
-def remove(name: Install, mods: t.List[str], trim_deps: bool, force: bool):
+def remove(name: Install, mods: t.List[str], recurse: bool, force: bool):
     """Remove installed mods."""
     mod_folder = os.path.join(os.path.dirname(name.path), "Mods")
     installed_list = installed_mods(mod_folder, valid=True, with_size=True)
@@ -640,7 +643,7 @@ def remove(name: Install, mods: t.List[str], trim_deps: bool, force: bool):
     resolved, unresolved = partition(lambda mod: mod in installed_list, mods)
 
     if len(unresolved) > 0:
-        echo("The following mods could not be found:")
+        echo("The following mods could not be found, and will not be removed:")
         for mod in unresolved:
             echo(f"\t{mod}")
         clickExt.confirm_ext("Continue anyways?", skip=force, abort=True)
@@ -656,7 +659,7 @@ def remove(name: Install, mods: t.List[str], trim_deps: bool, force: bool):
         echo(f"\t{mod}")
 
     removable = []
-    if trim_deps:
+    if recurse:
         all_dependencies = resolve_dependencies(
             [meta for meta in installed_list.values() if not meta.Name in mods],
             installed_list,
