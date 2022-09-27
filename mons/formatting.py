@@ -72,6 +72,8 @@ def format_columns(data: t.Any, prefix=""):
 
 
 def _format_columns_dict(dict, prefix):
+    if not dict:
+        return ""
     c1_width = max(len(k) for k in dict.keys())
     return "\n".join(
         "{}{:<{c1_width}}\t{}".format(prefix, k, v, c1_width=c1_width)

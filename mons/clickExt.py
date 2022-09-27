@@ -46,7 +46,7 @@ class CatchErrorsGroup(click.Group):
                     nl=False,
                 )
             else:
-                click.echo(colorize(type(e).__name__, TERM_COLORS.ERROR))
+                click.echo(colorize(repr(e), TERM_COLORS.ERROR))
                 click.echo(
                     f"""An unhandled exception has occurred.
 Use the --debug flag to disable clean exception handling."""
@@ -180,7 +180,14 @@ class URL(click.ParamType):
             if self.require_path and not parsed_url.path:
                 self.fail("Path component required for URL.", param, ctx)
             if not parsed_url.scheme and self.default_scheme:
-                parsed_url._replace(scheme=self.default_scheme)
+                if not value.startswith("//"):
+                    # urlparse treats urls NOT starting with // as relative URLs
+                    # https://docs.python.org/3.10/library/urllib.parse.html?highlight=urlparse#urllib.parse.urlparse
+                    parsed_url = parse.urlparse(
+                        "//" + value, scheme=self.default_scheme
+                    )
+                else:
+                    parsed_url._replace(scheme=self.default_scheme)
             if self.valid_schemes and parsed_url.scheme not in self.valid_schemes:
                 self.fail(f"URI scheme '{parsed_url.scheme}' not allowed.", param, ctx)
 

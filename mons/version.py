@@ -1,9 +1,12 @@
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
 class Version:
-    def __init__(self, major: int, minor: int, build: int = -1, revision: int = -1):
-        self.Major = major
-        self.Minor = minor
-        self.Build = build
-        self.Revision = revision
+    Major: int
+    Minor: int
+    Build: int = -1
+    Revision: int = -1
 
     @classmethod
     def parse(cls, version: str):

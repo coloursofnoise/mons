@@ -1,3 +1,4 @@
+import errno
 import hashlib
 import json
 import os
@@ -35,9 +36,11 @@ def find_celeste_file(path: str, file: str, force_name=True):
     if os.path.isdir(path):
         ret = os.path.join(path, file)
         if not os.path.exists(ret):
-            raise FileNotFoundError(f"File `{file}` could not be found in `{path}`")
+            raise FileNotFoundError(
+                errno.ENOENT, f"File `{file}` could not be found in `{path}`", ret
+            )
     elif force_name and not os.path.basename(path) == file:
-        raise FileNotFoundError(f"File `{file}` not found at `{path}`")
+        raise FileNotFoundError(errno.ENOENT, f"File `{file}` not found", path)
     return ret
 
 
