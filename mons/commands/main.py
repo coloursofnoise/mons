@@ -141,7 +141,7 @@ def list(userInfo: UserInfo):
     click.echo(format_columns(output))
 
 
-@cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
+@cli.command(cls=clickExt.CommandExt)
 @clickExt.install("name")
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
 def show(name: Install, verbose: bool):

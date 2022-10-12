@@ -27,12 +27,23 @@ def confirm_ext(*params, skip: t.Optional[bool] = None, **attrs):
 
 class CatchErrorsGroup(click.Group):
     def main(self, args=None, *params, **extra):
-        debug = False
+        def pop_arg(arg):
+            if arg in sys.argv:
+                if not args:
+                    sys.argv.remove(arg)
+                return True
+            return False
+
+        debug = pop_arg("--debug")
+        wait = pop_arg("--wait")
+        if pop_arg("--prompt-install"):
+            os.environ["MONS_PROMPT_INSTALL"] = "1"
         try:
-            debug = "--debug" in sys.argv
-            if debug and not args:
-                sys.argv.remove("--debug")
             super().main(args=args, *params, **extra)
+        except SystemExit as e:
+            if wait:
+                click.pause()
+            raise e
         except Exception as e:
             if debug or os.environ.get("MONS_DEBUG", "false") == "true":
                 click.echo(
@@ -151,6 +162,7 @@ def install(*param_decls, resolve=True, **attrs):
         type=Install(resolve_install=resolve),
         cls=OptionalArg,
         default=get_default_install,
+        prompt="Install name",
         warning="mons default install set to {default}",
         **attrs,
     )
@@ -232,11 +244,30 @@ class OptionalArg(click.Argument):
     def __init__(
         self,
         param_decls: t.Sequence[str],
-        required=None,
         **attrs,
     ) -> None:
         self.warning: t.Optional[str] = attrs.pop("warning", None)
+        self.prompt: str = attrs.pop("prompt", "")
         super().__init__(param_decls, True, **attrs)
+
+    def add_to_parser(self, parser: click.parser.OptionParser, ctx: click.Context):
+        if os.environ.get("MONS_PROMPT_INSTALL", None) and not ctx.resilient_parsing:
+            return
+        return super().add_to_parser(parser, ctx)
+
+    def consume_value(self, ctx: click.Context, opts: t.Mapping[str, t.Any]):
+        if os.environ.get("MONS_PROMPT_INSTALL", None) and not ctx.resilient_parsing:
+            source = click.core.ParameterSource.PROMPT
+            default = self.get_default(ctx)
+            value = click.prompt(
+                self.prompt,
+                default=default,
+                type=self.type,
+                value_proc=lambda x: self.process_value(ctx, x),
+            )
+            return value, source
+
+        return super().consume_value(ctx, opts)
 
 
 class CommandExt(click.Command):
