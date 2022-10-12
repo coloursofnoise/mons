@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=mons
+Comment=Celeste Mod Manager
+Exec=mons mods add %u --prompt-install --wait
+Terminal=true
+Categories=Game;
+MimeType=x-scheme-handler/everest
