@@ -10,6 +10,7 @@ jobs:
     uses: coloursofnoise/mons/.github/workflows/test.yml@main
 
   build-and-publish:
+    needs: test
     runs-on: ubuntu-latest
 
     steps:
