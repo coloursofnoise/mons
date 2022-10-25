@@ -12,6 +12,9 @@ It was originally built for productivity when working on Everest, but can be use
 **This program requires basic competency using the [commandline](https://en.wikipedia.org/wiki/Command-line_interface) for your operating system.** For a graphical installer, please use [Olympus](https://everestapi.github.io/#installing-everest) instead.
 
 ## Install:
+### Arch Linux:
+Install from the AUR: [`everest-mons`](https://aur.archlinux.org/packages/everest-mons)
+
 ### Using [pipx](https://pypa.github.io/pipx/) (recommended):
 ```console
 $ pipx install mons
