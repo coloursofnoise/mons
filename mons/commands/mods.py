@@ -366,9 +366,8 @@ def resolve_mods(mods: t.Sequence[str]):
     "--no-deps", is_flag=True, default=False, help="Skip installing dependencies."
 )
 @click.option("--optional-deps", is_flag=True, default=False, hidden=True)
-@click.option(
-    "--yes", "-y", is_flag=True, default=None, help="Skip confirmation prompts."
-)
+@clickExt.yes_option()
+@clickExt.force_option()
 def add(
     name: Install,
     mods: t.Tuple[str, ...],
@@ -376,7 +375,6 @@ def add(
     random: bool,
     no_deps: bool,
     optional_deps: bool,
-    yes: t.Optional[bool],
 ):
     """Add one or more mods.
 
@@ -414,8 +412,10 @@ def add(
                 resolved.append(
                     ModDownload(meta, f"file:{urllib.request.pathname2url(zip)}")
                 )
-        elif click.confirm(
-            f"'{name}' does not seem to be an Everest mod.\nInstall anyways?"
+        elif clickExt.confirm_ext(
+            f"'{name}' does not seem to be an Everest mod.\nInstall anyways?",
+            default=False,
+            dangerous=True,
         ):
             filename = click.prompt("Save as file")
             if filename:
@@ -474,7 +474,7 @@ def add(
             f"Downloading them all will use up to {format_bytes(download_size)} disk space."
         )
         if clickExt.confirm_ext(
-            "Download and attempt to resolve them before continuing?", True, skip=yes
+            "Download and attempt to resolve them before continuing?", default=True
         ):
             for url in unresolved:
                 with fs.temporary_file(persist=True) as file:
@@ -524,7 +524,12 @@ def add(
                 echo(f"{len(unregistered)} dependencies could not be found:")
                 for mod in unregistered:
                     echo(mod)
-                click.confirm("Skip missing dependencies?", default=True, abort=True)
+                if not clickExt.confirm_ext(
+                    "Install without missing dependencies?",
+                    default=True,
+                    dangerous=True,
+                ):
+                    raise click.Abort()
 
             deps_install = [
                 get_mod_download(mod.Name, mod_list) for mod in deps_install
@@ -574,7 +579,8 @@ def add(
                 f"After this operation, {format_bytes(abs(download_size))} disk space will be freed"
             )
 
-        clickExt.confirm_ext("Continue?", default=True, abort=True, skip=yes)
+        if not clickExt.confirm_ext("Continue?", default=True):
+            raise click.Abort()
 
         start = time.perf_counter()
         enable_mods(
@@ -609,7 +615,7 @@ def add(
             echo(
                 f"Installed Everest ({current_everest}) does not satisfy minimum requirement ({everest_min})."
             )
-            if clickExt.confirm_ext("Update Everest?", True, skip=yes):
+            if clickExt.confirm_ext("Update Everest?", default=True):
                 mons_cli.main(args=["install", install.name, str(everest_min)])
 
 
@@ -622,14 +628,8 @@ def add(
     is_flag=True,
     help="Remove all exclusive dependencies recursively.",
 )
-@click.option(
-    "--force",
-    "-f",
-    is_flag=True,
-    default=False,
-    help="Ignore errors and confirmation prompts.",
-)
-def remove(name: Install, mods: t.List[str], recurse: bool, force: bool):
+@clickExt.force_option()
+def remove(name: Install, mods: t.List[str], recurse: bool):
     """Remove installed mods."""
     mod_folder = os.path.join(os.path.dirname(name.path), "Mods")
     installed_list = installed_mods(mod_folder, valid=True, with_size=True)
@@ -646,7 +646,8 @@ def remove(name: Install, mods: t.List[str], recurse: bool, force: bool):
         echo("The following mods could not be found, and will not be removed:")
         for mod in unresolved:
             echo(f"\t{mod}")
-        clickExt.confirm_ext("Continue anyways?", skip=force, abort=True)
+        if not clickExt.confirm_ext("Continue anyways?", default=False, dangerous=True):
+            raise click.Abort()
 
     metas = [installed_list[mod] for mod in resolved]
 
@@ -681,8 +682,8 @@ def remove(name: Install, mods: t.List[str], recurse: bool, force: bool):
     total_size = sum(mod.Size for mod in itertools.chain(metas, removable))
     echo(f"After this operation, {format_bytes(total_size)} disk space will be freed.")
 
-    if not force:
-        click.confirm("Remove mods?", abort=True)
+    if not clickExt.confirm_ext("Remove mods?", default=True, dangerous=True):
+        raise click.Abort()
 
     folders: t.List[ModMeta] = []
     with click.progressbar(
@@ -712,6 +713,7 @@ def remove(name: Install, mods: t.List[str], recurse: bool, force: bool):
 @click.option(
     "--upgrade-only", is_flag=True, help="Only update if new file has a higher version."
 )
+@clickExt.yes_option()
 def update(name: Install, all: bool, enabled: t.Optional[bool], upgrade_only: bool):
     """Update installed mods."""
     if not all:
@@ -783,8 +785,8 @@ def update(name: Install, all: bool, enabled: t.Optional[bool], upgrade_only: bo
             f"After this operation, {format_bytes(abs(total_size))} disk space will be freed"
         )
 
-    if not click.confirm("Continue?", default=True):
-        return
+    if not clickExt.confirm_ext("Continue?", default=True):
+        raise click.Abort()
 
     start = time.perf_counter()
     download_threaded("", updates, thread_count=10)
@@ -800,6 +802,7 @@ def update(name: Install, all: bool, enabled: t.Optional[bool], upgrade_only: bo
     "--enabled", is_flag=True, help="Resolve currently enabled mods.", default=None
 )
 @click.option("--no-update", is_flag=True, help="Don't update outdated dependencies.")
+@clickExt.yes_option()
 def resolve(name: Install, all: bool, enabled: t.Optional[bool], no_update: bool):
     """Resolve any missing or outdated dependencies."""
     if not all:
@@ -893,7 +896,8 @@ def resolve(name: Install, all: bool, enabled: t.Optional[bool], no_update: bool
             f"After this operation, {format_bytes(abs(download_size))} disk space will be freed"
         )
 
-    click.confirm("Continue?", default=True, abort=True)
+    if not clickExt.confirm_ext("Continue?", default=True):
+        raise click.Abort
 
     start = time.perf_counter()
     download_threaded(mods_folder, sorted_dep_downloads, thread_count=10)
@@ -908,5 +912,5 @@ def resolve(name: Install, all: bool, enabled: t.Optional[bool], no_update: bool
         echo(
             f"Installed Everest ({current_everest}) does not satisfy minimum requirement ({everest_min})."
         )
-        if click.confirm("Update Everest?", True):
+        if clickExt.confirm_ext("Update Everest?", default=True):
             mons_cli.main(args=["install", install.name, str(everest_min)])

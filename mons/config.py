@@ -5,6 +5,7 @@ import typing as t
 from collections.abc import MutableMapping
 from configparser import ConfigParser
 from contextlib import AbstractContextManager
+from dataclasses import dataclass
 
 import click
 
@@ -26,6 +27,12 @@ Install.DEFAULTS = {
 
 def get_default_install():
     return os.environ.get("MONS_DEFAULT_INSTALL", None)
+
+
+@dataclass
+class Env:
+    skip_confirmation = False
+    ignore_errors = False
 
 
 def loadConfig(file: str, default: MutableMapping[str, str] = {}):

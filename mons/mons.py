@@ -6,6 +6,7 @@ from importlib import import_module
 import click
 
 import mons.clickExt as clickExt
+from mons.config import Env
 from mons.config import UserInfo
 
 
@@ -14,6 +15,10 @@ from mons.config import UserInfo
 @click.version_option()
 def cli(ctx: click.Context):
     ctx.obj = ctx.with_resource(UserInfo())
+
+    # Inject another context as the parent
+    env_ctx = click.Context(ctx.command, ctx.parent, obj=Env())
+    ctx.parent = env_ctx
 
 
 @cli.command(context_settings={"ignore_unknown_options": True})

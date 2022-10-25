@@ -8,6 +8,7 @@ from urllib import parse
 import click
 
 from mons.baseUtils import *
+from mons.config import Env
 from mons.config import get_default_install
 from mons.config import UserInfo
 from mons.errors import TTYError
@@ -16,13 +17,59 @@ from mons.formatting import TERM_COLORS
 from mons.install import Install as T_Install
 
 
-def confirm_ext(*params, skip: t.Optional[bool] = None, **attrs):
-    if skip != None:
-        return skip
+def confirm_ext(*params, default, dangerous=False, **attrs):
+    ctx = click.get_current_context(silent=True)
+    env = ctx and ctx.find_object(Env)
+
+    if env:
+        if env.ignore_errors:
+            return True
+        elif env.skip_confirmation and not dangerous:
+            return True
+
     if not os.isatty(sys.stdin.fileno()):
         raise TTYError("not a tty.\nUse '--yes' to skip confirmation prompts.")
 
-    return click.confirm(*params, **attrs)
+    return click.confirm(default=default, *params, **attrs)
+
+
+def env_flag_option(
+    var: str, *param_decls: str, help="", process_value: t.Any = None, **kwargs: t.Any
+):
+    def callback(ctx: click.Context, param: click.Parameter, value: bool):
+        env = ctx.find_object(Env)
+        if process_value:
+            value = process_value
+        setattr(env, var, value)
+
+    kwargs.setdefault("expose_value", False)
+    kwargs.setdefault("is_eager", True)
+    kwargs.setdefault("help", help)
+    kwargs["callback"] = callback
+    return click.option(*param_decls, **kwargs)
+
+
+def yes_option(*param_decls: str, **kwargs: t.Any):
+    if not param_decls:
+        param_decls = ("--yes",)
+
+    kwargs.setdefault("is_flag", True)
+    return env_flag_option(
+        "skip_confirmation", *param_decls, help="Skip confirmation prompts.", **kwargs
+    )
+
+
+def force_option(*param_decls: str, **kwargs: t.Any):
+    if not param_decls:
+        param_decls = ("--force",)
+
+    kwargs.setdefault("is_flag", True)
+    return env_flag_option(
+        "ignore_errors",
+        *param_decls,
+        help="Ignore errors and confirmation prompts.",
+        **kwargs,
+    )
 
 
 class CatchErrorsGroup(click.Group):
@@ -64,7 +111,7 @@ Use the --debug flag to disable clean exception handling."""
                 )
 
 
-def color_option():
+def color_option(*param_decls: str, **kwargs: t.Any):
     def auto_color():
         if os.environ.get("NO_COLOR"):
             return False
@@ -85,14 +132,14 @@ def color_option():
             return None
         raise click.BadParameter("Possible values: auto, never, always", ctx, param)
 
-    param_decls = ("--color",)
+    if not param_decls:
+        param_decls = ("--color",)
 
-    attrs = dict()
-    attrs.setdefault("is_eager", True)
-    attrs.setdefault("help", "Specify when to use colored output: auto, always, none")
-    attrs.setdefault("metavar", "WHEN")
-    attrs["callback"] = callback
-    return click.option(*param_decls, **attrs)
+    kwargs.setdefault("is_eager", True)
+    kwargs.setdefault("help", "Specify when to use colored output: auto, always, none")
+    kwargs.setdefault("metavar", "WHEN")
+    kwargs["callback"] = callback
+    return click.option(*param_decls, **kwargs)
 
 
 class Install(click.ParamType):
@@ -105,9 +152,9 @@ class Install(click.ParamType):
         self.validate_path = check_path
 
     def convert(self, value: t.Union[str, T_Install], param, ctx):
-        if not ctx:
+        userinfo = ctx and ctx.find_object(UserInfo)
+        if not userinfo:
             return value
-        userinfo: UserInfo = ctx.obj
         installs = userinfo.installs
 
         if self.exist:
