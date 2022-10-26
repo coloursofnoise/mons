@@ -211,6 +211,7 @@ def install(*param_decls, resolve=True, **attrs):
         default=get_default_install,
         prompt="Install name",
         warning="mons default install set to {default}",
+        prompt_envvar="MONS_PROMPT_INSTALL",
         **attrs,
     )
 
@@ -295,15 +296,16 @@ class OptionalArg(click.Argument):
     ) -> None:
         self.warning: t.Optional[str] = attrs.pop("warning", None)
         self.prompt: str = attrs.pop("prompt", "")
+        self.prompt_envvar: str = attrs.pop("prompt_envvar", "")
         super().__init__(param_decls, True, **attrs)
 
     def add_to_parser(self, parser: click.parser.OptionParser, ctx: click.Context):
-        if os.environ.get("MONS_PROMPT_INSTALL", None) and not ctx.resilient_parsing:
+        if os.environ.get(self.prompt_envvar, None) and not ctx.resilient_parsing:
             return
         return super().add_to_parser(parser, ctx)
 
     def consume_value(self, ctx: click.Context, opts: t.Mapping[str, t.Any]):
-        if os.environ.get("MONS_PROMPT_INSTALL", None) and not ctx.resilient_parsing:
+        if os.environ.get(self.prompt_envvar, None) and not ctx.resilient_parsing:
             source = click.core.ParameterSource.PROMPT
             default = self.get_default(ctx)
             value = click.prompt(
