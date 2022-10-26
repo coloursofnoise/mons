@@ -32,18 +32,21 @@ def help(ctx: click.Context, command: t.List[str]):
         exit(0)
 
     group = cli
+    cmd_path = []
     for cmd_name in command:
+        cmd_path.append(cmd_name)
         cmd = group.get_command(ctx, cmd_name)
         if not cmd:
-            click.echo(
-                str(click.BadArgumentUsage(f"No such command '{cmd_name}'.", ctx))
-            )
+            err_msg = "No such command '{}.'".format(" ".join(cmd_path))
+            click.echo(str(click.BadArgumentUsage(err_msg, ctx)))
             exit(click.BadArgumentUsage.exit_code)
 
         if isinstance(cmd, click.Group):
             group = cmd
             continue
         else:
+            # ctx currently thinks it's for the help command, this corrects the usage text
+            ctx.info_name = " ".join(cmd_path)
             click.echo(cmd.get_help(ctx))
             exit(0)
 
