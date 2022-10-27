@@ -3,10 +3,12 @@ import hashlib
 import json
 import os
 import re
+import time
 import typing as t
 import urllib.parse
 import urllib.request
 import zipfile
+from contextlib import contextmanager
 from urllib.error import HTTPError
 
 import dnfile  # https://github.com/malwarefrank/dnfile
@@ -26,6 +28,18 @@ VANILLA_HASH: t.Dict[str, t.Tuple[str, str]] = {
     "f1c4967fa8f1f113858327590e274b69": ("1.4.0.0", "FNA"),
     "107cd146973f2c5ec9fb0b4f81c1588a": ("1.4.0.0", "XNA"),
 }
+
+
+@contextmanager
+def timed_progress(msg: str):
+    """Times execution of the current context, then prints :param:`msg` with :func:`tqdm.write`.
+
+    :param msg: Message to be printed. Formatted with a `time` kwarg."""
+    start = time.perf_counter()
+    yield
+    end = time.perf_counter()
+    # Carriage return ensures msg is printed properly even after multiple progress bars
+    tqdm.write("\r" + msg.format(time=end - start))
 
 
 def find_celeste_file(path: str, file: str, force_name=True):

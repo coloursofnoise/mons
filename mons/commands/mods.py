@@ -3,7 +3,6 @@ import json
 import os
 import re
 import shutil
-import time
 import typing as t
 import urllib.parse
 import urllib.request
@@ -36,6 +35,7 @@ from mons.utils import get_mod_list
 from mons.utils import installed_mods
 from mons.utils import read_blacklist
 from mons.utils import search_mods
+from mons.utils import timed_progress
 from mons.version import Version
 
 
@@ -582,25 +582,23 @@ def add(
         if not clickExt.confirm_ext("Continue?", default=True):
             raise click.Abort()
 
-        start = time.perf_counter()
-        enable_mods(
-            mod_folder,
-            *itertools.chain(
-                (os.path.basename(mod.Path) for mod in deps_blacklisted),
-                (os.path.basename(mod.Old.Path) for mod in deps_update),
-                # blindly attempt to enable any other mods that will be downloaded
-                (f"{mod.Meta.Name}.zip" for mod in deps_install),
-            ),
-        )
+        with timed_progress("Downloaded files in {time:.3f} seconds."):
+            enable_mods(
+                mod_folder,
+                *itertools.chain(
+                    (os.path.basename(mod.Path) for mod in deps_blacklisted),
+                    (os.path.basename(mod.Old.Path) for mod in deps_update),
+                    # blindly attempt to enable any other mods that will be downloaded
+                    (f"{mod.Meta.Name}.zip" for mod in deps_install),
+                ),
+            )
 
-        download_threaded(
-            mod_folder,
-            sorted_dep_downloads,
-            late_downloads=sorted_main_downloads,
-            thread_count=10,
-        )
-        end = time.perf_counter()
-        tqdm.write(str.format("\rDownloaded files in {:.3f} seconds.", end - start))
+            download_threaded(
+                mod_folder,
+                sorted_dep_downloads,
+                late_downloads=sorted_main_downloads,
+                thread_count=10,
+            )
 
         if no_deps:
             exit()
@@ -788,10 +786,8 @@ def update(name: Install, all: bool, enabled: t.Optional[bool], upgrade_only: bo
     if not clickExt.confirm_ext("Continue?", default=True):
         raise click.Abort()
 
-    start = time.perf_counter()
-    download_threaded("", updates, thread_count=10)
-    end = time.perf_counter()
-    tqdm.write(str.format("Downloaded files in {:.3f} seconds.", end - start))
+    with timed_progress("Downloaded files in {time:.3f} seconds."):
+        download_threaded("", updates, thread_count=10)
 
 
 @cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
@@ -899,10 +895,8 @@ def resolve(name: Install, all: bool, enabled: t.Optional[bool], no_update: bool
     if not clickExt.confirm_ext("Continue?", default=True):
         raise click.Abort
 
-    start = time.perf_counter()
-    download_threaded(mods_folder, sorted_dep_downloads, thread_count=10)
-    end = time.perf_counter()
-    tqdm.write(str.format("Downloaded files in {:.3f} seconds.", end - start))
+    with timed_progress("Downloaded files in {time:.3f} seconds."):
+        download_threaded(mods_folder, sorted_dep_downloads, thread_count=10)
 
     everest_min = next(
         (dep.Version for dep in special if dep.Name == "Everest"), Version(1, 0, 0)
