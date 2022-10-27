@@ -5,20 +5,46 @@ from click import Abort
 from tqdm import tqdm
 
 
+if t.TYPE_CHECKING:
+    import typing_extensions as te
+
+
 T = t.TypeVar("T")
 
 
-def flip(b: t.Optional[T]) -> t.Optional[T]:
+@t.overload
+def invert(b: None) -> None:
+    ...
+
+
+@t.overload
+def invert(b: "te.Literal[True]") -> "te.Literal[False]":
+    ...
+
+
+@t.overload
+def invert(b: "te.Literal[False]") -> "te.Literal[True]":
+    ...
+
+
+@t.overload
+def invert(b: t.Optional[bool]) -> t.Optional[bool]:
+    ...
+
+
+def invert(b: t.Optional[bool]):
+    """Invert a `bool`, ignoring `None` values."""
     if b is None:
         return None
-    return t.cast(t.Optional[T], not b)
+    return not b
 
 
-def partition(pred: t.Callable[[T], bool], iterable: t.Iterable[T]):
+def partition(predicate: t.Callable[[T], bool], iterable: t.Iterable[T]):
+    """Partition a list based on the results of a :param:`predicate`."""
     trues: t.List[T] = []
     falses: t.List[T] = []
     for item in iterable:
-        if pred(item):
+        if predicate(item):
             trues.append(item)
         else:
             falses.append(item)
@@ -26,6 +52,9 @@ def partition(pred: t.Callable[[T], bool], iterable: t.Iterable[T]):
 
 
 def multi_partition(*predicates: t.Callable[[T], bool], iterable: t.Iterable[T]):
+    """Partition a list based on a series of :param:`predicates`.
+
+    Predicates are checked in the order they are passed."""
     results: t.List[t.List[T]] = [[] for _ in predicates]
     results.append([])
 

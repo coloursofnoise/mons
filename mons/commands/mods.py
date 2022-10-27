@@ -123,7 +123,7 @@ def list_mods(
     basePath = os.path.join(os.path.dirname(name.path), "Mods")
 
     installed = installed_mods(
-        basePath, dirs=dir, valid=valid, blacklisted=flip(enabled)
+        basePath, dirs=dir, valid=valid, blacklisted=invert(enabled)
     )
 
     gen = installed
@@ -729,7 +729,7 @@ def update(name: Install, all: bool, enabled: t.Optional[bool], upgrade_only: bo
         mods_folder = os.path.join(os.path.dirname(name.path), "Mods")
         installed = installed_mods(
             mods_folder,
-            blacklisted=flip(enabled),
+            blacklisted=invert(enabled),
             dirs=False,
             valid=True,
             with_size=True,
@@ -813,7 +813,7 @@ def resolve(name: Install, all: bool, enabled: t.Optional[bool], no_update: bool
     install = name
 
     mods_folder = os.path.join(os.path.dirname(install.path), "Mods")
-    installed = installed_mods(mods_folder, valid=True, blacklisted=flip(enabled))
+    installed = installed_mods(mods_folder, valid=True, blacklisted=invert(enabled))
     installed = list(
         tqdm(installed, desc="Reading Installed Mods", leave=False, unit="")
     )

@@ -9,6 +9,7 @@ from mons.baseUtils import tryExec
 
 
 def find_file(path: str, files: t.Iterable[str]):
+    """Return the first file in :param:`files` found in :param:`path`, or :literal:`None`."""
     for file in files:
         if os.path.isfile(os.path.join(path, file)):
             return file
@@ -34,9 +35,10 @@ def copy_recursive_force(src: str, dest: str, ignore=None):
         shutil.copyfile(src, dest)
 
 
-def folder_size(start_path="."):
+def folder_size(path):
+    """Compute the size of a folder on disk as reported by :func:`os.stat`."""
     total_size = 0
-    for dirpath, _, filenames in os.walk(start_path):
+    for dirpath, _, filenames in os.walk(path):
         for f in filenames:
             fp = os.path.join(dirpath, f)
             # skip if it is symbolic link
@@ -46,16 +48,16 @@ def folder_size(start_path="."):
     return total_size
 
 
-def isUnchanged(src: str, dest: str, file: str):
-    srcFile = os.path.join(src, file)
-    destFile = os.path.join(dest, file)
-    if os.path.exists(destFile):
-        return os.stat(destFile).st_mtime - os.stat(srcFile).st_mtime >= 0
+def is_unchanged(src: str, dest: str):
+    """Returns :literal:`True` if :param:`src` has not been changed after :param:`dest` was."""
+    if os.path.exists(dest):
+        return os.stat(dest).st_mtime - os.stat(src).st_mtime >= 0
     return False
 
 
 @contextmanager
 def relocated_file(src: str, dest: str):
+    """Temporarily moves :param:`src` to :param:`dest`."""
     file = shutil.move(src, dest)
     try:
         yield file
@@ -65,6 +67,7 @@ def relocated_file(src: str, dest: str):
 
 @contextmanager
 def copied_file(src: str, dest: str):
+    """Temporarily copies :param:`src` to :param:`dest`."""
     file = shutil.copy(src, dest)
     try:
         yield file

@@ -22,6 +22,7 @@ class Version:
         return cls(*arr)
 
     def satisfies(self, required: "Version"):
+        """Checks if this version satisfies the :param:`required` version."""
         # Special case: Always True if version == 0.0.*
         if self.Major == 0 and self.Minor == 0:
             return True

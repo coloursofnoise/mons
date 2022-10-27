@@ -17,7 +17,16 @@ from mons.formatting import TERM_COLORS
 from mons.install import Install as T_Install
 
 
-def confirm_ext(*params, default, dangerous=False, **attrs):
+def confirm_ext(*params, default, dangerous: bool = False, **attrs):
+    """Extension to :func:`click.confirm`.
+
+    Throws a :class:`TTYError` if `stdin` is not a TTY,
+    and returns `True` if :attr:`Env.ignore_errors` is set.
+
+    :param dangerous: if set to `False` (default), :attr:`Env.skip_confirmation`
+    will also be checked.
+    """
+
     ctx = click.get_current_context(silent=True)
     env = ctx and ctx.find_object(Env)
 
@@ -39,7 +48,7 @@ def env_flag_option(
     def callback(ctx: click.Context, param: click.Parameter, value: bool):
         env = ctx.find_object(Env)
         if process_value:
-            value = process_value
+            value = process_value(ctx, param, value)
         setattr(env, var, value)
 
     kwargs.setdefault("expose_value", False)

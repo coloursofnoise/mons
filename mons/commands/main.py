@@ -246,14 +246,22 @@ def install(
                 os.path.join(src, "Celeste.Mod.mm", "bin", "Debug", "net452"),
                 installDir,
                 ignore=lambda path, names: [
-                    name for name in names if fs.isUnchanged(path, installDir, name)
+                    name
+                    for name in names
+                    if fs.is_unchanged(
+                        os.path.join(path, name), os.path.join(installDir, name)
+                    )
                 ],
             )
             fs.copy_recursive_force(
                 os.path.join(src, "MiniInstaller", "bin", "Debug", "net452"),
                 installDir,
                 ignore=lambda path, names: [
-                    name for name in names if fs.isUnchanged(path, installDir, name)
+                    name
+                    for name in names
+                    if fs.is_unchanged(
+                        os.path.join(path, name), os.path.join(installDir, name)
+                    )
                 ],
             )
             success = True
