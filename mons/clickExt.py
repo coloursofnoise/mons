@@ -37,7 +37,11 @@ def confirm_ext(*params, default, dangerous: bool = False, **attrs):
             return True
 
     if not os.isatty(sys.stdin.fileno()):
-        raise TTYError("not a tty.\nUse '--yes' to skip confirmation prompts.")
+        if dangerous:
+            msg = "Use '--force' to skip error prompts."
+        else:
+            msg = "Use '--yes' to skip confirmation prompts."
+        raise TTYError("not a tty.\n" + msg)
 
     return click.confirm(default=default, *params, **attrs)
 
