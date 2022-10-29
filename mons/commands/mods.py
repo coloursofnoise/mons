@@ -368,7 +368,9 @@ def resolve_mods(mods: t.Sequence[str]):
 @click.option("--optional-deps", is_flag=True, default=False, hidden=True)
 @clickExt.yes_option()
 @clickExt.force_option()
+@click.pass_context
 def add(
+    ctx: click.Context,
     name: Install,
     mods: t.Tuple[str, ...],
     search: bool,
@@ -379,6 +381,17 @@ def add(
     """Add one or more mods.
 
     MODS can be one or more of: mod ID, local zip, zip URL, 1-Click install link, Google Drive share link, GameBanana page, or GameBanana submission ID."""
+    if random:
+        mods = (
+            urllib.request.urlopen(
+                "https://max480-random-stuff.appspot.com/celeste/random-map"
+            ).url,
+        )
+
+    if not mods:
+        param = next(param for param in ctx.command.params if param.name == "mods")
+        raise click.MissingParameter(ctx=ctx, param=param)
+
     install = name
     mod_folder = os.path.join(os.path.dirname(install.path), "Mods")
     mod_list = get_mod_list()
@@ -393,13 +406,6 @@ def add(
 
     resolved: t.List[ModDownload] = list()
     unresolved: t.List[str] = list()
-
-    if random:
-        mods = (
-            urllib.request.urlopen(
-                "https://max480-random-stuff.appspot.com/celeste/random-map"
-            ).url,
-        )
 
     def process_zip(zip: str, name: str):
         meta = read_mod_info(zip)
@@ -424,11 +430,8 @@ def add(
         else:
             echo(f"Skipped install for {name}.")
 
-    if not mods:
-        raise click.UsageError("Missing argument 'MODS'")
-
     # Query mod search API
-    elif search:
+    if search:
         mod_list = get_mod_list()
         search_result = search_mods(" ".join(mods))
         matches = {}
