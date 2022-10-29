@@ -141,7 +141,7 @@ def list(userInfo: UserInfo):
     click.echo(format_columns(output))
 
 
-@cli.command(cls=clickExt.CommandExt)
+@cli.command(cls=clickExt.CommandExt, no_args_is_help=True)
 @clickExt.install("name")
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
 def show(name: Install, verbose: bool):
@@ -435,7 +435,7 @@ def launch(ctx: click.Context, name: Install):
         proc.wait()
 
 
-@cli.command(no_args_is_help=True)
+@cli.command()
 @click.option(
     "-e", "--edit", is_flag=True, help="Open the global config file for editing."
 )

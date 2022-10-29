@@ -312,13 +312,15 @@ class OptionalArg(click.Argument):
         self.prompt_envvar: str = attrs.pop("prompt_envvar", "")
         super().__init__(param_decls, True, **attrs)
 
+    def should_prompt(self, ctx: click.Context):
+        return os.environ.get(self.prompt_envvar, None) and not ctx.resilient_parsing
+
     def add_to_parser(self, parser: click.parser.OptionParser, ctx: click.Context):
-        if os.environ.get(self.prompt_envvar, None) and not ctx.resilient_parsing:
-            return
-        return super().add_to_parser(parser, ctx)
+        if not self.should_prompt(ctx):
+            return super().add_to_parser(parser, ctx)
 
     def consume_value(self, ctx: click.Context, opts: t.Mapping[str, t.Any]):
-        if os.environ.get(self.prompt_envvar, None) and not ctx.resilient_parsing:
+        if self.should_prompt(ctx):
             source = click.core.ParameterSource.PROMPT
             default = self.get_default(ctx)
             value = click.prompt(
@@ -357,6 +359,9 @@ class CommandExt(click.Command):
                     ctx.params.update({o.name: o.type_cast_value(ctx, default)})
                     if o.warning:
                         self.warnings.append(o.warning.format(default=default))
+
+                    # ensure that the command is invoked even if there are technically no arguments passed
+                    self.no_args_is_help = False
                     return True
             return False
 

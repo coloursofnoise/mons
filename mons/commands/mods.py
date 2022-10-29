@@ -619,7 +619,7 @@ def add(
 
 @cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
 @clickExt.install("name")
-@click.argument("mods", nargs=-1)
+@click.argument("mods", nargs=-1, required=True)
 @click.option(
     "-r",
     "--recurse",
@@ -704,7 +704,7 @@ def remove(name: Install, mods: t.List[str], recurse: bool):
 @cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
 @clickExt.install("name")
 # @click.argument('mod', required=False)
-@click.option("--all", is_flag=True, help="Update all installed mods.")
+@click.option("--all", is_flag=True, help="Update all installed mods.", required=True)
 @click.option(
     "--enabled", is_flag=True, help="Update currently enabled mods.", default=None
 )
@@ -793,7 +793,7 @@ def update(name: Install, all: bool, enabled: t.Optional[bool], upgrade_only: bo
 @cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
 @clickExt.install("name")
 # @click.argument('mod', required=False)
-@click.option("--all", is_flag=True, help="Resolve all installed mods.")
+@click.option("--all", is_flag=True, help="Resolve all installed mods.", required=True)
 @click.option(
     "--enabled", is_flag=True, help="Resolve currently enabled mods.", default=None
 )
