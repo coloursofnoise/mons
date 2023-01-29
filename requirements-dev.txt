@@ -1,4 +1,4 @@
-wheel==0.37.1
+wheel==0.38.4
 pre-commit==2.17.0
 sphinx==5.0.2
 git+https://github.com/coloursofnoise/sphinx-click
