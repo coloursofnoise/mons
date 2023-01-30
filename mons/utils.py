@@ -325,7 +325,7 @@ def search_mods(search: str):
         f"https://max480-random-stuff.appspot.com/celeste/gamebanana-search?q={search}"
     )
     response = urllib.request.urlopen(url)
-    return yaml.safe_load(response.read())
+    return json.loads(response.read())
 
 
 def read_blacklist(path: str):

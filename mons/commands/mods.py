@@ -177,12 +177,12 @@ def search(search: str):
         match = [
             mod
             for mod, data in mod_list.items()
-            if data["GameBananaId"] == item["itemid"]
+            if data["GameBananaId"] == item["GameBananaId"]
         ]
         for m in match:
             echo(m)
         if len(match) < 1:
-            raise click.UsageError("Entry not found: " + str(item["itemid"]))
+            raise click.UsageError("Entry not found: " + str(item["GameBananaId"]))
 
 
 def prompt_mod_selection(options: t.Dict[str, t.Any], max=-1):
@@ -440,7 +440,7 @@ def add(
                 {
                     mod: data
                     for mod, data in mod_list.items()
-                    if data["GameBananaId"] == item["itemid"]
+                    if data["GameBananaId"] == item["GameBananaId"]
                 }
             )
 
