@@ -384,7 +384,7 @@ def add(
     if random:
         mods = (
             urllib.request.urlopen(
-                "https://max480-random-stuff.appspot.com/celeste/random-map"
+                "https://max480.ovh/celeste/random-map"
             ).url,
         )
 
