@@ -310,7 +310,7 @@ def get_dependency_graph() -> t.Dict[str, t.Any]:
 
     dependency_graph = yaml.safe_load(
         download_with_progress(
-            "https://max480-random-stuff.appspot.com/celeste/mod_dependency_graph.yaml?format=everestyaml",
+            "https://max480.ovh/celeste/mod_dependency_graph.yaml?format",
             None,
             "Downloading Dependency Graph",
             clear=True,
@@ -322,7 +322,7 @@ def get_dependency_graph() -> t.Dict[str, t.Any]:
 def search_mods(search: str):
     search = urllib.parse.quote_plus(search)
     url = (
-        f"https://max480-random-stuff.appspot.com/celeste/gamebanana-search?q={search}"
+        f"https://max480.ovh/celeste/gamebanana-search?q={search}"
     )
     response = urllib.request.urlopen(url)
     return json.loads(response.read())
