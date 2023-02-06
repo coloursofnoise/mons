@@ -310,7 +310,7 @@ def get_dependency_graph() -> t.Dict[str, t.Any]:
 
     dependency_graph = yaml.safe_load(
         download_with_progress(
-            "https://max480.ovh/celeste/mod_dependency_graph.yaml?format",
+            "https://max480.ovh/celeste/mod_dependency_graph.yaml",
             None,
             "Downloading Dependency Graph",
             clear=True,
