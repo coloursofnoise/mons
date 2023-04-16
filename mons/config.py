@@ -1,28 +1,19 @@
-from __future__ import annotations  # ABCs are not generic prior to 3.9
-
 import os
 import typing as t
-from collections.abc import MutableMapping
-from configparser import ConfigParser
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
+from dataclasses import fields
 
 import click
+import yaml
 
-from mons.install import Install
-
+from mons.baseUtils import T
+from mons.errors import EmptyFileError
+from mons.errors import MultiException
 
 config_dir = click.get_app_dir("mons", roaming=False)
 
-CONFIG_FILE = "config.ini"
-INSTALLS_FILE = "installs.ini"
-CACHE_FILE = "cache.ini"
-
-# Config, Installs, Cache
-Config_DEFAULT = {}
-Install.DEFAULTS = {
-    "PreferredBranch": "stable",
-}
+CONFIG_FILE = os.path.join(config_dir, "config.yaml")
 
 
 def get_default_install():
@@ -35,60 +26,87 @@ class Env:
     ignore_errors = False
 
 
-def loadConfig(file: str, default: MutableMapping[str, str] = {}):
-    config = ConfigParser()
-    config_file = os.path.join(config_dir, file)
-    if os.path.isfile(config_file):
-        config.read(config_file)
-    else:
-        config["DEFAULT"] = default
-        os.makedirs(config_dir, exist_ok=True)
-        with open(config_file, "x") as f:
-            config.write(f)
-    return config
+@dataclass
+class Config:
+    @dataclass
+    class Downloading:
+        everest_builds: str = "https://everestapi.github.io/everestupdater.txt"
+        mod_db: str = "https://everestapi.github.io/modupdater.txt"
+        autobuild_repo: str = "EverestAPI/Everest"
+        source_repo: str = "https://github.com/EverestAPI/Everest.git"
+        thread_count: int = 8
+
+    source_directory: t.Optional[str] = None
+    default_install: t.Optional[str] = None
+
+    downloading: Downloading = Downloading()
 
 
-def saveConfig(config: ConfigParser, file: str):
-    with open(os.path.join(config_dir, file), "w") as f:
-        config.write(f)
+def read_yaml(path: str, type: t.Type[T]) -> T:
+    with open(path) as file:
+        data = load_yaml(file, type)
+    if not data:
+        raise EmptyFileError(path)
+    return data
 
 
-def editConfig(config: ConfigParser, file: str):
-    saveConfig(config, file)
-    click.edit(
-        filename=os.path.join(config_dir, file),
-        editor=config.get("user", "editor", fallback=None),
-    )
-    return loadConfig(file, config["DEFAULT"])
+def load_yaml(document: t.Any, type: t.Type[T]) -> t.Optional[T]:
+    data: t.Dict[str, t.Any] = yaml.safe_load(document)
+    if not data:
+        return None
+
+    return dataclass_fromdict(data, type)
+
+
+def dataclass_fromdict(data: t.Dict[str, t.Any], type: t.Type[T]) -> T:
+    type_fields = {f.name: f.type for f in fields(type) if f.init}
+    errors: t.List[Exception] = list()
+    for k, v in data.items():
+        if k not in type_fields:
+            errors.append(Exception(f"Unknown key: {k}"))
+
+        elif not isinstance(v, type_fields[k]):
+            if issubclass(type_fields[k], object):  # recursively deserialize objects
+                try:
+                    load_yaml(str(v), type_fields[k])
+                except MultiException as e:
+                    errors.extend(e.list)
+                except Exception as e:
+                    errors.append(e)
+            else:
+                errors.append(Exception(f"Invalid value for key {k}: {v}"))
+    if len(errors) > 1:
+        raise MultiException("", errors)
+    if len(errors) == 1:
+        raise errors[0]
+
+    return type(**data)
 
 
 class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgument]
+    @property
+    def config(self):
+        try:
+            if not self._config:
+                self._config = read_yaml(CONFIG_FILE, Config)
+        except (FileNotFoundError, EmptyFileError):
+            self._config = Config()
+        except MultiException as e:
+            e.message = "Multiple errors loading config"
+            raise click.ClickException(str(e))
+        except Exception as e:
+            raise click.ClickException("Error loading config:\n  " + str(e))
+
+        return self._config
+
+    _config: t.Optional[Config] = None
+
     def __enter__(self):
-        self.config = loadConfig(CONFIG_FILE, Config_DEFAULT)
-        installs = loadConfig(INSTALLS_FILE)
-        cache = loadConfig(CACHE_FILE)
-
-        def load_install(name: str):
-            if not cache.has_section(name):
-                cache.add_section(name)
-            return Install(
-                name, installs[name]["Path"], cache=cache[name], data=installs[name]
-            )
-
-        self.installs = {name: load_install(name) for name in installs.sections()}
-        if not self.config.has_section("user"):
-            self.config["user"] = {}
         return self
 
     def __exit__(self, *exec_details):
-        saveConfig(self.config, CONFIG_FILE)
-        installs = ConfigParser()
-        cache = ConfigParser()
-        for k, v in self.installs.items():
-            installs[k] = v.serialize()
-            cache[k] = v.cache
-        saveConfig(installs, INSTALLS_FILE)
-        saveConfig(cache, CACHE_FILE)
+        pass
 
 
 pass_userinfo = click.make_pass_decorator(UserInfo)
+pass_env = click.make_pass_decorator(Env, ensure=True)
