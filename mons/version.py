@@ -10,8 +10,8 @@ class Version:
 
     @classmethod
     def parse(cls, version: str):
-        if version == "NoVersion":
-            return cls(1, 0)
+        if not version or version.lower() in ["noversion", "none", "null"]:
+            return None
 
         # discard semver prerelease version
         strArr = version.split("-", maxsplit=1)[0].split(".")

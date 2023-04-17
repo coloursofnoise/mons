@@ -4,16 +4,21 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from dataclasses import fields
 
-import click
 import yaml
+from click import ClickException
+from click import get_app_dir
+from click import make_pass_decorator
 
 from mons.baseUtils import T
 from mons.errors import EmptyFileError
 from mons.errors import MultiException
+from mons.install import Install
 
-config_dir = click.get_app_dir("mons", roaming=False)
+config_dir = get_app_dir("mons", roaming=False)
 
 CONFIG_FILE = os.path.join(config_dir, "config.yaml")
+INSTALLS_FILE = os.path.join(config_dir, "installs.yaml")
+CACHE_FILE = os.path.join(config_dir, "cache.yaml")
 
 
 def get_default_install():
@@ -83,30 +88,108 @@ def dataclass_fromdict(data: t.Dict[str, t.Any], type: t.Type[T]) -> T:
     return type(**data)
 
 
+_cache: t.Dict[str, t.Any] = dict()
+
+
+def load_cache(install: Install):
+    if install.name in _cache:
+        return populate_cache(install, _cache[install.name])
+
+    try:
+        with open(CACHE_FILE) as file:
+            data: t.Dict[str, t.Any] = yaml.safe_load(file)
+        if not data:
+            raise EmptyFileError
+
+        if install.name in data:
+            return populate_cache(install, data[install.name])
+
+        _cache.update(data)
+    except (FileNotFoundError, EmptyFileError):
+        pass
+    return False
+
+
+def populate_cache(install: Install, data: t.Dict[str, t.Any]):
+    try:
+        install.update_cache(
+            {
+                "hash": data["hash"],
+                "framework": data["framework"],
+                "celeste_version": data["celeste_version"],
+                "everest_version": data["everest_version"],
+            }
+        )
+        return True
+    except KeyError:
+        install.hash = None  # Invalidate cache
+        return False
+
+
 class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgument]
+    _config: t.Optional[Config] = None
+    _installs: t.Optional[t.Dict[str, Install]] = None
+
     @property
     def config(self):
-        try:
-            if not self._config:
+        if not self._config:
+            try:
                 self._config = read_yaml(CONFIG_FILE, Config)
-        except (FileNotFoundError, EmptyFileError):
-            self._config = Config()
-        except MultiException as e:
-            e.message = "Multiple errors loading config"
-            raise click.ClickException(str(e))
-        except Exception as e:
-            raise click.ClickException("Error loading config:\n  " + str(e))
+            except (FileNotFoundError, EmptyFileError):
+                self._config = Config()
+            except MultiException as e:
+                e.message = "Multiple errors loading config"
+                raise ClickException(str(e))
+            except Exception as e:
+                raise ClickException("Error loading config:\n  " + str(e))
 
         return self._config
 
-    _config: t.Optional[Config] = None
+    @property
+    def installs(self):
+        if not self._installs:
+            try:
+                with open(INSTALLS_FILE) as file:
+                    data: t.Dict[str, t.Any] = yaml.safe_load(file)
+                if not data:
+                    raise EmptyFileError(INSTALLS_FILE)
+
+                self._installs = {
+                    k: Install(k, v["path"], load_cache) for (k, v) in data.items()
+                }
+            except (FileNotFoundError, EmptyFileError):
+                self._installs = dict()
+            except Exception as e:
+                msg = str(e)
+                if isinstance(e, KeyError):
+                    msg = f"Invalid install, missing {msg}"
+                raise ClickException("Error loading config:\n  " + str(e))
+
+        return self._installs
 
     def __enter__(self):
         return self
 
     def __exit__(self, *exec_details):
-        pass
+        if self._installs:
+            with open(INSTALLS_FILE, "w") as file:
+                yaml.safe_dump(
+                    {
+                        install.name: {"path": install.path}
+                        for install in self._installs.values()
+                    },
+                    file,
+                )
+            with open(CACHE_FILE, "w") as file:
+                _cache.update(
+                    {
+                        install.name: install.get_cache()
+                        for install in self._installs.values()
+                        if install.hash
+                    }
+                )
+                yaml.safe_dump(_cache, file)
 
 
-pass_userinfo = click.make_pass_decorator(UserInfo)
-pass_env = click.make_pass_decorator(Env, ensure=True)
+pass_userinfo = make_pass_decorator(UserInfo)
+pass_env = make_pass_decorator(Env, ensure=True)

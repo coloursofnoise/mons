@@ -22,11 +22,12 @@ from mons.baseUtils import GeneratorWithLen
 from mons.downloading import download_with_progress
 from mons.modmeta import ModMeta
 from mons.modmeta import read_mod_info
+from mons.version import Version
 
 
-VANILLA_HASH: t.Dict[str, t.Tuple[str, str]] = {
-    "f1c4967fa8f1f113858327590e274b69": ("1.4.0.0", "FNA"),
-    "107cd146973f2c5ec9fb0b4f81c1588a": ("1.4.0.0", "XNA"),
+VANILLA_HASH: t.Dict[str, t.Tuple[Version, t.Literal["FNA", "XNA"]]] = {
+    "f1c4967fa8f1f113858327590e274b69": (Version(1, 4, 0, 0), "FNA"),
+    "107cd146973f2c5ec9fb0b4f81c1588a": (Version(1, 4, 0, 0), "XNA"),
 }
 
 
