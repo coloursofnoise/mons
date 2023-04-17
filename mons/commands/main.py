@@ -301,7 +301,7 @@ def install(
                 f"Build number could not be retrieved for `{versionspec}`."
             )
 
-        if str(build) == install.cache.get("EverestBuild"):
+        if build == install.everest_version.Minor:
             echo(f"Build {build} already installed.")
             exit(0)
 

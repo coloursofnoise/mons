@@ -9,9 +9,9 @@ class Version:
     Revision: int = -1
 
     @classmethod
-    def parse(cls, version: str):
+    def parse(cls, version: str) -> "Version":
         if not version or version.lower() in ["noversion", "none", "null"]:
-            return None
+            return NOVERSION()
 
         # discard semver prerelease version
         strArr = version.split("-", maxsplit=1)[0].split(".")
@@ -71,4 +71,18 @@ class Version:
             and self.Revision > other.Revision
         ):
             return True
+        return False
+
+
+class NOVERSION(Version):
+    def __init__(self):
+        super().__init__(0, 0)
+
+    def satisfies(self, *_):
+        return True
+
+    def __str__(self) -> str:
+        return "NOVERSION"
+
+    def __gt__(self, other):
         return False

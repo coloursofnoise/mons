@@ -2,13 +2,15 @@ import operator as op
 
 import pytest
 
+from mons.version import NOVERSION
 from mons.version import Version
 
 
 @pytest.mark.parametrize(
     ("version", "expect"),
     [
-        ("NoVersion", Version(1, 0)),
+        (None, NOVERSION()),
+        ("NoVersion", NOVERSION()),
         ("1.2.3.4", Version(1, 2, 3, 4)),
         ("1.2.3-pre", Version(1, 2, 3)),
     ],
