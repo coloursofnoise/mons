@@ -144,7 +144,12 @@ def parseExeInfo(path: str):
     assert assemRef
     framework = "FNA" if any(row.Name == "FNA" for row in assemRef.rows) else "XNA"
 
-    return hasEverest, everestBuild, framework
+    if everestBuild:
+        return Version(1, int(everestBuild), 0), framework
+    if hasEverest:
+        return Version(0, 0), framework
+
+    return None, framework
 
 
 def parseVersionSpec(string: str):

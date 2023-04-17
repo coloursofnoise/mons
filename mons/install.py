@@ -113,10 +113,4 @@ class Install:
                 has_everest = True
 
         if read_exe and has_everest:
-            _, everest_build_or_version, self.framework = parseExeInfo(self.path)
-            if not everest_build_or_version:
-                self.everest_version = None
-            elif isinstance(everest_build_or_version, Version):
-                self.everest_version = everest_build_or_version
-            else:
-                self.everest_version = Version(1, everest_build_or_version, 0)
+            self.everest_version, self.framework = parseExeInfo(self.path)
