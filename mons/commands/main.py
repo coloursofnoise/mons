@@ -11,9 +11,6 @@ from click import echo
 
 import mons.clickExt as clickExt
 import mons.fs as fs
-from mons.config import config_dir
-from mons.config import CONFIG_FILE
-from mons.config import editConfig
 from mons.config import pass_userinfo
 from mons.config import UserInfo
 from mons.downloading import download_with_progress
@@ -27,6 +24,7 @@ from mons.utils import find_celeste_file
 from mons.utils import getMD5Hash
 from mons.utils import parseVersionSpec
 from mons.utils import unpack
+from mons.version import Version
 
 
 @cli.command(no_args_is_help=True)
@@ -138,6 +136,7 @@ def list(userInfo: UserInfo):
 def show(name: Install, verbose: bool):
     """Display information for a specific install"""
     install = name
+    install.update_cache(read_exe=True)
     if verbose:
         echo(install.name + ":")
         output = {**install.get_cache()}
@@ -201,7 +200,7 @@ def install(
     build = None
 
     if src_default:
-        src = userinfo.config.get("user", "SourceDirectory", fallback=None)
+        src = userinfo.config.source_directory
         if not src:
             raise click.BadOptionUsage(
                 "--src", "--src option passed with no path and no SourceDirectory set"
@@ -374,15 +373,10 @@ def install(
             echo("Install success")
             if build:
                 peHash = getMD5Hash(path)
-                install.cache.update(
-                    {
-                        "Hash": peHash,
-                        "Everest": str(True),
-                        "EverestBuild": str(build),
-                    }
-                )
+                install.hash = peHash
+                install.everest_version = Version(1, build, 0)
             else:
-                install.update_cache()
+                install.update_cache(read_exe=True)
                 echo("Install info cached")
             if launch:
                 echo("Launching Celeste...")
