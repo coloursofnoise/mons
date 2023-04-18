@@ -15,7 +15,9 @@ import dnfile  # https://github.com/malwarefrank/dnfile
 import urllib3
 import yaml
 from click import echo
-from pefile import DIRECTORY_ENTRY  # https://github.com/erocarrera/pefile
+from pefile import (  # pyright:ignore[reportMissingTypeStubs]
+    DIRECTORY_ENTRY,
+)  # https://github.com/erocarrera/pefile
 from tqdm import tqdm
 
 from mons.baseUtils import GeneratorWithLen

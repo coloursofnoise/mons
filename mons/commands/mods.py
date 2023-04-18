@@ -268,7 +268,9 @@ def resolve_mods(mods: t.Sequence[str]):
             )
             meta = read_mod_info(parsed_url.path)
             if meta:
-                download = ModDownload(meta, urllib.parse.urlunparse(parsed_url))
+                download = ModDownload(
+                    meta, urllib.parse.urlunparse(parsed_url)
+                )  # type:ignore
                 echo(f"Mod found: {meta}")
 
         # Mod ID match
@@ -380,7 +382,8 @@ def add(
 ):
     """Add one or more mods.
 
-    MODS can be one or more of: mod ID, local zip, zip URL, 1-Click install link, Google Drive share link, GameBanana page, or GameBanana submission ID."""
+    MODS can be one or more of: mod ID, local zip, zip URL, 1-Click install link, Google Drive share link, GameBanana page, or GameBanana submission ID.
+    """
     if random:
         mods = (
             urllib.request.urlopen(

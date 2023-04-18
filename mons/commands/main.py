@@ -258,9 +258,9 @@ def install(
 
     elif url:
         download_url = urllib.parse.urlunparse(url)
-        echo("Downloading artifact from " + download_url)
+        echo("Downloading artifact from " + str(download_url))
         artifactPath = os.path.join(installDir, url.path.split("/")[-1])
-        download_with_progress(download_url, artifactPath, atomic=True, clear=True)
+        download_with_progress(str(download_url), artifactPath, atomic=True, clear=True)
 
     elif zip:
         artifactPath = zip
