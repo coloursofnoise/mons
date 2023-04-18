@@ -113,15 +113,6 @@ def remove(userInfo: UserInfo, name: str):
     echo(f"Removed install {name}.")
 
 
-@cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
-@clickExt.install("name")
-@click.argument("branch")
-def set_branch(name: Install, branch: str):
-    """Set the preferred branch name for an existing install"""
-    name["PreferredBranch"] = branch
-    echo(f"Preferred branch for `{name.name}` is now `{branch}`.")
-
-
 @cli.command()
 # @click.option("--json", is_flag=True, hidden=True)
 @pass_userinfo
@@ -294,7 +285,7 @@ def install(
                 success = True
 
     elif not src:
-        versionspec = "" if latest else (versionspec or install["PreferredBranch"])
+        versionspec = "" if latest else versionspec
         build = parseVersionSpec(versionspec)
         if not build:
             raise click.ClickException(
@@ -433,22 +424,3 @@ def launch(ctx: click.Context, name: Install):
     )
     if not redirect:
         proc.wait()
-
-
-@cli.command()
-@click.option(
-    "-e", "--edit", is_flag=True, help="Open the global config file for editing."
-)
-@click.option("--open", is_flag=True, help="Show the mons config folder.")
-@pass_userinfo
-def config(userinfo: UserInfo, edit: bool, open: bool):
-    """Manage the global config"""
-    if edit:
-        userinfo.config = editConfig(userinfo.config, CONFIG_FILE)
-    elif open:
-        click.launch(os.path.join(config_dir, CONFIG_FILE), locate=True)
-    else:
-        raise click.UsageError(
-            """Managing config directly via commandline is not currently supported.
-Use --edit to edit the config using the default editor."""
-        )
