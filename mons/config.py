@@ -6,19 +6,21 @@ from dataclasses import fields
 
 import yaml
 from click import ClickException
-from click import get_app_dir
 from click import make_pass_decorator
+from platformdirs import PlatformDirs
 
 from mons.baseUtils import T
 from mons.errors import EmptyFileError
 from mons.errors import MultiException
 from mons.install import Install
 
-config_dir = get_app_dir("mons", roaming=False)
+dirs = PlatformDirs("mons", False, ensure_exists=True)
+CONFIG_DIR = dirs.user_config_dir
+CACHE_DIR = dirs.user_cache_dir
 
-CONFIG_FILE = os.path.join(config_dir, "config.yaml")
-INSTALLS_FILE = os.path.join(config_dir, "installs.yaml")
-CACHE_FILE = os.path.join(config_dir, "cache.yaml")
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config.yaml")
+INSTALLS_FILE = os.path.join(CONFIG_DIR, "installs.yaml")
+CACHE_FILE = os.path.join(CACHE_DIR, "cache.yaml")
 
 
 def get_default_install():
