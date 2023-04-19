@@ -283,50 +283,6 @@ def get_build_list() -> t.List[t.Dict[str, t.Any]]:
     return build_list
 
 
-mod_list = None
-
-
-def get_mod_list() -> t.Dict[str, t.Any]:
-    global mod_list
-    if mod_list:
-        return mod_list
-
-    update_url = (
-        urllib.request.urlopen("https://everestapi.github.io/modupdater.txt")
-        .read()
-        .decode()
-        .strip()
-    )
-    mod_list = yaml.safe_load(
-        download_with_progress(
-            update_url,
-            None,
-            "Downloading Update List",
-            clear=True,
-        )
-    )
-    return mod_list
-
-
-dependency_graph = None
-
-
-def get_dependency_graph() -> t.Dict[str, t.Any]:
-    global dependency_graph
-    if dependency_graph:
-        return dependency_graph
-
-    dependency_graph = yaml.safe_load(
-        download_with_progress(
-            "https://max480-random-stuff.appspot.com/celeste/mod_dependency_graph.yaml?format=everestyaml",
-            None,
-            "Downloading Dependency Graph",
-            clear=True,
-        )
-    )
-    return dependency_graph
-
-
 def search_mods(search: str):
     search = urllib.parse.quote_plus(search)
     url = (

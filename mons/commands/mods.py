@@ -29,9 +29,11 @@ from mons.modmeta import ModMeta
 from mons.modmeta import read_mod_info
 from mons.modmeta import UpdateInfo
 from mons.mons import cli as mons_cli
+from mons.sources import fetch_dependency_graph
+from mons.sources import fetch_mod_db
+from mons.sources import fetch_mod_search
+from mons.sources import fetch_random_map
 from mons.utils import enable_mods
-from mons.utils import get_dependency_graph
-from mons.utils import get_mod_list
 from mons.utils import installed_mods
 from mons.utils import read_blacklist
 from mons.utils import search_mods
@@ -223,7 +225,7 @@ def prompt_mod_selection(options: t.Dict[str, t.Any], max=-1):
 def resolve_dependencies(
     mods: t.Iterable[ModMeta], database: t.Optional[t.Dict[str, t.Any]] = None
 ):
-    database = database or get_dependency_graph()
+    database = database or fetch_dependency_graph()
     deps = combined_dependencies(mods, database)
     sorted_deps = sorted(deps.values(), key=lambda dep: dep.Name)
 
@@ -236,10 +238,10 @@ def get_mod_download(mod: str, mod_list: t.Dict[str, t.Any]):
     return ModDownload(ModMeta(mod_info), mod_info["URL"], mod_info["MirrorURL"])
 
 
-def resolve_mods(mods: t.Sequence[str]):
+def resolve_mods(ctx, mods: t.Sequence[str]):
     resolved: t.List[ModDownload] = list()
     unresolved: t.List[str] = list()
-    mod_list = get_mod_list()
+    mod_list = fetch_mod_db(ctx)
 
     for mod in mods:
         parsed_url = urllib.parse.urlparse(mod)
@@ -269,8 +271,8 @@ def resolve_mods(mods: t.Sequence[str]):
             meta = read_mod_info(parsed_url.path)
             if meta:
                 download = ModDownload(
-                    meta, urllib.parse.urlunparse(parsed_url)
-                )  # type:ignore
+                    meta, urllib.parse.urlunparse(parsed_url)  # type:ignore
+                )
                 echo(f"Mod found: {meta}")
 
         # Mod ID match
@@ -385,11 +387,8 @@ def add(
     MODS can be one or more of: mod ID, local zip, zip URL, 1-Click install link, Google Drive share link, GameBanana page, or GameBanana submission ID.
     """
     if random:
-        mods = (
-            urllib.request.urlopen(
-                "https://max480-random-stuff.appspot.com/celeste/random-map"
-            ).url,
-        )
+        mods = (fetch_random_map(),)
+        echo("Selected a random mod: " + str(mods[0]))
 
     if not mods:
         param = next(param for param in ctx.command.params if param.name == "mods")
@@ -397,7 +396,7 @@ def add(
 
     install = name
     mod_folder = os.path.join(os.path.dirname(install.path), "Mods")
-    mod_list = get_mod_list()
+    mod_list = fetch_mod_db(ctx)
 
     installed_list = installed_mods(mod_folder, valid=True, with_size=True)
     installed_list = {
@@ -435,8 +434,8 @@ def add(
 
     # Query mod search API
     if search:
-        mod_list = get_mod_list()
-        search_result = search_mods(" ".join(mods))
+        mod_list = fetch_mod_db(ctx)
+        search_result = fetch_mod_search(" ".join(mods))
         matches = {}
         for item in search_result:
             matches.update(
@@ -469,7 +468,7 @@ def add(
                 process_zip(temp, "stdin")
 
     else:
-        resolved, unresolved = resolve_mods(mods)
+        resolved, unresolved = resolve_mods(ctx, mods)
 
     if len(unresolved) > 0:
         echo("The following mods could not be resolved:")

@@ -33,12 +33,26 @@ class Env:
     ignore_errors = False
 
 
+# Defaults
+CONTENT_URL = "https://everestapi.github.io"
+EVEREST_UPDATER = f"{CONTENT_URL}/everestupdater.txt"
+MOD_UPDATER = f"{CONTENT_URL}/modupdater.txt"
+
+EXTRA_URL = "https://maddie480.ovh/celeste"
+MOD_DEPENDENCY_GRAPH = f"{EXTRA_URL}/mod_dependency_graph.yaml"
+MOD_SEARCH = f"{EXTRA_URL}/gamebanana-search"
+RANDOM_MAP = f"{EXTRA_URL}/random-map"
+
+
 @dataclass
 class Config:
     @dataclass
     class Downloading:
-        everest_builds: str = "https://everestapi.github.io/everestupdater.txt"
-        mod_db: str = "https://everestapi.github.io/modupdater.txt"
+        # Marked optional because the default URL is just a text file with the actual URL in it.
+        # Default: https://everestapi.github.io/everestupdater.txt
+        everest_builds: t.Optional[str] = None
+        # Default: https://everestapi.github.io/modupdater.txt
+        mod_db: t.Optional[str] = None
         autobuild_repo: str = "EverestAPI/Everest"
         source_repo: str = "https://github.com/EverestAPI/Everest.git"
         thread_count: int = 8
