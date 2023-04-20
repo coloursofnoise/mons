@@ -18,11 +18,12 @@ from mons.errors import TTYError
 from mons.formatting import format_columns
 from mons.install import Install
 from mons.mons import cli
-from mons.utils import build_exists
-from mons.utils import fetch_build_artifact
+from mons.sources import fetch_build_artifact
+from mons.sources import fetch_build_exists
+from mons.sources import fetch_latest_build
 from mons.utils import find_celeste_file
 from mons.utils import getMD5Hash
-from mons.utils import parseVersionSpec
+from mons.utils import parse_build_number
 from mons.utils import unpack
 from mons.version import Version
 
@@ -285,7 +286,9 @@ def install(
 
     elif not src:
         versionspec = "" if latest else versionspec
-        build = parseVersionSpec(versionspec)
+        build = parse_build_number(versionspec)
+        if not build:
+            build = fetch_latest_build(userinfo, versionspec)
         if not build:
             raise click.ClickException(
                 f"Build number could not be retrieved for `{versionspec}`."
@@ -295,7 +298,7 @@ def install(
             echo(f"Build {build} already installed.")
             exit(0)
 
-        if not build_exists(build):
+        if not fetch_build_exists(userinfo, build):
             raise click.ClickException(
                 f"Build artifacts could not be found for build {build}."
             )
@@ -303,7 +306,7 @@ def install(
         echo(f"Installing Everest build {build}")
         echo("Downloading build metadata...")
         try:
-            meta = fetch_build_artifact(build, "olympus-meta")
+            meta = fetch_build_artifact(userinfo, build, "olympus-meta")
             with zipfile.ZipFile(io.BytesIO(meta.read())) as file:
                 size = int(file.read("olympus-meta/size.txt"))
         except:
@@ -311,7 +314,7 @@ def install(
 
         if size > 0:
             echo("Downloading olympus-build.zip", nl=False)
-            response = fetch_build_artifact(build, "olympus-build")
+            response = fetch_build_artifact(userinfo, build, "olympus-build")
             response.headers["Content-Length"] = str(size)
             artifactPath = os.path.join(installDir, "olympus-build.zip")
             echo(f" to file {artifactPath}")
@@ -327,7 +330,7 @@ def install(
 
         else:
             echo("Downloading main.zip", nl=False)
-            response = fetch_build_artifact(build, "main")
+            response = fetch_build_artifact(userinfo, build, "main")
             artifactPath = os.path.join(installDir, "main.zip")
             echo(f" to file {artifactPath}")
             download_with_progress(

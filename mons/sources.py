@@ -3,9 +3,11 @@ import time
 import typing as t
 import urllib.parse
 from functools import update_wrapper
+from urllib.error import HTTPError
 from urllib.request import urlopen
 
 import typing_extensions as te
+import urllib3
 import yaml
 from click import Context
 
@@ -104,6 +106,103 @@ def fetch_build_list(config: Config) -> t.List[t.Dict[str, t.Any]]:
 
     return yaml.safe_load(
         download_with_progress(download_url, None, "Downloading Build List", clear=True)
+    )
+
+
+def fetch_latest_build(ctx, branch: str):
+    if branch.startswith(("refs/heads/", "refs/pull/")):
+        return fetch_latest_build_azure(branch)
+
+    build_list = fetch_build_list(ctx)
+    for build in build_list:
+        if not branch or build["branch"] == branch:
+            return int(build["version"])
+
+    return None
+
+
+def fetch_latest_build_azure(branch: str):
+    response: urllib3.HTTPResponse = urllib3.PoolManager().request(
+        "GET",
+        "https://dev.azure.com/EverestAPI/Everest/_apis/build/builds",
+        fields={
+            "definitions": 3,
+            "statusFilter": "completed",
+            "resultFilter": "succeeded",
+            "branchName": branch
+            if branch == "" or branch.startswith(("refs/heads/", "refs/pull/"))
+            else "refs/heads/" + branch,
+            "api-version": 6.0,
+            "$top": 1,
+        },
+    )
+
+    data: t.Dict[str, t.Any] = yaml.safe_load(response.data.decode())
+    if data["count"] < 1:
+        return None
+    elif data["count"] > 1:
+        raise Exception("Unexpected number of builds: " + str(data["count"]))
+
+    build = data["value"][0]
+    id = build["id"]
+    try:
+        return int(id) + 700
+    except:
+        pass
+    return None
+
+
+def fetch_build_exists(ctx, build: int):
+    build_list = fetch_build_list(ctx)
+    if build in (int(b["version"]) for b in build_list):
+        return True
+
+    return fetch_build_exists_azure(build)
+
+
+def fetch_build_exists_azure(build: int):
+    try:
+        urlopen(
+            "https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/"
+            + str(build - 700)
+        )
+        return True
+    except HTTPError as err:
+        if err.code == 404:
+            return False
+        raise
+
+
+updateURLLookup = {
+    "main": "mainDownload",
+    "olympus-meta": "olympusMetaDownload",
+    "olympus-build": "olympusBuildDownload",
+}
+
+
+def fetch_build_artifact(ctx, build: int, artifactName: str) -> urllib3.HTTPResponse:
+    build_list = fetch_build_list(ctx)
+    for b in build_list:
+        if build == int(b["version"]):
+            return urllib3.PoolManager().request(
+                "GET", b[updateURLLookup[artifactName]], preload_content=False
+            )
+
+    return fetch_build_artifact_azure(build, artifactName)
+
+
+def fetch_build_artifact_azure(
+    build: int, artifactName="olympus-build"
+) -> urllib3.HTTPResponse:
+    return urllib3.PoolManager().request(
+        "GET",
+        f"https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts",
+        fields={
+            "artifactName": artifactName,
+            "api-version": 6.0,
+            "$format": "zip",
+        },
+        preload_content=False,
     )
 
 

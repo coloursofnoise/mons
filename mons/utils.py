@@ -1,6 +1,5 @@
 import errno
 import hashlib
-import json
 import os
 import re
 import time
@@ -9,11 +8,8 @@ import urllib.parse
 import urllib.request
 import zipfile
 from contextlib import contextmanager
-from urllib.error import HTTPError
 
 import dnfile  # https://github.com/malwarefrank/dnfile
-import urllib3
-import yaml
 from click import echo
 from pefile import (  # pyright:ignore[reportMissingTypeStubs]
     DIRECTORY_ENTRY,
@@ -21,7 +17,6 @@ from pefile import (  # pyright:ignore[reportMissingTypeStubs]
 from tqdm import tqdm
 
 from mons.baseUtils import GeneratorWithLen
-from mons.downloading import download_with_progress
 from mons.modmeta import ModMeta
 from mons.modmeta import read_mod_info
 from mons.version import Version
@@ -154,142 +149,15 @@ def parseExeInfo(path: str):
     return None, framework
 
 
-def parseVersionSpec(string: str):
+def parse_build_number(string: str):
     if string.startswith("1.") and string.endswith(".0"):
         string = string[2:-2]
     if string.isdigit():
         buildnumber = int(string)
     else:
-        buildnumber = latest_build(string)
+        buildnumber = None
 
     return buildnumber
-
-
-def latest_build(branch: str):
-    if branch.startswith(("refs/heads/", "refs/pull/")):
-        return latest_build_azure(branch)
-
-    build_list = get_build_list()
-    for build in build_list:
-        if not branch or build["branch"] == branch:
-            return int(build["version"])
-
-    return None
-
-
-def latest_build_azure(branch: str):
-    response: urllib3.HTTPResponse = urllib3.PoolManager().request(
-        "GET",
-        "https://dev.azure.com/EverestAPI/Everest/_apis/build/builds",
-        fields={
-            "definitions": 3,
-            "statusFilter": "completed",
-            "resultFilter": "succeeded",
-            "branchName": branch
-            if branch == "" or branch.startswith(("refs/heads/", "refs/pull/"))
-            else "refs/heads/" + branch,
-            "api-version": 6.0,
-            "$top": 1,
-        },
-    )
-
-    data: t.Dict[str, t.Any] = json.loads(response.data.decode())
-    if data["count"] < 1:
-        return None
-    elif data["count"] > 1:
-        raise Exception("Unexpected number of builds: " + str(data["count"]))
-
-    build = data["value"][0]
-    id = build["id"]
-    try:
-        return int(id) + 700
-    except:
-        pass
-    return None
-
-
-def build_exists(build: int):
-    build_list = get_build_list()
-    if build in (int(b["version"]) for b in build_list):
-        return True
-
-    return build_exists_azure(build)
-
-
-def build_exists_azure(build: int):
-    try:
-        urllib.request.urlopen(
-            "https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/"
-            + str(build - 700)
-        )
-        return True
-    except HTTPError as err:
-        if err.code == 404:
-            return False
-        raise
-
-
-updateURLLookup = {
-    "main": "mainDownload",
-    "olympus-meta": "olympusMetaDownload",
-    "olympus-build": "olympusBuildDownload",
-}
-
-
-def fetch_build_artifact(build: int, artifactName: str) -> urllib3.HTTPResponse:
-    build_list = get_build_list()
-    for b in build_list:
-        if build == int(b["version"]):
-            return urllib3.PoolManager().request(
-                "GET", b[updateURLLookup[artifactName]], preload_content=False
-            )
-
-    return fetch_build_artifact_azure(build, artifactName)
-
-
-def fetch_build_artifact_azure(
-    build: int, artifactName="olympus-build"
-) -> urllib3.HTTPResponse:
-    return urllib3.PoolManager().request(
-        "GET",
-        f"https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts",
-        fields={
-            "artifactName": artifactName,
-            "api-version": 6.0,
-            "$format": "zip",
-        },
-        preload_content=False,
-    )
-
-
-build_list = None
-
-
-def get_build_list() -> t.List[t.Dict[str, t.Any]]:
-    global build_list
-    if build_list:
-        return build_list
-
-    update_url = (
-        urllib.request.urlopen("https://everestapi.github.io/everestupdater.txt")
-        .read()
-        .decode()
-        .strip()
-    )
-
-    build_list = yaml.safe_load(
-        download_with_progress(update_url, None, "Downloading Build List", clear=True)
-    )
-    return build_list
-
-
-def search_mods(search: str):
-    search = urllib.parse.quote_plus(search)
-    url = (
-        f"https://max480-random-stuff.appspot.com/celeste/gamebanana-search?q={search}"
-    )
-    response = urllib.request.urlopen(url)
-    return json.loads(response.read())
 
 
 def read_blacklist(path: str):

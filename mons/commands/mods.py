@@ -36,7 +36,6 @@ from mons.sources import fetch_random_map
 from mons.utils import enable_mods
 from mons.utils import installed_mods
 from mons.utils import read_blacklist
-from mons.utils import search_mods
 from mons.utils import timed_progress
 from mons.version import Version
 
@@ -168,13 +167,14 @@ def list_mods(
 
 @cli.command(hidden=True)
 @click.argument("search")
-def search(search: str):
-    mod_list = get_mod_list()
+@click.pass_context
+def search(ctx, search: str):
+    mod_list = fetch_mod_db(ctx)
     if search in mod_list:
         echo(mod_list[search]["GameBananaId"])
         return
 
-    search_result = search_mods(search)
+    search_result = fetch_mod_search(search)
     for item in search_result:
         match = [
             mod
@@ -716,14 +716,17 @@ def remove(name: Install, mods: t.List[str], recurse: bool):
     "--upgrade-only", is_flag=True, help="Only update if new file has a higher version."
 )
 @clickExt.yes_option()
-def update(name: Install, all: bool, enabled: t.Optional[bool], upgrade_only: bool):
+@click.pass_context
+def update(
+    ctx, name: Install, all: bool, enabled: t.Optional[bool], upgrade_only: bool
+):
     """Update installed mods."""
     if not all:
         raise click.UsageError(
             "this command can currently only be used with the --all option"
         )
 
-    mod_list = get_mod_list()
+    mod_list = fetch_mod_db(ctx)
     updates: t.List[UpdateInfo] = []
     has_updates = False
     total_size: int = 0
@@ -803,7 +806,8 @@ def update(name: Install, all: bool, enabled: t.Optional[bool], upgrade_only: bo
 )
 @click.option("--no-update", is_flag=True, help="Don't update outdated dependencies.")
 @clickExt.yes_option()
-def resolve(name: Install, all: bool, enabled: t.Optional[bool], no_update: bool):
+@click.pass_context
+def resolve(ctx, name: Install, all: bool, enabled: t.Optional[bool], no_update: bool):
     """Resolve any missing or outdated dependencies."""
     if not all:
         raise click.UsageError(
@@ -844,7 +848,7 @@ def resolve(name: Install, all: bool, enabled: t.Optional[bool], no_update: bool
         f'{len(deps_missing) + len(deps_outdated)} dependencies missing{" or outdated" if len(deps_outdated) else ""}, attempting to resolve...'
     )
 
-    mod_list = get_mod_list()
+    mod_list = fetch_mod_db(ctx)
     deps_install = [
         get_mod_download(mod.Name, mod_list)
         for mod in deps_missing
