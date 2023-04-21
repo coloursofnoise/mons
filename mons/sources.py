@@ -1,3 +1,4 @@
+import json
 import os
 import time
 import typing as t
@@ -71,8 +72,8 @@ def with_cache(
     filename: str,
     *,
     lifespan=15,
-    reader=yaml.safe_load,
-    writer=yaml.safe_dump,
+    reader=json.load,
+    writer=json.dump,
 ):
     """Wraps a function that returns a serializable object, and caches it in memory and on disk."""
 
@@ -96,7 +97,7 @@ def with_cache(
     return decorator
 
 
-@with_cache("build_list.yaml")
+@with_cache("build_list.json")
 @wrap_config_param
 def fetch_build_list(config: Config) -> t.List[t.Dict[str, t.Any]]:
     download_url = (
@@ -206,7 +207,7 @@ def fetch_build_artifact_azure(
     )
 
 
-@with_cache("mod_database.yaml")
+@with_cache("mod_database.json")
 @wrap_config_param
 def fetch_mod_db(config: Config) -> t.Dict[str, t.Any]:
     download_url = (
@@ -224,7 +225,7 @@ def fetch_mod_db(config: Config) -> t.Dict[str, t.Any]:
     )
 
 
-@with_cache("dependency_graph.yaml")
+@with_cache("dependency_graph.json")
 def fetch_dependency_graph() -> t.Dict[str, t.Any]:
     return yaml.safe_load(
         download_with_progress(
