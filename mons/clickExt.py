@@ -357,6 +357,9 @@ class CommandExt(click.Command):
 
     def __init__(self, *args, **kwargs) -> None:
         self.usages: t.List[t.Dict[str, t.List[str]]] = kwargs.pop("usages", [])
+        self.meta_options: t.OrderedDict[str, t.List[t.Tuple[str, str]]] = kwargs.pop(
+            "meta_options", None
+        )
         super().__init__(*args, **kwargs)
 
     def make_parser(self, ctx):
@@ -411,6 +414,13 @@ class CommandExt(click.Command):
             click.echo(colorize(w, TERM_COLORS.WARNING))
         return super().invoke(ctx)
 
+    def format_help(self, ctx: click.Context, formatter):
+        self.format_usage(ctx, formatter)
+        self.format_help_text(ctx, formatter)
+        self.format_options(ctx, formatter)
+        self.format_meta_options(ctx, formatter)
+        self.format_epilog(ctx, formatter)
+
     def format_usage(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
         if not self.usages:
             return super().format_usage(ctx, formatter)
@@ -425,3 +435,9 @@ class CommandExt(click.Command):
 
         # pieces = self.collect_usage_pieces(ctx)
         # formatter.write_usage(ctx.command_path, " ".join(pieces))
+
+    def format_meta_options(self, ctx, formatter):
+        if self.meta_options:
+            for opt_set, opts in self.meta_options.items():
+                with formatter.section(_(opt_set)):
+                    formatter.write_dl(opts)

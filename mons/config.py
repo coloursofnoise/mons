@@ -2,8 +2,10 @@ import os
 import typing as t
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
+from dataclasses import field
 from dataclasses import fields
 
+import typing_extensions as te
 import yaml
 from click import ClickException
 from click import make_pass_decorator
@@ -59,6 +61,7 @@ class Config:
 
     source_directory: t.Optional[str] = None
     default_install: t.Optional[str] = None
+    launch_args: t.List[str] = field(default_factory=list)
 
     downloading: Downloading = Downloading()
 
@@ -85,8 +88,12 @@ def dataclass_fromdict(data: t.Dict[str, t.Any], type: t.Type[T]) -> T:
     for k, v in data.items():
         if k not in type_fields:
             errors.append(Exception(f"Unknown key: {k}"))
+            continue
 
-        elif not isinstance(v, type_fields[k]):
+        # Retrieve type checkable version of generic and special types
+        # Only checks base type, so 'List[str]' is only checked as 'list'
+        checkable_type = te.get_origin(type_fields[k]) or type_fields[k]
+        if not isinstance(v, checkable_type):
             if issubclass(type_fields[k], object):  # recursively deserialize objects
                 try:
                     load_yaml(str(v), type_fields[k])

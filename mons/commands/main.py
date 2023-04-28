@@ -415,11 +415,18 @@ def install(
         ignore_unknown_options=True,
         allow_extra_args=True,
     ),
+    meta_options={
+        "Game Arguments": [
+            ("--console", "Attach output of game process (implies --wait)."),
+            ("--vanilla", "Launche Celeste without Everest."),
+        ]
+    },
     cls=clickExt.CommandExt,
 )
 @clickExt.install("name", metavar="NAME [ARGS]...")
+@click.option("--wait", is_flag=True, help="Wait for game process to exit.")
 @click.pass_context
-def launch(ctx: click.Context, name: Install):
+def launch(ctx: click.Context, name: Install, wait: bool):
     """Launch the game associated with an install
 
     Any additional arguments are passed to the launched process."""
@@ -432,10 +439,16 @@ def launch(ctx: click.Context, name: Install):
         else:
             path = os.path.splitext(path)[0]  # drop the .exe
 
-    redirect = None if "--console" in ctx.args else subprocess.PIPE
+    launch_args = ctx.ensure_object(UserInfo).config.launch_args
+    launch_args += ctx.args
+
+    redirect = subprocess.PIPE
+    if "--console" in launch_args:
+        redirect = None
+        wait = True
 
     proc = subprocess.Popen(
-        [path] + ctx.args, stdout=redirect, stderr=redirect, shell=True
+        [path] + launch_args, stdout=redirect, stderr=redirect, shell=True
     )
-    if not redirect:
+    if wait:
         proc.wait()
