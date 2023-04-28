@@ -16,6 +16,10 @@ class Install:
     name: str
     path: str
 
+    @property
+    def dir(self):
+        return os.path.dirname(self.path)
+
     _cache: t.Dict[str, t.Any] = field(default_factory=dict, init=False)
 
     def get_cache(self):

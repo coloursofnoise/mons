@@ -1,6 +1,7 @@
 import os
 import sys
 import typing as t
+from gettext import gettext as _
 from traceback import format_exception_only
 from traceback import format_tb
 from urllib import parse
@@ -44,6 +45,11 @@ def confirm_ext(*params, default, dangerous: bool = False, **attrs):
         raise TTYError("not a tty.\n" + msg)
 
     return click.confirm(default=default, *params, **attrs)
+
+
+def type_cast_value(ctx, type: click.ParamType, value):
+    dummy = click.Option("-d", type=type)
+    return dummy.type_cast_value(ctx, value)
 
 
 def env_flag_option(
@@ -261,12 +267,22 @@ class URL(click.ParamType):
                     )
                 else:
                     parsed_url._replace(scheme=self.default_scheme)
+            if not all((parsed_url.scheme, parsed_url.netloc)):
+                self.fail("Invalid URL.", param, ctx)
             if self.valid_schemes and parsed_url.scheme not in self.valid_schemes:
                 self.fail(f"URI scheme '{parsed_url.scheme}' not allowed.", param, ctx)
 
             return parsed_url
         except ValueError:
             self.fail(f"{value} is not a valid URL.", param, ctx)
+
+
+class OptionExt(click.Option):
+    def __init__(self, *args, **attrs):
+        name = attrs.pop("name", None)
+        super().__init__(*args, **attrs)
+        if name:
+            self.name = name
 
 
 class DefaultOption(click.Option):
@@ -339,6 +355,10 @@ class CommandExt(click.Command):
 
     warnings: t.List[str] = list()
 
+    def __init__(self, *args, **kwargs) -> None:
+        self.usages: t.List[t.Dict[str, t.List[str]]] = kwargs.pop("usages", [])
+        super().__init__(*args, **kwargs)
+
     def make_parser(self, ctx):
         """Strip placeholder params"""
         self.params = [
@@ -390,3 +410,18 @@ class CommandExt(click.Command):
         for w in self.warnings:
             click.echo(colorize(w, TERM_COLORS.WARNING))
         return super().invoke(ctx)
+
+    def format_usage(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        if not self.usages:
+            return super().format_usage(ctx, formatter)
+
+        options_metavar = [self.options_metavar] if self.options_metavar else []
+        prefix = None
+        for usage in self.usages:
+            formatter.write_usage(
+                ctx.command_path, " ".join(options_metavar + usage), prefix
+            )
+            prefix = f"   {_('OR:')} "
+
+        # pieces = self.collect_usage_pieces(ctx)
+        # formatter.write_usage(ctx.command_path, " ".join(pieces))

@@ -4,7 +4,7 @@ import shutil
 import subprocess
 import typing as t
 import urllib.parse
-import zipfile
+from zipfile import ZipFile
 
 import click
 from click import echo
@@ -18,13 +18,13 @@ from mons.errors import TTYError
 from mons.formatting import format_columns
 from mons.install import Install
 from mons.mons import cli
-from mons.sources import fetch_build_artifact
-from mons.sources import fetch_build_exists
-from mons.sources import fetch_latest_build
+from mons.sources import fetch_build_artifact_azure
+from mons.sources import fetch_build_list
+from mons.sources import fetch_latest_build_azure
 from mons.utils import find_celeste_file
 from mons.utils import getMD5Hash
-from mons.utils import parse_build_number
 from mons.utils import unpack
+from mons.version import NOVERSION
 from mons.version import Version
 
 
@@ -151,243 +151,262 @@ def show(name: Install, verbose: bool):
         echo(install.path)
 
 
-@cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
-@clickExt.install("name")
-@click.argument("versionSpec", required=False)
+def build_source(srcdir: str, verbose=False):
+    if shutil.which("dotnet"):
+        return (
+            subprocess.run(
+                [
+                    "dotnet",
+                    "build",
+                    "--verbosity",
+                    "normal" if verbose else "minimal",
+                ],
+                cwd=srcdir,
+            ).returncode
+            == 0
+        )
+    elif shutil.which("msbuild"):
+        return (
+            subprocess.run(
+                ["msbuild", "-verbosity:" + ("normal" if verbose else "minimal")],
+                cwd=srcdir,
+            ).returncode
+            == 0
+        )
+    else:
+        raise click.ClickException(
+            "Unable to build project: could not find `dotnet` or `msbuild` on PATH.\n"
+            + "Include the --no-build switch to skip build step."
+        )
+
+
+def copy_source_artifacts(srcdir: str, dest: str):
+    echo("Copying files...")
+    fs.copy_recursive_force(
+        os.path.join(srcdir, "Celeste.Mod.mm", "bin", "Debug", "net452"),
+        dest,
+        ignore=lambda path, names: [
+            name
+            for name in names
+            if fs.is_unchanged(os.path.join(path, name), os.path.join(dest, name))
+        ],
+    )
+    fs.copy_recursive_force(
+        os.path.join(srcdir, "MiniInstaller", "bin", "Debug", "net452"),
+        dest,
+        ignore=lambda path, names: [
+            name
+            for name in names
+            if fs.is_unchanged(os.path.join(path, name), os.path.join(dest, name))
+        ],
+    )
+    return True
+
+
+def is_version(string: str):
+    try:
+        ver = Version.parse(string)
+        return not isinstance(ver, NOVERSION)
+    except:
+        return False
+
+
+def download_artifact(ctx: click.Context, version: t.Optional[str]) -> t.IO[bytes]:
+    dummy_option = click.Option("-d")
+
+    dummy_option.type = click.File(mode="rb")
+    try:
+        file = dummy_option.type_cast_value(ctx, version)
+        if file:
+            return file
+    except click.BadParameter:
+        pass
+
+    def get_url():
+        dummy_option.type = clickExt.URL(require_path=True)
+        try:
+            url = dummy_option.type_cast_value(ctx, version)
+            if url:
+                return str(urllib.parse.urlunparse(url))
+        except click.BadParameter:
+            pass
+
+        if not version:
+            build_list = fetch_build_list(ctx)
+            return build_list[0]["mainDownload"]
+
+        if version.startswith("refs/"):
+            build = fetch_latest_build_azure(version)
+            if build:
+                return fetch_build_artifact_azure(build)
+
+        build_list = fetch_build_list(ctx)
+        branches = {build["branch"]: build for build in build_list}
+        if version in branches:
+            return branches[version]["mainDownload"]
+
+        if version.isdigit():
+            build_num = int(version)
+            for build in build_list:
+                if build["version"] == build_num:
+                    return build["mainDownload"]
+
+        if is_version(version):
+            parsed_ver = Version.parse(version)
+            for build in build_list:
+                if build["version"] == parsed_ver.Minor:
+                    return build["mainDownload"]
+
+        raise click.ClickException("")
+
+    url = get_url()
+    if not url:
+        raise click.BadParameter("you failed!")
+
+    click.echo("Downloading artifact from " + str(url))
+    with fs.temporary_file(persist=True) as file:
+        download_with_progress(url, file, clear=True)
+        return click.open_file(file, mode="rb")
+
+
+def extract_artifact(install: Install, artifact: t.IO[bytes]):
+    if artifact.fileno() == 0:  # stdin
+        if artifact.isatty():
+            raise TTYError("no input.")
+        artifact = io.BytesIO(artifact.read())
+
+    dest = install.dir
+    with ZipFile(artifact) as wrapper:
+        try:
+            entry = wrapper.open(
+                "olympus-build/build.zip"
+            )  # Throws KeyError if not present
+            with ZipFile(entry) as nested:
+                unpack(nested, dest)
+        except KeyError:
+            unpack(wrapper, dest, "main/")
+
+
+def run_installer(install: Install, verbose: bool):
+    stdout = None if verbose else subprocess.DEVNULL
+    install_dir = install.dir
+    if os.name == "nt":
+        installer_ret = subprocess.run(
+            os.path.join(install_dir, "MiniInstaller.exe"),
+            stdout=stdout,
+            stderr=None,
+            cwd=install_dir,
+        )
+    else:
+        uname = os.uname()
+        if uname.sysname == "Darwin":
+            kickstart_dir = os.path.join(install_dir, "..", "MacOS")
+            with fs.copied_file(
+                os.path.join(kickstart_dir, "Celeste"),
+                os.path.join(kickstart_dir, "MiniInstaller"),
+            ) as miniinstaller:
+                return (
+                    subprocess.run(
+                        miniinstaller, stdout=stdout, stderr=None, cwd=install_dir
+                    ).returncode
+                    == 0
+                )
+        else:
+            suffix = "x86_64" if uname.machine == "x86_64" else "x86"
+            with fs.copied_file(
+                os.path.join(os.path.join(install_dir, f"Celeste.bin.{suffix}")),
+                os.path.join(install_dir, f"MiniInstaller.bin.{suffix}"),
+            ) as miniinstaller:
+                return (
+                    subprocess.run(
+                        miniinstaller, stdout=stdout, stderr=None, cwd=install_dir
+                    ).returncode
+                    == 0
+                )
+
+
+@cli.command(
+    no_args_is_help=True,
+    cls=clickExt.CommandExt,
+    usages=[
+        ["NAME", "[VERSIONSPEC | PATH | URL]"],
+        ["NAME", "--src", "[--no-build]", "[PATH]"],
+    ],
+)
+@clickExt.install("install", metavar="NAME")
+@click.argument("source", required=False)
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
 @click.option(
     "--latest", is_flag=True, help="Install latest available build, branch-ignorant."
 )
-@click.option("--zip", type=click.File(mode="rb"), help="Install from zip artifact.")
-@click.option(
-    "--url",
-    type=clickExt.URL(require_path=True),
-    help="Download and install from a URL.",
-)
 @click.option(
     "--src",
-    cls=clickExt.ExplicitOption,
-    type=click.Path(exists=True, file_okay=False, resolve_path=True),
+    is_flag=True,
     help="Build and install from source folder.",
 )
-@click.option("--src", cls=clickExt.DefaultOption, is_flag=True)
 @click.option(
     "--no-build", is_flag=True, help="Use with --src to install without building."
 )
-@click.option("--launch", is_flag=True, help="Launch Celeste after installing.")
+@click.option(
+    "--launch",
+    name="launch_game",
+    is_flag=True,
+    help="Launch Celeste after installing.",
+    cls=clickExt.OptionExt,
+)
 @pass_userinfo
+@click.pass_context
 def install(
+    ctx: click.Context,
     userinfo: UserInfo,
-    name: Install,
-    versionspec: str,
+    install: Install,
+    source: t.Optional[str],
     verbose: bool,
     latest: bool,
-    zip: io.BufferedReader,
-    url: t.Optional[urllib.parse.ParseResult],
-    src: t.Optional[str],
-    src_default: bool,
+    src: bool,
     no_build: bool,
-    launch: bool,
+    launch_game: bool,
 ):
     """Install Everest
 
     VERSIONSPEC can be a branch name, build number, or version number."""
-    install = name
-    path = install.path
-    installDir = os.path.dirname(path)
-    success = False
+    if no_build and not src:
+        raise click.BadOptionUsage(
+            "--no-build", "--no-build can only be used with the --src option.", ctx
+        )
 
-    artifactPath = None
-    build = None
-
-    if src_default:
-        src = userinfo.config.source_directory
-        if not src:
+    if src and not source:
+        source = userinfo.config.source_directory
+        if not source:
             raise click.BadOptionUsage(
-                "--src", "--src option passed with no path and no SourceDirectory set"
+                "--src",
+                "--src option passed with no path or 'source_directory' configuration value.",
+                ctx,
             )
 
     if src:
-        build_success = 0 if no_build else 1
+        source_dir = clickExt.type_cast_value(
+            ctx,
+            click.Path(exists=True, file_okay=False, readable=True, resolve_path=True),
+            source,
+        )
         if not no_build:
-            if shutil.which("dotnet"):
-                build_success = subprocess.run(
-                    [
-                        "dotnet",
-                        "build",
-                        "--verbosity",
-                        "normal" if verbose else "minimal",
-                    ],
-                    cwd=src,
-                ).returncode
-            elif shutil.which("msbuild"):
-                build_success = subprocess.run(
-                    ["msbuild", "-verbosity:" + ("normal" if verbose else "minimal")],
-                    cwd=src,
-                ).returncode
-            else:
-                raise click.ClickException(
-                    "Unable to build project: could not find `dotnet` or `msbuild` on PATH.\n"
-                    + "Include the --no-build switch to skip build step."
-                )
+            build_source(source_dir, verbose)
+        copy_source_artifacts(source_dir, install.dir)
+        artifact = None
+    else:
+        artifact = download_artifact(ctx, source)
 
-        if build_success == 0:
-            echo("Copying files...")
-            fs.copy_recursive_force(
-                os.path.join(src, "Celeste.Mod.mm", "bin", "Debug", "net452"),
-                installDir,
-                ignore=lambda path, names: [
-                    name
-                    for name in names
-                    if fs.is_unchanged(
-                        os.path.join(path, name), os.path.join(installDir, name)
-                    )
-                ],
-            )
-            fs.copy_recursive_force(
-                os.path.join(src, "MiniInstaller", "bin", "Debug", "net452"),
-                installDir,
-                ignore=lambda path, names: [
-                    name
-                    for name in names
-                    if fs.is_unchanged(
-                        os.path.join(path, name), os.path.join(installDir, name)
-                    )
-                ],
-            )
-            success = True
+    if artifact:
+        extract_artifact(install, artifact)
 
-    elif url:
-        download_url = urllib.parse.urlunparse(url)
-        echo("Downloading artifact from " + str(download_url))
-        artifactPath = os.path.join(installDir, url.path.split("/")[-1])
-        download_with_progress(str(download_url), artifactPath, atomic=True, clear=True)
+    click.echo("Running MiniInstaller...")
+    if not run_installer(install, verbose):
+        ctx.exit(1)
 
-    elif zip:
-        artifactPath = zip
-
-    if artifactPath:
-        label = f"Unzipping {os.path.basename(artifactPath) if isinstance(artifactPath, str) else zip.name}"
-        if zip and zip.fileno() == 0:  # stdin
-            if zip.isatty():
-                raise TTYError("no input.")
-            artifactPath = io.BytesIO(zip.read())
-        with zipfile.ZipFile(artifactPath) as wrapper:
-            try:
-                entry = wrapper.open(
-                    "olympus-build/build.zip"
-                )  # Throws KeyError if not present
-                with zipfile.ZipFile(entry) as artifact:
-                    unpack(artifact, installDir, label=label)
-                    success = True
-            except KeyError:
-                unpack(wrapper, installDir, "main/", label=label)
-                success = True
-
-    elif not src:
-        versionspec = "" if latest else versionspec
-        build = parse_build_number(versionspec)
-        if not build:
-            build = fetch_latest_build(userinfo, versionspec)
-        if not build:
-            raise click.ClickException(
-                f"Build number could not be retrieved for `{versionspec}`."
-            )
-
-        if build == install.everest_version.Minor:
-            echo(f"Build {build} already installed.")
-            exit(0)
-
-        if not fetch_build_exists(userinfo, build):
-            raise click.ClickException(
-                f"Build artifacts could not be found for build {build}."
-            )
-
-        echo(f"Installing Everest build {build}")
-        echo("Downloading build metadata...")
-        try:
-            meta = fetch_build_artifact(userinfo, build, "olympus-meta")
-            with zipfile.ZipFile(io.BytesIO(meta.read())) as file:
-                size = int(file.read("olympus-meta/size.txt"))
-        except:
-            size = 0
-
-        if size > 0:
-            echo("Downloading olympus-build.zip", nl=False)
-            response = fetch_build_artifact(userinfo, build, "olympus-build")
-            response.headers["Content-Length"] = str(size)
-            artifactPath = os.path.join(installDir, "olympus-build.zip")
-            echo(f" to file {artifactPath}")
-            download_with_progress(
-                response, artifactPath, label="Downloading", clear=True
-            )
-            with zipfile.ZipFile(artifactPath) as wrapper:
-                with zipfile.ZipFile(
-                    wrapper.open("olympus-build/build.zip")
-                ) as artifact:
-                    unpack(artifact, installDir, label="Extracting")
-                    success = True
-
-        else:
-            echo("Downloading main.zip", nl=False)
-            response = fetch_build_artifact(userinfo, build, "main")
-            artifactPath = os.path.join(installDir, "main.zip")
-            echo(f" to file {artifactPath}")
-            download_with_progress(
-                response, artifactPath, label="Downloading", clear=True
-            )
-            echo("Unzipping main.zip")
-            with zipfile.ZipFile(artifactPath) as artifact:
-                unpack(artifact, installDir, "main/", label="Extracting")
-                success = True
-
-    if success:
-        echo("Running MiniInstaller...")
-        stdout = None if verbose else subprocess.DEVNULL
-        if os.name == "nt":
-            installer_ret = subprocess.run(
-                os.path.join(installDir, "MiniInstaller.exe"),
-                stdout=stdout,
-                stderr=None,
-                cwd=installDir,
-            )
-        else:
-            uname = os.uname()
-            if uname.sysname == "Darwin":
-                kickstart_dir = os.path.join(installDir, "..", "MacOS")
-                with fs.copied_file(
-                    os.path.join(kickstart_dir, "Celeste"),
-                    os.path.join(kickstart_dir, "MiniInstaller"),
-                ) as miniinstaller:
-                    installer_ret = subprocess.run(
-                        miniinstaller, stdout=stdout, stderr=None, cwd=installDir
-                    )
-            else:
-                suffix = "x86_64" if uname.machine == "x86_64" else "x86"
-                with fs.copied_file(
-                    os.path.join(os.path.join(installDir, f"Celeste.bin.{suffix}")),
-                    os.path.join(installDir, f"MiniInstaller.bin.{suffix}"),
-                ) as miniinstaller:
-                    installer_ret = subprocess.run(
-                        miniinstaller, stdout=stdout, stderr=None, cwd=installDir
-                    )
-
-        if installer_ret.returncode == 0:
-            echo("Install success")
-            if build:
-                peHash = getMD5Hash(path)
-                install.hash = peHash
-                install.everest_version = Version(1, build, 0)
-            else:
-                install.update_cache(read_exe=True)
-                echo("Install info cached")
-            if launch:
-                echo("Launching Celeste...")
-                cli.main(args=["launch", install.name])
-            return
-
-    # If we got this far, something went wrong
-    click.get_current_context().exit(1)
+    if launch_game:
+        echo("Launching Celeste...")
+        ctx.invoke(launch, name=install)
 
 
 @cli.command(
@@ -398,8 +417,7 @@ def install(
     ),
     cls=clickExt.CommandExt,
 )
-@clickExt.install("name")
-@click.argument("args", nargs=-1, required=False, cls=clickExt.PlaceHolder)
+@clickExt.install("name", metavar="NAME [ARGS]...")
 @click.pass_context
 def launch(ctx: click.Context, name: Install):
     """Launch the game associated with an install
