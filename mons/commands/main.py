@@ -216,20 +216,18 @@ def is_version(string: str):
 
 
 def download_artifact(ctx: click.Context, version: t.Optional[str]) -> t.IO[bytes]:
-    dummy_option = click.Option("-d")
-
-    dummy_option.type = click.File(mode="rb")
     try:
-        file = dummy_option.type_cast_value(ctx, version)
+        file = clickExt.type_cast_value(ctx, click.File(mode="rb"), version)
         if file:
             return file
     except click.BadParameter:
         pass
 
     def get_url():
-        dummy_option.type = clickExt.URL(require_path=True)
         try:
-            url = dummy_option.type_cast_value(ctx, version)
+            url = clickExt.type_cast_value(
+                ctx, clickExt.URL(require_path=True), version
+            )
             if url:
                 return str(urllib.parse.urlunparse(url))
         except click.BadParameter:

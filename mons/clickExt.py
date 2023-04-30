@@ -47,7 +47,40 @@ def confirm_ext(*params, default, dangerous: bool = False, **attrs):
     return click.confirm(default=default, *params, **attrs)
 
 
-def type_cast_value(ctx, type: click.ParamType, value):
+class ParamTypeG(click.ParamType, t.Generic[T]):
+    def convert(
+        self,
+        value: t.Union[str, T],
+        param: t.Optional[click.Parameter],
+        ctx: t.Optional[click.Context],
+    ) -> T:
+        return super().convert(value, param, ctx)
+
+
+# clickExt generic overload
+@t.overload
+def type_cast_value(ctx: click.Context, type: ParamTypeG[T], value: t.Any) -> T:
+    ...
+
+
+# click overloads
+@t.overload
+def type_cast_value(ctx: click.Context, type: click.File, value: t.Any) -> t.IO[t.Any]:
+    ...
+
+
+@t.overload
+def type_cast_value(ctx: click.Context, type: click.Path, value: t.Any) -> str:
+    ...
+
+
+# Base overload
+@t.overload
+def type_cast_value(ctx: click.Context, type: click.ParamType, value: t.Any) -> t.Any:
+    ...
+
+
+def type_cast_value(ctx, type, value):
     dummy = click.Option("-d", type=type)
     return dummy.type_cast_value(ctx, value)
 
@@ -161,7 +194,7 @@ def color_option(*param_decls: str, **kwargs: t.Any):
     return click.option(*param_decls, **kwargs)
 
 
-class Install(click.ParamType):
+class Install(ParamTypeG[t.Union[str, T_Install]]):
     name = "Install"
 
     def __init__(self, exist=True, resolve_install=False, check_path=True) -> None:
@@ -235,7 +268,7 @@ def install(*param_decls, resolve=True, **attrs):
     )
 
 
-class URL(click.ParamType):
+class URL(ParamTypeG[parse.ParseResult]):
     name = "URL"
 
     def __init__(
