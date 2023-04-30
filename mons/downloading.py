@@ -14,8 +14,8 @@ from click import Abort
 from tqdm import tqdm
 from urllib3.exceptions import HTTPError
 
-import mons.fs as fs
 from mons import baseUtils  # required to set module variable
+from mons import fs
 from mons.baseUtils import read_with_progress
 from mons.modmeta import ModDownload
 from mons.modmeta import UpdateInfo
@@ -109,7 +109,7 @@ def downloader(
 
 
 def mod_downloader(
-    mod_folder: str,
+    mod_folder: fs.Directory,
     download: t.Union[ModDownload, UpdateInfo],
     http_pool: urllib3.PoolManager,
 ):
@@ -132,7 +132,7 @@ def mod_downloader(
 
 
 def download_threaded(
-    mod_folder: str,
+    mod_folder: fs.Directory,
     downloads: t.Sequence[t.Union[ModDownload, UpdateInfo]],
     late_downloads: t.Optional[t.Sequence[t.Union[ModDownload, UpdateInfo]]] = None,
     thread_count=8,
@@ -150,7 +150,9 @@ def download_threaded(
         ) as temp_dir:
             if late_downloads:
                 futures += [
-                    pool.submit(mod_downloader, temp_dir, download, http_pool)
+                    pool.submit(
+                        mod_downloader, fs.Directory(temp_dir), download, http_pool
+                    )
                     for download in late_downloads
                 ]
             try:

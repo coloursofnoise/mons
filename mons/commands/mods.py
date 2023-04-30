@@ -121,7 +121,7 @@ def list_mods(
                 "--dependency", "--dependency cannot be used with the --invalid flag."
             )
 
-    basePath = os.path.join(os.path.dirname(name.path), "Mods")
+    basePath = fs.joindir(name.dir, "Mods")
 
     installed = installed_mods(
         basePath, dirs=dir, valid=valid, blacklisted=invert(enabled)
@@ -395,7 +395,7 @@ def add(
         raise click.MissingParameter(ctx=ctx, param=param)
 
     install = name
-    mod_folder = os.path.join(os.path.dirname(install.path), "Mods")
+    mod_folder = fs.joindir(install.dir, "Mods")
     mod_list = fetch_mod_db(ctx)
 
     installed_list = installed_mods(mod_folder, valid=True, with_size=True)
@@ -633,7 +633,7 @@ def add(
 @clickExt.force_option()
 def remove(name: Install, mods: t.List[str], recurse: bool):
     """Remove installed mods."""
-    mod_folder = os.path.join(os.path.dirname(name.path), "Mods")
+    mod_folder = fs.joindir(name.dir, "Mods")
     installed_list = installed_mods(mod_folder, valid=True, with_size=True)
     installed_list = {
         meta.Name: meta
@@ -731,7 +731,7 @@ def update(
     has_updates = False
     total_size: int = 0
     if all:
-        mods_folder = os.path.join(os.path.dirname(name.path), "Mods")
+        mods_folder = fs.joindir(name.dir, "Mods")
         installed = installed_mods(
             mods_folder,
             blacklisted=invert(enabled),
@@ -741,7 +741,7 @@ def update(
             with_hash=True,
         )
         updater_blacklist = os.path.join(mods_folder, "updaterblacklist.txt")
-        updater_blacklist = os.path.exists(updater_blacklist) and read_blacklist(
+        updater_blacklist = fs.isfile(updater_blacklist) and read_blacklist(
             updater_blacklist
         )
         for meta in installed:
@@ -794,7 +794,7 @@ def update(
         raise click.Abort()
 
     with timed_progress("Downloaded files in {time:.3f} seconds."):
-        download_threaded("", updates, thread_count=10)
+        download_threaded(name.dir, updates, thread_count=10)
 
 
 @cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
@@ -816,7 +816,7 @@ def resolve(ctx, name: Install, all: bool, enabled: t.Optional[bool], no_update:
 
     install = name
 
-    mods_folder = os.path.join(os.path.dirname(install.path), "Mods")
+    mods_folder = fs.joindir(install.dir, "Mods")
     installed = installed_mods(mods_folder, valid=True, blacklisted=invert(enabled))
     installed = list(
         tqdm(installed, desc="Reading Installed Mods", leave=False, unit="")

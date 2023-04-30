@@ -16,6 +16,7 @@ from pefile import (  # pyright:ignore[reportMissingTypeStubs]
 )  # https://github.com/erocarrera/pefile
 from tqdm import tqdm
 
+from mons import fs
 from mons.baseUtils import GeneratorWithLen
 from mons.modmeta import ModMeta
 from mons.modmeta import read_mod_info
@@ -40,23 +41,23 @@ def timed_progress(msg: str):
     tqdm.write("\r" + msg.format(time=end - start))
 
 
-def find_celeste_file(path: str, file: str, force_name=True):
-    if os.path.basename(path) == "Celeste.app":
-        path = os.path.join(path, "Resources")
+def find_celeste_file(path: fs.Path, file: str, force_name=True):
+    if fs.isdir(path) and os.path.basename(path) == "Celeste.app":
+        path = fs.joindir(path, "Resources")
 
     ret = path
-    if os.path.isdir(path):
+    if fs.isdir(path):
         ret = os.path.join(path, file)
-        if not os.path.exists(ret):
+        if not fs.isfile(ret):
             raise FileNotFoundError(
                 errno.ENOENT, f"File `{file}` could not be found in `{path}`", ret
             )
     elif force_name and not os.path.basename(path) == file:
         raise FileNotFoundError(errno.ENOENT, f"File `{file}` not found", path)
-    return ret
+    return fs.File(ret)
 
 
-def getMD5Hash(path: str):
+def getMD5Hash(path: fs.File):
     with open(path, "rb") as f:
         file_hash = hashlib.md5()
         chunk = f.read(8129)
@@ -66,7 +67,7 @@ def getMD5Hash(path: str):
     return file_hash.hexdigest()
 
 
-def unpack(zip: zipfile.ZipFile, root: str, prefix="", label="Extracting"):
+def unpack(zip: zipfile.ZipFile, root: fs.Directory, prefix="", label="Extracting"):
     totalSize = 0
     for zipinfo in zip.infolist():
         if not prefix or zipinfo.filename.startswith(prefix):
@@ -105,7 +106,7 @@ opener.addheaders = [
 urllib.request.install_opener(opener)
 
 
-def parseExeInfo(path: str):
+def parseExeInfo(path: fs.File):
     echo("Reading exe...\r", nl=False)
     pe = dnfile.dnPE(path, fast_load=True)
     pe.parse_data_directories(
@@ -160,13 +161,13 @@ def parse_build_number(string: str):
     return buildnumber
 
 
-def read_blacklist(path: str):
+def read_blacklist(path: fs.File):
     with open(path) as file:
         return [m.strip() for m in file.readlines() if not m.startswith("#")]
 
 
 def installed_mods(
-    path: str,
+    path: fs.Directory,
     *,
     dirs: t.Optional[bool] = None,
     valid: t.Optional[bool] = None,
@@ -177,7 +178,7 @@ def installed_mods(
     files = os.listdir(path)
     blacklist = None
     if os.path.isfile(os.path.join(path, "blacklist.txt")):
-        blacklist = read_blacklist(os.path.join(path, "blacklist.txt"))
+        blacklist = read_blacklist(fs.joinfile(path, "blacklist.txt"))
         if blacklisted is not None:
             files = list(filter(lambda m: blacklisted ^ (m in blacklist), files))
     elif blacklisted:
@@ -185,9 +186,9 @@ def installed_mods(
 
     def _iter():
         for file in files:
-            modpath = os.path.join(path, file)
+            modpath = fs.joinpath(path, file)
             if dirs is not None:
-                if dirs ^ bool(os.path.isdir(modpath)):
+                if dirs ^ bool(fs.isdir(modpath)):
                     continue
 
             mod = read_mod_info(modpath, with_size=with_size, with_hash=with_hash)

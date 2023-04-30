@@ -5,6 +5,7 @@ from dataclasses import field
 
 import typing_extensions as te
 
+from mons import fs
 from mons.utils import getMD5Hash
 from mons.utils import parseExeInfo
 from mons.utils import VANILLA_HASH
@@ -14,11 +15,11 @@ from mons.version import Version
 @dataclass
 class Install:
     name: str
-    path: str
+    path: fs.File
 
     @property
     def dir(self):
-        return os.path.dirname(self.path)
+        return fs.dirname(self.path)
 
     _cache: t.Dict[str, t.Any] = field(default_factory=dict, init=False)
 
@@ -109,7 +110,7 @@ class Install:
             self.everest_version = None
         else:
             orig_path = os.path.join(os.path.dirname(self.path), "orig", "Celeste.exe")
-            if os.path.isfile(orig_path):
+            if fs.isfile(orig_path):
                 orig_hash = getMD5Hash(orig_path)
                 self.celeste_version, self.framework = VANILLA_HASH.get(
                     orig_hash, (None, None)

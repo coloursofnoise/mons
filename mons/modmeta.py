@@ -7,7 +7,7 @@ import yaml
 from click import echo
 from yaml.scanner import ScannerError
 
-import mons.fs as fs
+from mons import fs
 from mons.baseUtils import find
 from mons.errors import EmptyFileError
 from mons.version import Version
@@ -84,10 +84,10 @@ class ModMeta(_ModMeta_Base, _ModMeta_Deps):
         self.Size = int(data["Size"]) if "Size" in data else 0
 
     @classmethod
-    def placeholder(cls, path: str):
+    def placeholder(cls, path: fs.Path):
         basename = os.path.basename(path)
         meta = None
-        if os.path.isdir(path):
+        if fs.isdir(path):
             meta = cls({"Name": "_dir_" + basename, "Version": Version(0, 0, 0)})
 
         elif zipfile.is_zipfile(path):
@@ -169,7 +169,7 @@ class UpdateInfo:
 def read_mod_info(mod: t.Union[str, t.IO[bytes]], with_size=False, with_hash=False):
     meta = None
     try:
-        if not isinstance(mod, str) or os.path.isfile(mod) and zipfile.is_zipfile(mod):
+        if not isinstance(mod, str) or fs.isfile(mod) and zipfile.is_zipfile(mod):
             with zipfile.ZipFile(mod) as zip:
                 everest_file = find(zip.namelist(), ("everest.yaml", "everest.yml"))
                 if everest_file:
@@ -184,7 +184,7 @@ def read_mod_info(mod: t.Union[str, t.IO[bytes]], with_size=False, with_hash=Fal
                         zip.fp.seek(0, os.SEEK_END)
                         meta.Size = zip.fp.tell() if with_size else 0
 
-        elif os.path.isdir(mod):
+        elif fs.isdir(mod):
             everest_file = fs.find_file(mod, ("everest.yaml", "everest.yml"))
             if everest_file:
                 with open(

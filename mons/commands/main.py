@@ -32,7 +32,7 @@ from mons.version import Version
 @click.argument("name", type=clickExt.Install(exist=False))
 @click.argument("path", type=click.Path(exists=True, resolve_path=True))
 @pass_userinfo
-def add(userInfo: UserInfo, name: str, path: str):
+def add(userInfo: UserInfo, name: str, path: fs.Path):
     """Add a Celeste install"""
     try:
         install_path = find_celeste_file(path, "Celeste.exe")
@@ -84,7 +84,7 @@ def rename(userInfo: UserInfo, old: str, new: str):
 @cli.command(no_args_is_help=True)
 @click.argument("name", type=clickExt.Install(check_path=False, resolve_install=True))
 @click.argument("path", type=click.Path(exists=True, resolve_path=True))
-def set_path(name: Install, path: str):
+def set_path(name: Install, path: fs.Path):
     """Change the path of an existing install"""
     try:
         install_path = find_celeste_file(path, "Celeste.exe")
@@ -142,7 +142,7 @@ def show(name: Install, verbose: bool):
         echo(install.name + ":")
         output = {**install.get_cache()}
         orig_exe = os.path.join(os.path.dirname(install.path), "orig", "Celeste.exe")
-        if os.path.isfile(orig_exe):
+        if fs.isfile(orig_exe):
             output["vanilla hash"] = getMD5Hash(orig_exe)
         output["path"] = install.path
         echo(format_columns(output, prefix="\t"))
@@ -180,24 +180,28 @@ def build_source(srcdir: str, verbose=False):
         )
 
 
-def copy_source_artifacts(srcdir: str, dest: str):
+def copy_source_artifacts(srcdir: fs.Directory, dest: str):
+    """Copy build artifacts from an Everest source repo.
+
+    :raises OSError: if artifact directories do not exist.
+    """
     echo("Copying files...")
     fs.copy_recursive_force(
-        os.path.join(srcdir, "Celeste.Mod.mm", "bin", "Debug", "net452"),
+        fs.joindir(srcdir, "Celeste.Mod.mm", "bin", "Debug", "net452"),
         dest,
         ignore=lambda path, names: [
             name
             for name in names
-            if fs.is_unchanged(os.path.join(path, name), os.path.join(dest, name))
+            if fs.is_unchanged(fs.joinfile(path, name), os.path.join(dest, name))
         ],
     )
     fs.copy_recursive_force(
-        os.path.join(srcdir, "MiniInstaller", "bin", "Debug", "net452"),
+        fs.joindir(srcdir, "MiniInstaller", "bin", "Debug", "net452"),
         dest,
         ignore=lambda path, names: [
             name
             for name in names
-            if fs.is_unchanged(os.path.join(path, name), os.path.join(dest, name))
+            if fs.is_unchanged(fs.joinfile(path, name), os.path.join(dest, name))
         ],
     )
     return True
@@ -300,9 +304,9 @@ def run_installer(install: Install, verbose: bool):
     else:
         uname = os.uname()
         if uname.sysname == "Darwin":
-            kickstart_dir = os.path.join(install_dir, "..", "MacOS")
+            kickstart_dir = fs.joindir(install_dir, "..", "MacOS")
             with fs.copied_file(
-                os.path.join(kickstart_dir, "Celeste"),
+                fs.joinfile(kickstart_dir, "Celeste"),
                 os.path.join(kickstart_dir, "MiniInstaller"),
             ) as miniinstaller:
                 return (
@@ -314,7 +318,7 @@ def run_installer(install: Install, verbose: bool):
         else:
             suffix = "x86_64" if uname.machine == "x86_64" else "x86"
             with fs.copied_file(
-                os.path.join(os.path.join(install_dir, f"Celeste.bin.{suffix}")),
+                fs.joinfile(install_dir, f"Celeste.bin.{suffix}"),
                 os.path.join(install_dir, f"MiniInstaller.bin.{suffix}"),
             ) as miniinstaller:
                 return (
@@ -385,10 +389,14 @@ def install(
             )
 
     if src:
-        source_dir = clickExt.type_cast_value(
-            ctx,
-            click.Path(exists=True, file_okay=False, readable=True, resolve_path=True),
-            source,
+        source_dir = fs.Directory(
+            clickExt.type_cast_value(
+                ctx,
+                click.Path(
+                    exists=True, file_okay=False, readable=True, resolve_path=True
+                ),
+                source,
+            )
         )
         if not no_build:
             build_source(source_dir, verbose)

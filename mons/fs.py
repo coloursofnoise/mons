@@ -5,42 +5,91 @@ import tempfile
 import typing as t
 from contextlib import contextmanager
 
+import typing_extensions as te
+
 from mons.baseUtils import tryExec
 
 
-def find_file(path: str, files: t.Iterable[str]):
+class Path(str):
+    def __new__(cls, *args, **kwargs):
+        self = super().__new__(cls, *args, *kwargs)
+        if not (os.path.isfile(self) or os.path.isdir(self)):
+            raise FileNotFoundError
+        return self
+
+
+class File(Path):
+    def __new__(cls, *args, **kwargs):
+        self = str.__new__(cls, *args, **kwargs)
+        if not os.path.isfile(self):
+            raise FileNotFoundError
+        return self
+
+
+class Directory(Path):
+    def __new__(cls, *args, **kwargs):
+        self = str.__new__(cls, *args, **kwargs)
+        if not os.path.isdir(self):
+            raise FileNotFoundError
+        return self
+
+
+def isdir(path: str) -> te.TypeGuard[Directory]:
+    return os.path.isdir(path)
+
+
+def isfile(path: str) -> te.TypeGuard[File]:
+    return os.path.isfile(path)
+
+
+def joinfile(path: Directory, *paths: str):
+    return File(os.path.join(path, *paths))
+
+
+def joindir(path: Directory, *paths: str):
+    return Directory(os.path.join(path, *paths))
+
+
+def joinpath(path: Directory, *paths: str):
+    return Path(os.path.join(path, *paths))
+
+
+def find_file(path: Directory, files: t.Iterable[str]):
     """Return the first file in :param:`files` found in :param:`path`, or :literal:`None`."""
     for file in files:
-        if os.path.isfile(os.path.join(path, file)):
+        if isfile(os.path.join(path, file)):
             return file
     return None
 
 
+def dirname(path: File):
+    return Directory(os.path.dirname(path))
+
+
 # shutils.copytree(dirs_exist_ok) replacement https://stackoverflow.com/a/15824216
-def copy_recursive_force(src: str, dest: str, ignore=None):
-    if os.path.isdir(src):
-        if not os.path.isdir(dest):
+def copy_recursive_force(
+    src: Path,
+    dest: str,
+    ignore: t.Optional[t.Callable[[Directory, t.List[str]], t.List[str]]] = None,
+):
+    if isdir(src):
+        if not isdir(dest):
             os.makedirs(dest)
         files = os.listdir(src)
-        if ignore is not None:
-            ignored = ignore(src, files)
-        else:
-            ignored: t.Collection[str] = set()
+        ignored = ignore(src, files) if ignore else []
         for f in files:
             if f not in ignored:
-                copy_recursive_force(
-                    os.path.join(src, f), os.path.join(dest, f), ignore
-                )
+                copy_recursive_force(joindir(src, f), os.path.join(dest, f), ignore)
     else:
         shutil.copyfile(src, dest)
 
 
-def folder_size(path):
+def folder_size(path: Directory):
     """Compute the size of a folder on disk as reported by :func:`os.stat`."""
     total_size = 0
     for dirpath, _, filenames in os.walk(path):
         for f in filenames:
-            fp = os.path.join(dirpath, f)
+            fp = joinfile(Directory(dirpath), f)
             # skip if it is symbolic link
             if not os.path.islink(fp):
                 total_size += os.path.getsize(fp)
@@ -48,7 +97,7 @@ def folder_size(path):
     return total_size
 
 
-def is_unchanged(src: str, dest: str):
+def is_unchanged(src: File, dest: str):
     """Returns :literal:`True` if :param:`src` has not been changed after :param:`dest` was."""
     if os.path.exists(dest):
         return os.stat(dest).st_mtime - os.stat(src).st_mtime >= 0
@@ -56,7 +105,7 @@ def is_unchanged(src: str, dest: str):
 
 
 @contextmanager
-def relocated_file(src: str, dest: str):
+def relocated_file(src: File, dest: str):
     """Temporarily moves :param:`src` to :param:`dest`."""
     file = shutil.move(src, dest)
     try:
@@ -66,7 +115,7 @@ def relocated_file(src: str, dest: str):
 
 
 @contextmanager
-def copied_file(src: str, dest: str):
+def copied_file(src: File, dest: str):
     """Temporarily copies :param:`src` to :param:`dest`."""
     file = shutil.copy(src, dest)
     try:
@@ -82,7 +131,7 @@ def temporary_file(persist=False):
         atexit.register(tryExec, os.remove, path)
     os.close(fd)
     try:
-        yield path
+        yield File(path)
     finally:
-        if not persist and os.path.isfile(path):
+        if not persist and isfile(path):
             os.remove(path)
