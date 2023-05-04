@@ -8,6 +8,7 @@ from zipfile import ZipFile
 
 import click
 from click import echo
+from urllib3 import HTTPResponse
 
 import mons.clickExt as clickExt
 import mons.fs as fs
@@ -185,26 +186,13 @@ def copy_source_artifacts(srcdir: fs.Directory, dest: str):
 
     :raises OSError: if artifact directories do not exist.
     """
-    echo("Copying files...")
-    fs.copy_recursive_force(
-        fs.joindir(srcdir, "Celeste.Mod.mm", "bin", "Debug", "net452"),
-        dest,
-        ignore=lambda path, names: [
-            name
-            for name in names
-            if fs.is_unchanged(fs.joinfile(path, name), os.path.join(dest, name))
-        ],
+    changed_files = fs.copy_changed_files(
+        fs.joindir(srcdir, "Celeste.Mod.mm", "bin", "Debug", "net452"), dest
     )
-    fs.copy_recursive_force(
-        fs.joindir(srcdir, "MiniInstaller", "bin", "Debug", "net452"),
-        dest,
-        ignore=lambda path, names: [
-            name
-            for name in names
-            if fs.is_unchanged(fs.joinfile(path, name), os.path.join(dest, name))
-        ],
+    changed_files += fs.copy_changed_files(
+        fs.joindir(srcdir, "MiniInstaller", "bin", "Debug", "net452"), dest
     )
-    return True
+    return changed_files
 
 
 def is_version(string: str):
@@ -215,57 +203,46 @@ def is_version(string: str):
         return False
 
 
-def download_artifact(ctx: click.Context, version: t.Optional[str]) -> t.IO[bytes]:
+def fetch_artifact_source(ctx: click.Context, source: t.Optional[str]):
     try:
-        file = clickExt.type_cast_value(ctx, click.File(mode="rb"), version)
-        if file:
-            return file
+        url = clickExt.type_cast_value(ctx, clickExt.URL(require_path=True), source)
+        if url:
+            return str(urllib.parse.urlunparse(url))
     except click.BadParameter:
         pass
 
-    def get_url():
-        try:
-            url = clickExt.type_cast_value(
-                ctx, clickExt.URL(require_path=True), version
-            )
-            if url:
-                return str(urllib.parse.urlunparse(url))
-        except click.BadParameter:
-            pass
-
-        if not version:
-            build_list = fetch_build_list(ctx)
-            return build_list[0]["mainDownload"]
-
-        if version.startswith("refs/"):
-            build = fetch_latest_build_azure(version)
-            if build:
-                return fetch_build_artifact_azure(build)
-
+    if not source:
         build_list = fetch_build_list(ctx)
-        branches = {build["branch"]: build for build in build_list}
-        if version in branches:
-            return branches[version]["mainDownload"]
+        return build_list[0]["mainDownload"]
 
-        if version.isdigit():
-            build_num = int(version)
-            for build in build_list:
-                if build["version"] == build_num:
-                    return build["mainDownload"]
+    if source.startswith("refs/"):
+        build = fetch_latest_build_azure(source)
+        if build:
+            return fetch_build_artifact_azure(build)
 
-        if is_version(version):
-            parsed_ver = Version.parse(version)
-            for build in build_list:
-                if build["version"] == parsed_ver.Minor:
-                    return build["mainDownload"]
+    build_list = fetch_build_list(ctx)
+    branches = {build["branch"]: build for build in build_list}
+    if source in branches:
+        return branches[source]["mainDownload"]
 
-        raise click.ClickException("")
+    if source.isdigit():
+        build_num = int(source)
+        for build in build_list:
+            if build["version"] == build_num:
+                return build["mainDownload"]
 
-    url = get_url()
-    if not url:
-        raise click.BadParameter("you failed!")
+    if is_version(source):
+        parsed_ver = Version.parse(source)
+        for build in build_list:
+            if build["version"] == parsed_ver.Minor:
+                return build["mainDownload"]
 
-    click.echo("Downloading artifact from " + str(url))
+    return None
+
+
+def download_artifact(url: t.Union[HTTPResponse, str]) -> t.IO[bytes]:
+    url_str = str(url.geturl() if isinstance(url, HTTPResponse) else url)
+    click.echo("Downloading artifact from " + url_str)
     with fs.temporary_file(persist=True) as file:
         download_with_progress(url, file, clear=True)
         return click.open_file(file, mode="rb")
@@ -372,6 +349,7 @@ def install(
     """Install Everest
 
     VERSIONSPEC can be a branch name, build number, or version number."""
+    # Additional option validation
     if no_build and not src:
         raise click.BadOptionUsage(
             "--no-build", "--no-build can only be used with the --src option.", ctx
@@ -386,6 +364,7 @@ def install(
                 ctx,
             )
 
+    # Install command start
     if src:
         source_dir = fs.Directory(
             clickExt.type_cast_value(
@@ -397,18 +376,40 @@ def install(
             )
         )
         if not no_build:
+            echo("Building Everest source...")
             build_source(source_dir, verbose)
-        copy_source_artifacts(source_dir, install.dir)
+        echo("Copying new and updated files...")
+        copied = copy_source_artifacts(source_dir, install.dir)
+        if copied == 0:
+            echo(f"No files were changed")
+        else:
+            echo(f"Copied {copied} files")
         artifact = None
+    elif source and fs.isdir(source):
+        artifact = clickExt.type_cast_value(ctx, click.File(mode="rb"), source)
+
     else:
-        artifact = download_artifact(ctx, source)
+        source_download = fetch_artifact_source(ctx, source)
+        if not source_download:
+            raise click.BadParameter(
+                f"Provided build or branch '{source}' does not exist.",
+                ctx,
+                param_hint="source",
+            )
+        artifact = download_artifact(source_download)
 
     if artifact:
         extract_artifact(install, artifact)
 
     click.echo("Running MiniInstaller...")
     if not run_installer(install, verbose):
-        ctx.exit(1)
+        raise click.ClickException(
+            "Installing Everest failed, consult the MiniInstaller log for details."
+        )
+
+    # install.update_cache(read_exe=True)
+    # if install.everest_version != version:
+    #    echo(f"Warning: Requested and installed versions do not match! ({install.everest_version} != {version})"
 
     if launch_game:
         echo("Launching Celeste...")

@@ -70,18 +70,52 @@ def dirname(path: File):
 def copy_recursive_force(
     src: Path,
     dest: str,
-    ignore: t.Optional[t.Callable[[Directory, t.List[str]], t.List[str]]] = None,
+    filter: t.Optional[t.Callable[[Directory, t.List[str]], t.List[str]]] = None,
 ):
-    if isdir(src):
-        if not isdir(dest):
-            os.makedirs(dest)
-        files = os.listdir(src)
-        ignored = ignore(src, files) if ignore else []
-        for f in files:
-            if f not in ignored:
-                copy_recursive_force(joindir(src, f), os.path.join(dest, f), ignore)
-    else:
+    """Recursively copies files from `src` to `dest`.
+
+    :param src: Source file/directory path.
+    :param dest: Destination path, will be created if it does not exist.
+    :param filter: Filter files for each level of recursion.
+    Takes the current directory and the list of children, and returns a filtered list of children.
+    :raises OSError: If `src` is not a file or directory.
+    :return: The number of files that were copied.
+    """
+
+    if isfile(src):
         shutil.copyfile(src, dest)
+        return 1
+
+    if not isdir(src):
+        raise OSError(src)
+
+    if not isdir(dest):
+        os.makedirs(dest)
+
+    files = os.listdir(src)
+    files = filter(src, files) if filter else files
+
+    return sum(
+        copy_recursive_force(joinpath(src, f), os.path.join(dest, f), filter)
+        for f in files
+    )
+
+
+def copy_changed_files(src: Path, dest: str):
+    """Copies any files in `src` that do not exist in `dest` or are newer/more recently changed than their equivalent.
+
+    :raises OSError: If `src` is not a file or directory.
+    :return: The number of files that were copied.
+    """
+    return copy_recursive_force(
+        src,
+        dest,
+        filter=lambda copy_source, filenames: [
+            file
+            for file in filenames
+            if not is_unchanged(joinpath(copy_source, file), os.path.join(dest, file))
+        ],
+    )
 
 
 def folder_size(path: Directory):
@@ -97,7 +131,7 @@ def folder_size(path: Directory):
     return total_size
 
 
-def is_unchanged(src: File, dest: str):
+def is_unchanged(src: Path, dest: str):
     """Returns :literal:`True` if :param:`src` has not been changed after :param:`dest` was."""
     if os.path.exists(dest):
         return os.stat(dest).st_mtime - os.stat(src).st_mtime >= 0
