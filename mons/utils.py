@@ -41,20 +41,29 @@ def timed_progress(msg: str):
     tqdm.write("\r" + msg.format(time=end - start))
 
 
-def find_celeste_file(path: fs.Path, file: str, force_name=True):
-    if fs.isdir(path) and os.path.basename(path) == "Celeste.app":
-        path = fs.joindir(path, "Resources")
+def find_celeste_asm(path: fs.Path):
+    if fs.isfile(path):
+        if os.path.basename(path) == "Celeste.exe":
+            return path
 
-    ret = path
-    if fs.isdir(path):
-        ret = os.path.join(path, file)
-        if not fs.isfile(ret):
-            raise FileNotFoundError(
-                errno.ENOENT, f"File `{file}` could not be found in `{path}`", ret
-            )
-    elif force_name and not os.path.basename(path) == file:
-        raise FileNotFoundError(errno.ENOENT, f"File `{file}` not found", path)
-    return fs.File(ret)
+        if os.uname().sysname != "nt" and os.path.basename(path) == "Celeste.dll":
+            return path
+
+    elif fs.isdir(path):
+        if os.path.basename(path) == "Celeste.app":
+            path = fs.joindir(path, "Resources")
+
+        if fs.isfile(os.path.join(path, "Celeste.exe")):
+            return fs.joinfile(path, "Celeste.exe")
+
+        if os.uname().sysname != "nt" and fs.isfile(os.path.join(path, "Celeste.dll")):
+            return fs.joinfile(path, "Celeste.dll")
+
+    raise FileNotFoundError(
+        errno.ENOENT,
+        f"'{'Celeste.exe' if os.uname().sysname == 'nt' else 'Celeste.exe or Celeste.dll'}' could not be found in '{path}'",
+        path,
+    )
 
 
 def getMD5Hash(path: fs.File):

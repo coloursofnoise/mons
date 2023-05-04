@@ -236,19 +236,15 @@ class Install(ParamTypeG[t.Union[str, T_Install]]):
         if install not in installs:
             raise ValueError(f"Install {install} does not exist")
 
-        path = installs[install].path
         if validate_path:
-            error = None
-            if not os.path.exists(path):
-                error = "does not exist."
-            elif not os.path.basename(path) == "Celeste.exe":
-                error = "does not point to Celeste.exe"
-
-            if error:
+            path = installs[install].path
+            try:
+                find_celeste_asm(path)
+            except FileNotFoundError as err:
                 raise FileNotFoundError(
                     f"""Install {install} does not have a valid path:
-{TERM_COLORS.ERROR}{path} {error}{TERM_COLORS.RESET}
-Use `set-path` to assign a new path."""
+                        {TERM_COLORS.ERROR}{path} {err}{TERM_COLORS.RESET}
+                        Use `set-path` to assign a new path."""
                 )
 
 

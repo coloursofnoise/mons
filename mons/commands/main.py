@@ -22,7 +22,7 @@ from mons.mons import cli
 from mons.sources import fetch_build_artifact_azure
 from mons.sources import fetch_build_list
 from mons.sources import fetch_latest_build_azure
-from mons.utils import find_celeste_file
+from mons.utils import find_celeste_asm
 from mons.utils import getMD5Hash
 from mons.utils import unpack
 from mons.version import NOVERSION
@@ -36,14 +36,14 @@ from mons.version import Version
 def add(userInfo: UserInfo, name: str, path: fs.Path):
     """Add a Celeste install"""
     try:
-        install_path = find_celeste_file(path, "Celeste.exe")
+        install_path = fs.dirname(find_celeste_asm(path))
     except FileNotFoundError as err:
         raise click.UsageError(str(err))
 
     new_install = Install(name, install_path)
     userInfo.installs[name] = new_install
 
-    echo(f"Found Celeste.exe: {install_path}")
+    echo(f"Found Celeste install: {install_path}")
     echo(new_install.version_string())
 
 
@@ -88,12 +88,12 @@ def rename(userInfo: UserInfo, old: str, new: str):
 def set_path(name: Install, path: fs.Path):
     """Change the path of an existing install"""
     try:
-        install_path = find_celeste_file(path, "Celeste.exe")
+        install_path = fs.dirname(find_celeste_asm(path))
     except FileNotFoundError as err:
         raise click.UsageError(str(err))
 
     name.path = install_path
-    echo(f"Found Celeste.exe: {install_path}")
+    echo(f"Found Celeste install: {install_path}")
     echo(name.version_string())
 
 
@@ -268,40 +268,50 @@ def extract_artifact(install: Install, artifact: t.IO[bytes]):
 
 def run_installer(install: Install, verbose: bool):
     stdout = None if verbose else subprocess.DEVNULL
-    install_dir = install.dir
+    install_dir = install.path
     if os.name == "nt":
-        installer_ret = subprocess.run(
+        return subprocess.run(
             os.path.join(install_dir, "MiniInstaller.exe"),
             stdout=stdout,
             stderr=None,
             cwd=install_dir,
         )
-    else:
-        uname = os.uname()
-        if uname.sysname == "Darwin":
-            kickstart_dir = fs.joindir(install_dir, "..", "MacOS")
-            with fs.copied_file(
-                fs.joinfile(kickstart_dir, "Celeste"),
-                os.path.join(kickstart_dir, "MiniInstaller"),
-            ) as miniinstaller:
-                return (
-                    subprocess.run(
-                        miniinstaller, stdout=stdout, stderr=None, cwd=install_dir
-                    ).returncode
-                    == 0
-                )
-        else:
-            suffix = "x86_64" if uname.machine == "x86_64" else "x86"
-            with fs.copied_file(
-                fs.joinfile(install_dir, f"Celeste.bin.{suffix}"),
-                os.path.join(install_dir, f"MiniInstaller.bin.{suffix}"),
-            ) as miniinstaller:
-                return (
-                    subprocess.run(
-                        miniinstaller, stdout=stdout, stderr=None, cwd=install_dir
-                    ).returncode
-                    == 0
-                )
+
+    uname = os.uname()
+    if uname.sysname == "Darwin":
+        kickstart_dir = fs.joindir(install_dir, "..", "MacOS")
+        with fs.copied_file(
+            fs.joinfile(kickstart_dir, "Celeste"),
+            os.path.join(kickstart_dir, "MiniInstaller"),
+        ) as miniinstaller:
+            return (
+                subprocess.run(
+                    miniinstaller, stdout=stdout, stderr=None, cwd=install_dir
+                ).returncode
+                == 0
+            )
+
+    # Linux
+    suffix = "x86_64" if uname.machine == "x86_64" else "x86"
+    core_miniinstaller = os.path.join(install_dir, "MiniInstaller-linux")
+    if fs.isfile(core_miniinstaller):
+        return (
+            subprocess.run(
+                core_miniinstaller, stdout=stdout, stderr=None, cwd=install_dir
+            ).returncode
+            == 0
+        )
+
+    with fs.copied_file(
+        fs.joinfile(install_dir, f"Celeste.bin.{suffix}"),
+        os.path.join(install_dir, f"MiniInstaller.bin.{suffix}"),
+    ) as miniinstaller:
+        return (
+            subprocess.run(
+                miniinstaller, stdout=stdout, stderr=None, cwd=install_dir
+            ).returncode
+            == 0
+        )
 
 
 @cli.command(
