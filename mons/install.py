@@ -9,6 +9,7 @@ from mons import fs
 from mons.utils import getMD5Hash
 from mons.utils import parseExeInfo
 from mons.utils import VANILLA_HASH
+from mons.version import NOVERSION
 from mons.version import Version
 
 
@@ -44,7 +45,8 @@ class Install:
 
     @property
     def everest_version(self):
-        return Version.parse(self._cache.get("everest_version", None))
+        version = self._cache.get("everest_version", None)
+        return Version.parse(version) if version else None
 
     @everest_version.setter
     def everest_version(self, value: t.Optional[Version]):
@@ -70,7 +72,7 @@ class Install:
         if self.framework:
             version_str += f"-{self.framework.upper()}"
 
-        if self.everest_version == Version(0, 0):
+        if isinstance(self.everest_version, NOVERSION):
             version_str += f" + Everest(unknown version)"
         elif self.everest_version:
             version_str += f" + {self.everest_version}"

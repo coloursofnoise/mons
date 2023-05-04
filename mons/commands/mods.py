@@ -613,7 +613,7 @@ def add(
         )
 
         current_everest = install.everest_version
-        if not current_everest.satisfies(everest_min):
+        if not (current_everest and current_everest.satisfies(everest_min)):
             echo(
                 f"Installed Everest ({current_everest}) does not satisfy minimum requirement ({everest_min})."
             )
@@ -910,7 +910,7 @@ def resolve(ctx, name: Install, all: bool, enabled: t.Optional[bool], no_update:
         (dep.Version for dep in special if dep.Name == "Everest"), Version(0, 0, 0)
     )
     current_everest = install.everest_version
-    if not current_everest.satisfies(everest_min):
+    if not (current_everest and current_everest.satisfies(everest_min)):
         echo(
             f"Installed Everest ({current_everest}) does not satisfy minimum requirement ({everest_min})."
         )
