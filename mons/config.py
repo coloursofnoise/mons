@@ -198,7 +198,7 @@ class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgu
             with open(INSTALLS_FILE, "w") as file:
                 yaml.safe_dump(
                     {
-                        install.name: {"path": install.path}
+                        install.name: {"path": str(install.path)}
                         for install in self._installs.values()
                     },
                     file,
