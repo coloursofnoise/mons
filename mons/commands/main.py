@@ -254,7 +254,7 @@ def extract_artifact(install: Install, artifact: t.IO[bytes]):
             raise TTYError("no input.")
         artifact = io.BytesIO(artifact.read())
 
-    dest = install.dir
+    dest = install.path
     with ZipFile(artifact) as wrapper:
         try:
             entry = wrapper.open(
@@ -389,7 +389,7 @@ def install(
             echo("Building Everest source...")
             build_source(source_dir, verbose)
         echo("Copying new and updated files...")
-        copied = copy_source_artifacts(source_dir, install.dir)
+        copied = copy_source_artifacts(source_dir, install.path)
         if copied == 0:
             echo(f"No files were changed")
         else:
@@ -447,14 +447,14 @@ def launch(ctx: click.Context, name: Install, wait: bool):
     """Launch the game associated with an install
 
     Any additional arguments are passed to the launched process."""
-    path = name.path
+    path = name.asm
     if os.name != "nt":
         if os.uname().sysname == "Darwin":
-            path = os.path.normpath(
-                os.path.join(os.path.dirname(path), "..", "MacOS", "Celeste")
+            path = fs.File(
+                os.path.normpath(os.path.join(name.path, "..", "MacOS", "Celeste"))
             )
         else:
-            path = os.path.splitext(path)[0]  # drop the .exe
+            path = fs.File(os.path.splitext(path)[0])  # drop the .exe
 
     launch_args = ctx.ensure_object(UserInfo).config.launch_args
     launch_args += ctx.args

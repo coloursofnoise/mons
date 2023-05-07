@@ -6,6 +6,7 @@ from dataclasses import field
 import typing_extensions as te
 
 from mons import fs
+from mons.utils import find_celeste_asm
 from mons.utils import getMD5Hash
 from mons.utils import parseExeInfo
 from mons.utils import VANILLA_HASH
@@ -16,11 +17,11 @@ from mons.version import Version
 @dataclass
 class Install:
     name: str
-    path: fs.File
+    path: fs.Directory
 
     @property
-    def dir(self):
-        return fs.dirname(self.path)
+    def asm(self):
+        return find_celeste_asm(self.path)
 
     _cache: t.Dict[str, t.Any] = field(default_factory=dict, init=False)
 
@@ -93,7 +94,7 @@ class Install:
         if data:
             self._cache.update(data)
 
-        hash = getMD5Hash(self.path)
+        hash = getMD5Hash(self.asm)
         if self.hash == hash:
             # Cache is up to date
             return
@@ -111,7 +112,7 @@ class Install:
             self.celeste_version, self.framework = version
             self.everest_version = None
         else:
-            orig_path = os.path.join(os.path.dirname(self.path), "orig", "Celeste.exe")
+            orig_path = os.path.join(self.path, "orig", "Celeste.exe")
             if fs.isfile(orig_path):
                 orig_hash = getMD5Hash(orig_path)
                 self.celeste_version, self.framework = VANILLA_HASH.get(
@@ -120,4 +121,4 @@ class Install:
                 has_everest = True
 
         if read_exe and has_everest:
-            self.everest_version, self.framework = parseExeInfo(self.path)
+            self.everest_version, self.framework = parseExeInfo(self.asm)
