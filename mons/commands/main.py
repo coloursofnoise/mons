@@ -722,8 +722,6 @@ def launch(ctx: click.Context, name: Install, wait: bool):
         redirect = None
         wait = True
 
-    proc = subprocess.Popen(
-        [path] + launch_args, stdout=redirect, stderr=redirect, shell=True
-    )
+    proc = subprocess.Popen([path] + launch_args, stdout=redirect, stderr=redirect)
     if wait:
         proc.wait()
