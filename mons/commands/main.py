@@ -602,6 +602,88 @@ def install(
         ctx.invoke(launch, name=install)
 
 
+# fmt: off
+everest_core_filenames = [
+    "apphosts", "everest-lib",
+    "lib64-win-x64", "lib64-win-x86", "lib64-linux", "lib64-osx",
+    "Celeste.dll", "Celeste.runtimeconfig.json",
+    "Celeste.deps.json", "Celeste.Mod.mm.deps.json", "NETCoreifier.deps.json",
+    "MiniInstaller-win.exe", "MiniInstaller-win64.exe", "MiniInstaller-linux", "MiniInstaller-osx", "MiniInstaller-win.exe.manifest",
+    "MiniInstaller.dll", "MiniInstaller.runtimeconfig.json", "MiniInstaller.deps.json",
+    "NETCoreifier.dll", "NETCoreifier.pdb", "NETCoreifier.deps.json",
+
+    "MonoMod.Backports.dll", "MonoMod.Backports.pdb", "MonoMod.Backports.xml",
+    "MonoMod.Core.dll", "MonoMod.Core.pdb", "MonoMod.Core.xml",
+    "MonoMod.Iced.dll", "MonoMod.Iced.pdb", "MonoMod.Iced.xml",
+    "MonoMod.ILHelpers.dll", "MonoMod.ILHelpers.pdb",
+    "MonoMod.RuntimeDetour.pdb", "MonoMod.RuntimeDetour.xml",
+    "MonoMod.Utils.pdb", "MonoMod.Utils.xml",
+    "MonoMod.Patcher", "MonoMod.Patcher.runtimeconfig.json",
+    "MonoMod.Patcher.dll", "MonoMod.Patcher.pdb", "MonoMod.Patcher.xml",
+    "MonoMod.RuntimeDetour.HookGen", "MonoMod.RuntimeDetour.HookGen.runtimeconfig.json",
+    "MonoMod.RuntimeDetour.HookGen.dll", "MonoMod.RuntimeDetour.HookGen.pdb", "MonoMod.RuntimeDetour.HookGen.xml",
+]
+
+everest_backup_exclude = [
+    "Content", "Saves",
+]
+# fmt: on
+
+
+@cli.command(hidden=True)
+@clickExt.install("name")
+@click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
+def downgrade_core(name: Install, verbose: bool):
+    """Use when downgrading from a .NET Core build.
+
+    Cleans up and restores some files that are added or changed in the .NET Core build.
+
+    WARNING: This command will leave the install in an unstable state.
+    Make sure to re-install Everest after running it.
+    """
+    echo("Removing residual .NET Core files...")
+    for filename in everest_core_filenames:
+        path = os.path.join(name.path, filename)
+        if fs.isfile(path):
+            os.remove(path)
+        elif fs.isdir(path):
+            shutil.rmtree(path)
+        else:
+            continue
+        if verbose:
+            echo(path)
+
+    echo("Restoring backup...")
+    restore_dest = name.path
+    for filename in os.listdir(os.path.join(restore_dest, "orig")):
+        if filename in everest_backup_exclude:
+            continue
+
+        orig_path = os.path.join(restore_dest, "orig", filename)
+        dest_path = os.path.join(restore_dest, filename)
+
+        # MacOS is special
+        if os.uname().sysname == "Darwin":
+            macos_path = os.path.join(os.path.dirname(name.path), "MacOS")
+            if filename.casefold() == "Celeste".casefold():
+                restore_dest = os.path.join(macos_path, "Celeste")
+            elif filename.casefold() == "osx".casefold():
+                restore_dest = os.path.join(macos_path, "osx")
+
+        if fs.isfile(orig_path):
+            if fs.isfile(dest_path):
+                os.remove(dest_path)
+            os.rename(orig_path, dest_path)
+        elif fs.isdir(orig_path):
+            if fs.isdir(dest_path):
+                shutil.rmtree(dest_path)
+            os.rename(orig_path, dest_path)
+        else:
+            continue
+        if verbose:
+            echo(orig_path + " -> " + dest_path)
+
+
 @cli.command(
     no_args_is_help=True,
     context_settings=dict(
