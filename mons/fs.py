@@ -96,25 +96,37 @@ def copy_recursive_force(
     files = filter(src, files) if filter else files
 
     return sum(
-        copy_recursive_force(joinpath(src, f), os.path.join(dest, f), filter)
+        copy_recursive_force(joinpath(src, f), os.path.join(dest, f), filter=filter)
         for f in files
     )
 
 
-def copy_changed_files(src: Path, dest: str):
+def copy_changed_files(
+    src: Path,
+    dest: str,
+    *,
+    filter: t.Optional[t.Callable[[Directory, t.List[str]], t.Iterable[str]]] = None,
+):
     """Copies any files in `src` that do not exist in `dest` or are newer/more recently changed than their equivalent.
 
     :raises OSError: If `src` is not a file or directory.
     :return: The number of files that were copied.
     """
+
+    def filter_changed(copy_source: Directory, filenames: t.List[str]):
+        copy_dest = os.path.join(dest, os.path.relpath(copy_source, src))
+        return [
+            file
+            for file in (filter(copy_source, filenames) if filter else filenames)
+            if not is_unchanged(
+                joinpath(copy_source, file), os.path.join(copy_dest, file)
+            )
+        ]
+
     return copy_recursive_force(
         src,
         dest,
-        filter=lambda copy_source, filenames: [
-            file
-            for file in filenames
-            if not is_unchanged(joinpath(copy_source, file), os.path.join(dest, file))
-        ],
+        filter=filter_changed,
     )
 
 

@@ -60,6 +60,7 @@ class Config:
         thread_count: int = 8
 
     source_directory: t.Optional[str] = None
+    build_args: t.List[str] = field(default_factory=list)
     default_install: t.Optional[str] = None
     launch_args: t.List[str] = field(default_factory=list)
 

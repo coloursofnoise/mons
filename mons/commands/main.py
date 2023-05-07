@@ -1,6 +1,7 @@
 import io
 import os
 import shutil
+import stat
 import subprocess
 import typing as t
 import urllib.parse
@@ -113,10 +114,10 @@ def remove(userInfo: UserInfo, name: str):
     echo(f"Removed install {name}.")
 
 
-@cli.command()
+@cli.command(name="list")
 # @click.option("--json", is_flag=True, hidden=True)
 @pass_userinfo
-def list(userInfo: UserInfo):
+def list_cmd(userInfo: UserInfo):
     """List existing installs"""
     output = {}
     if not userInfo.installs:
@@ -152,24 +153,57 @@ def show(name: Install, verbose: bool):
         echo(install.path)
 
 
-def build_source(srcdir: str, verbose=False):
+def build_source(
+    srcdir: str,
+    dest: str,
+    publish: bool,
+    verbose: bool,
+    configuration_target: t.Optional[str],
+    build_args: t.List[str],
+):
+    framework = configuration = None
+    if configuration_target:
+        configuration, framework = configuration_target.split("/")
+
     if shutil.which("dotnet"):
+        build_command = [
+            "dotnet",
+            "publish" if publish else "build",
+
+            "--verbosity",     "normal"  if verbose else "minimal",
+         *(("--configuration", configuration) if configuration else ()),
+         *(("--framework",     framework)     if framework     else ()),
+            "--output",        dest,
+            *build_args,
+        ]  # fmt: skip
+
+        if verbose:
+            echo(" ".join(build_command))
         return (
             subprocess.run(
-                [
-                    "dotnet",
-                    "build",
-                    "--verbosity",
-                    "normal" if verbose else "minimal",
-                ],
+                build_command,
                 cwd=srcdir,
             ).returncode
             == 0
         )
     elif shutil.which("msbuild"):
+        build_command = [
+            "msbuild",
+
+          *("-target:"    +  "Publish" if publish else ()),
+            "-verbosity:" + ("normal"  if verbose else "minimal"),
+
+          *("-property:"  +  "Configuration=" + configuration if configuration else ()),
+          *("-property:"  +  "Framework="     + framework if framework else ()),
+            "-property:"  +  "OutDir="        + dest,
+            *build_args,
+        ]  # fmt: skip
+
+        if verbose:
+            echo(" ".join(build_command))
         return (
             subprocess.run(
-                ["msbuild", "-verbosity:" + ("normal" if verbose else "minimal")],
+                build_command,
                 cwd=srcdir,
             ).returncode
             == 0
@@ -181,17 +215,117 @@ def build_source(srcdir: str, verbose=False):
         )
 
 
-def copy_source_artifacts(srcdir: fs.Directory, dest: str):
-    """Copy build artifacts from an Everest source repo.
+def determine_configuration(srcdir: fs.Directory):
+    """Use heuristics to determine which build output (Configuration/Target) to copy.
 
-    :raises OSError: if artifact directories do not exist.
+    :return: Returns the most recently modified output that is shared between all projects in `srcdir`.
     """
-    changed_files = fs.copy_changed_files(
-        fs.joindir(srcdir, "Celeste.Mod.mm", "bin", "Debug", "net452"), dest
-    )
-    changed_files += fs.copy_changed_files(
-        fs.joindir(srcdir, "MiniInstaller", "bin", "Debug", "net452"), dest
-    )
+    artifacts: t.Dict[str, t.Set[str]] = dict()
+
+    # Find project dirs
+    for proj in os.listdir(srcdir):
+        if not fs.isfile(os.path.join(srcdir, proj, proj + ".csproj")):
+            continue
+
+        bindir = os.path.join(srcdir, proj, "bin")
+        if not fs.isdir(bindir):
+            raise click.ClickException(
+                f"No build artifacts found for project '{proj}'. Make sure to build the project before installing."
+            )
+
+        outputs = set()
+
+        # Find all output directories (assuming 'bin/{Configuration}/{Target}') with files in them
+        for conf in os.listdir(bindir):
+            for target in os.listdir(fs.joindir(bindir, conf)):
+                if any(
+                    filenames
+                    for _, _, filenames in os.walk(fs.joindir(bindir, conf, target))
+                ):
+                    outputs.add(os.path.join(conf, target))
+        if len(outputs) < 1:
+            raise click.ClickException(
+                f"No build artifacts found for project '{proj}'."
+            )
+        artifacts[proj] = outputs
+
+    if len(artifacts) < 1:
+        raise click.ClickException(
+            f"No projects found. Are you sure '{srcdir}' is an Everest source repo?"
+        )
+
+    # Get outputs that are shared between all projects
+    common_outputs = set.intersection(*[outputs for outputs in artifacts.values()])
+
+    if len(common_outputs) < 1:
+        return None
+
+    if len(common_outputs) > 1:
+        # Get the artifact that was modified most recently (and presumeably built most recently)
+        newest_artifact, _ = max(
+            (
+                (output, os.stat(fs.joindir(srcdir, p, "bin", output)))
+                for (p, outputs) in artifacts.items()
+                for output in outputs
+            ),
+            key=lambda item: item[1],
+        )
+        return newest_artifact
+
+    # Only one output is shared
+    (only_common_output,) = common_outputs
+    return only_common_output
+
+
+def copy_source_artifacts(
+    srcdir: fs.Directory,
+    explicit_configuration: t.Optional[str],
+    dest: str,
+    publish=False,
+):
+    """Copy build artifacts from an Everest source repo."""
+
+    configuration = explicit_configuration or determine_configuration(srcdir)
+    if not configuration:
+        raise click.ClickException(
+            "Could not determine build artifact to copy. Use the '--configuration' option to specify."
+        )
+
+    echo(f"Copying files for configuration '{configuration}'.")
+    changed_files = 0
+    for proj in os.listdir(srcdir):
+        if not (
+            fs.isfile(os.path.join(srcdir, proj, proj + ".csproj"))
+            and fs.isdir(os.path.join(srcdir, proj, "bin"))
+        ):
+            continue
+
+        output_path = os.path.join(srcdir, proj, "bin", configuration)
+        if explicit_configuration and not fs.isdir(output_path):
+            echo(
+                f"Build artifacts for configuration '{explicit_configuration}' do not exist for project '{proj}'. Skipping project..."
+            )
+            continue
+
+        artifact_dir = fs.joindir(srcdir, proj, "bin", configuration)
+        if publish and fs.isdir(os.path.join(artifact_dir, "publish")):
+            artifact_dir = fs.joindir(artifact_dir, "publish")
+
+        # Publish artifacts are added to a 'publish' subfolder, which we want to skip for regular builds.
+        def skip_published(dir, filenames: t.List[str]):
+            if not publish:
+                if os.path.basename(dir) == "publish":
+                    return []
+                # Let's skip the 'publish' folder too
+                return (file for file in filenames if not file == "publish")
+            return filenames
+
+        changed_files += fs.copy_changed_files(
+            artifact_dir,
+            dest,
+            filter=skip_published,
+        )
+
     return changed_files
 
 
@@ -295,6 +429,8 @@ def run_installer(install: Install, verbose: bool):
     suffix = "x86_64" if uname.machine == "x86_64" else "x86"
     core_miniinstaller = os.path.join(install_dir, "MiniInstaller-linux")
     if fs.isfile(core_miniinstaller):
+        # This file may not be marked as executable, especially when building from a zip artifact
+        os.chmod(core_miniinstaller, os.stat(core_miniinstaller).st_mode | stat.S_IEXEC)
         return (
             subprocess.run(
                 core_miniinstaller, stdout=stdout, stderr=None, cwd=install_dir
@@ -314,8 +450,18 @@ def run_installer(install: Install, verbose: bool):
         )
 
 
+def validate_configuration(ctx, param, value: t.Optional[str]):
+    if isinstance(value, str) and not len(value.split("/")) == 2:
+        raise click.BadParameter("Must be supplied as '[CONFIGURATION]/[TARGET]'")
+    return value
+
+
 @cli.command(
     no_args_is_help=True,
+    context_settings=dict(
+        ignore_unknown_options=True,
+        allow_extra_args=True,
+    ),
     cls=clickExt.CommandExt,
     usages=[
         ["NAME", "[VERSIONSPEC | PATH | URL]"],
@@ -337,6 +483,16 @@ def run_installer(install: Install, verbose: bool):
     "--no-build", is_flag=True, help="Use with --src to install without building."
 )
 @click.option(
+    "--configuration",
+    help="Configuration/Framework to build for.",
+    callback=validate_configuration,
+)
+@click.option(
+    "--publish/--no-publish",
+    default=False,
+    help="Invoke the 'Publish' target when building.",
+)
+@click.option(
     "--launch",
     name="launch_game",
     is_flag=True,
@@ -354,16 +510,24 @@ def install(
     latest: bool,
     src: bool,
     no_build: bool,
+    configuration: t.Optional[str],
+    publish: bool,
     launch_game: bool,
 ):
     """Install Everest
 
     VERSIONSPEC can be a branch name, build number, or version number."""
     # Additional option validation
-    if no_build and not src:
-        raise click.BadOptionUsage(
-            "--no-build", "--no-build can only be used with the --src option.", ctx
-        )
+    if not src:
+        for opt, val in [
+            ("no-build", no_build),
+            ("configuration", configuration),
+            ("publish", publish),
+        ]:
+            if val:
+                raise click.BadOptionUsage(
+                    f"--{opt}", "--{opt} can only be used with the --src option.", ctx
+                )
 
     if src and not source:
         source = userinfo.config.source_directory
@@ -387,13 +551,24 @@ def install(
         )
         if not no_build:
             echo("Building Everest source...")
-            build_source(source_dir, verbose)
-        echo("Copying new and updated files...")
-        copied = copy_source_artifacts(source_dir, install.path)
-        if copied == 0:
-            echo(f"No files were changed")
+            # Build source straight to install path
+            build_source(
+                source_dir,
+                install.path,
+                publish,
+                verbose,
+                configuration,
+                build_args=userinfo.config.build_args + ctx.args,
+            )
         else:
-            echo(f"Copied {copied} files")
+            echo("Copying new and updated files...")
+            copied = copy_source_artifacts(
+                source_dir, configuration, install.path, publish
+            )
+            if copied == 0:
+                echo(f"No files were changed.")
+            else:
+                echo(f"Copied {copied} files.")
         artifact = None
     elif source and fs.isdir(source):
         artifact = clickExt.type_cast_value(ctx, click.File(mode="rb"), source)
@@ -411,11 +586,12 @@ def install(
     if artifact:
         extract_artifact(install, artifact)
 
-    click.echo("Running MiniInstaller...")
+    echo("Running MiniInstaller...")
     if not run_installer(install, verbose):
         raise click.ClickException(
             "Installing Everest failed, consult the MiniInstaller log for details."
         )
+    echo("Everest was installed.")
 
     # install.update_cache(read_exe=True)
     # if install.everest_version != version:
