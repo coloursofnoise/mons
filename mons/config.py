@@ -1,4 +1,5 @@
 import os
+import shutil
 import typing as t
 from contextlib import AbstractContextManager
 from dataclasses import asdict
@@ -215,23 +216,26 @@ class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgu
 
     def __exit__(self, *exec_details):
         if self._installs:
-            with open(INSTALLS_FILE, "w") as file:
-                yaml.safe_dump(
-                    {
-                        install.name: {"path": str(install.path)}
-                        for install in self._installs.values()
-                    },
-                    file,
-                )
-            with open(CACHE_FILE, "w") as file:
-                _cache.update(
-                    {
-                        install.name: install.get_cache()
-                        for install in self._installs.values()
-                        if install.hash
-                    }
-                )
-                yaml.safe_dump(_cache, file)
+            # Use a temp file to avoid losing data if serialization fails
+            with fs.temporary_file() as temp:
+                with open(temp, "w") as file:
+                    yaml.safe_dump(
+                        {install.name: install for install in self._installs.values()},
+                        file,
+                    )
+                # /tmp is very likely to be a tmpfs, os.rename/replace cannot handle cross-fs move
+                shutil.move(temp, INSTALLS_FILE)
+            with fs.temporary_file() as temp:
+                with open(temp, "w") as file:
+                    _cache.update(
+                        {
+                            install.name: install.get_cache()
+                            for install in self._installs.values()
+                            if install.hash
+                        }
+                    )
+                    yaml.safe_dump(_cache, file)
+                shutil.move(temp, CACHE_FILE)
 
 
 pass_userinfo = make_pass_decorator(UserInfo)
