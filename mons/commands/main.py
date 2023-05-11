@@ -700,8 +700,9 @@ def downgrade_core(name: Install, verbose: bool):
 )
 @clickExt.install("name", metavar="NAME [ARGS]...")
 @click.option("--wait", is_flag=True, help="Wait for game process to exit.")
+@click.option("--dry-run", is_flag=True, hidden=True)
 @click.pass_context
-def launch(ctx: click.Context, name: Install, wait: bool):
+def launch(ctx: click.Context, name: Install, wait: bool, dry_run: bool):
     """Launch the game associated with an install
 
     Any additional arguments are passed to the launched process."""
@@ -721,6 +722,10 @@ def launch(ctx: click.Context, name: Install, wait: bool):
     if "--console" in launch_args:
         redirect = None
         wait = True
+
+    if dry_run:
+        echo(" ".join([path] + launch_args))
+        exit(0)
 
     proc = subprocess.Popen([path] + launch_args, stdout=redirect, stderr=redirect)
     if wait:
