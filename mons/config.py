@@ -50,9 +50,9 @@ MOD_SEARCH = f"{EXTRA_URL}/gamebanana-search"
 RANDOM_MAP = f"{EXTRA_URL}/random-map"
 
 
-@dataclass
+@dataclass(frozen=True)
 class Config:
-    @dataclass
+    @dataclass(frozen=True)
     class Downloading:
         # Marked optional because the default URL is just a text file with the actual URL in it.
         # Default: https://everestapi.github.io/everestupdater.txt
