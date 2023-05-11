@@ -3,6 +3,7 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 import typing as t
 import urllib.parse
 from zipfile import ZipFile
@@ -10,6 +11,9 @@ from zipfile import ZipFile
 import click
 from click import echo
 from urllib3 import HTTPResponse
+
+if sys.platform == "linux":
+    from mons import overlayfs
 
 import mons.clickExt as clickExt
 import mons.fs as fs
@@ -32,20 +36,68 @@ from mons.version import Version
 
 @cli.command(no_args_is_help=True)
 @click.argument("name", type=clickExt.Install(exist=False))
-@click.argument("path", type=click.Path(exists=True, resolve_path=True))
+@click.argument("path", type=click.Path())
+@click.option(
+    "--overlay",
+    type=click.Path(exists=True, resolve_path=True),
+    metavar="BASEINSTALL",
+    help="Overlay this install on top of BASEINSTALL.",
+    hidden=sys.platform != "linux",
+)
 @pass_userinfo
-def add(userInfo: UserInfo, name: str, path: fs.Path):
+@click.pass_context
+def add(
+    ctx: click.Context,
+    user_info: UserInfo,
+    name: str,
+    path: str,
+    overlay: t.Optional[fs.Path] = None,
+):
     """Add a Celeste install"""
+    if overlay and sys.platform == "linux":
+        return add_overlay(user_info, name, path, overlay)
+
+    # This can't be done as during argument parsing because when `--overlay` is used the path doesn't have to exist yet.
+    path = clickExt.type_cast_value(
+        ctx, click.Path(exists=True, resolve_path=True), path
+    )
+    assert fs.isdir(path) or fs.isfile(path)
+
     try:
         install_path = fs.dirname(find_celeste_asm(path))
     except FileNotFoundError as err:
         raise click.UsageError(str(err))
 
     new_install = Install(name, install_path)
-    userInfo.installs[name] = new_install
+    user_info.installs[name] = new_install
 
     echo(f"Found Celeste install: {install_path}")
     echo(new_install.version_string())
+
+
+if sys.platform == "linux":
+
+    def add_overlay(
+        user_info: UserInfo, name: str, install_path: str, overlay: fs.Path
+    ):
+        try:
+            overlay_path = fs.dirname(find_celeste_asm(overlay))
+        except FileNotFoundError as err:
+            raise click.UsageError(str(err))
+
+        os.makedirs(install_path, exist_ok=True)
+        assert fs.isdir(install_path)
+        new_install = Install(name, install_path, overlay_base=overlay_path)
+        overlayfs.setup(new_install)
+
+        user_info.installs[name] = new_install
+        echo(f"Found Celeste install: {install_path}")
+        # The overlay won't be mounted yet, and we don't want to try to activate it
+        # right now. Luckily since it's brand-new there will be no changes from the
+        # overlay base.
+        new_install.path = overlay_path
+        echo(new_install.version_string())
+        new_install.path = install_path
 
 
 @cli.command(no_args_is_help=True)
@@ -600,6 +652,18 @@ def install(
     if launch_game:
         echo("Launching Celeste...")
         ctx.invoke(launch, name=install)
+
+
+if sys.platform == "linux":
+
+    @cli.command
+    @clickExt.install("name")
+    def uninstall(name: Install):
+        if not name.overlay_base:
+            raise click.UsageError(
+                "Uninstalling is currently only supported for overlay installs."
+            )
+        overlayfs.reset(name)
 
 
 # fmt: off

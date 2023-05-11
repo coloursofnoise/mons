@@ -8,6 +8,7 @@ from urllib import parse
 
 import click
 
+from mons import overlayfs
 from mons.baseUtils import *
 from mons.config import Env
 from mons.config import get_default_install
@@ -16,6 +17,7 @@ from mons.errors import TTYError
 from mons.formatting import colorize
 from mons.formatting import TERM_COLORS
 from mons.install import Install as T_Install
+from mons.utils import find_celeste_asm
 
 
 def confirm_ext(*params, default, dangerous: bool = False, **attrs):
@@ -238,6 +240,8 @@ class Install(ParamTypeG[t.Union[str, T_Install]]):
 
         if validate_path:
             path = installs[install].path
+            if installs[install].overlay_base:
+                overlayfs.activate(installs[install])
             try:
                 find_celeste_asm(path)
             except FileNotFoundError as err:

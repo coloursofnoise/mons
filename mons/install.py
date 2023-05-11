@@ -18,6 +18,7 @@ from mons.version import Version
 class Install:
     name: str
     path: fs.Directory
+    overlay_base: t.Optional[fs.Directory] = None
 
     @property
     def asm(self):

@@ -1,6 +1,7 @@
 import os
 import typing as t
 from contextlib import AbstractContextManager
+from dataclasses import asdict
 from dataclasses import dataclass
 from dataclasses import field
 from dataclasses import fields
@@ -11,6 +12,7 @@ from click import ClickException
 from click import make_pass_decorator
 from platformdirs import PlatformDirs
 
+from mons import fs
 from mons.baseUtils import T
 from mons.errors import EmptyFileError
 from mons.errors import MultiException
@@ -19,6 +21,7 @@ from mons.install import Install
 dirs = PlatformDirs("mons", False, ensure_exists=True)
 CONFIG_DIR = dirs.user_config_dir
 CACHE_DIR = dirs.user_cache_dir
+DATA_DIR = dirs.user_data_dir
 
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.yaml")
 INSTALLS_FILE = os.path.join(CONFIG_DIR, "installs.yaml")
@@ -150,6 +153,21 @@ def populate_cache(install: Install, data: t.Dict[str, t.Any]):
         return False
 
 
+def install_repr(dumper: yaml.SafeDumper, o: Install):
+    return dumper.represent_dict(
+        {
+            k: v
+            for k, v in asdict(o).items()
+            if not k.startswith("_") and not k == "name" and v
+        }
+    )
+
+
+yaml.SafeDumper.add_representer(Install, install_repr)
+
+yaml.SafeDumper.add_multi_representer(fs.Path, yaml.SafeDumper.represent_str)
+
+
 class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgument]
     _config: t.Optional[Config] = None
     _installs: t.Optional[t.Dict[str, Install]] = None
@@ -179,7 +197,8 @@ class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgu
                     raise EmptyFileError(INSTALLS_FILE)
 
                 self._installs = {
-                    k: Install(k, v["path"], load_cache) for (k, v) in data.items()
+                    k: Install(k, **v, _cache_loader=load_cache)
+                    for (k, v) in data.items()
                 }
             except (FileNotFoundError, EmptyFileError):
                 self._installs = dict()
