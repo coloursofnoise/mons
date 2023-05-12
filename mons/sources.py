@@ -41,7 +41,7 @@ def read_cache(filename: str, reader: t.Callable[[t.IO[t.Any]], t.Any]):
     try:
         with open(os.path.join(CACHE_DIR, filename)) as file:
             return reader(file)
-    except:
+    except Exception:
         return None
 
 
@@ -50,7 +50,7 @@ def write_cache(filename: str, data: t.Any, writer):
     try:
         with open(filepath, "w") as file:
             writer(data, file)
-    except:
+    except Exception:
         # Don't leave partial caches
         os.remove(filepath)
         return
@@ -61,7 +61,7 @@ def cache_is_valid(filename, lifespan) -> bool:
         return time.time() - os.stat(os.path.join(CACHE_DIR, filename)).st_mtime < (
             lifespan * 60
         )
-    except:
+    except Exception:
         return False
 
 
@@ -148,7 +148,7 @@ def fetch_latest_build_azure(branch: str):
     id = build["id"]
     try:
         return int(id) + 700
-    except:
+    except Exception:
         pass
     return None
 

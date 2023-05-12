@@ -9,7 +9,7 @@ from urllib import parse
 import click
 
 from mons import overlayfs
-from mons.baseUtils import *
+from mons.baseUtils import T
 from mons.config import Env
 from mons.config import get_default_install
 from mons.config import UserInfo
@@ -160,7 +160,7 @@ class CatchErrorsGroup(click.Group):
             else:
                 click.echo(colorize(repr(e), TERM_COLORS.ERROR))
                 click.echo(
-                    f"""An unhandled exception has occurred.
+                    """An unhandled exception has occurred.
 Use the --debug flag to disable clean exception handling."""
                 )
 
@@ -197,6 +197,13 @@ def color_option(*param_decls: str, **kwargs: t.Any):
 
 
 class Install(ParamTypeG[t.Union[str, T_Install]]):
+    """Represents a Celeste install. Returns a path, or an `Install` object with `resolve_install`.
+
+    :param exist: Install must already exist in the Installs config file.
+    :param resolve_install: Return an `Install` object instead of a path.
+    :param check_path: Ensures the path exists and is a valid Celeste install (includes a Celeste asm).
+    """
+
     name = "Install"
 
     def __init__(self, exist=True, resolve_install=False, check_path=True) -> None:
@@ -220,7 +227,7 @@ class Install(ParamTypeG[t.Union[str, T_Install]]):
                 except ValueError as err:
                     self.fail(str(err), param, ctx)
                 except FileNotFoundError as err:
-                    raise click.UsageError(str(err), ctx)
+                    raise click.ClickException(str(err))
 
                 if self.resolve_install:
                     value = installs[value]
@@ -389,7 +396,7 @@ class CommandExt(click.Command):
     warnings: t.List[str] = list()
 
     def __init__(self, *args, **kwargs) -> None:
-        self.usages: t.List[t.Dict[str, t.List[str]]] = kwargs.pop("usages", [])
+        self.usages: t.List[t.List[str]] = kwargs.pop("usages", [])
         self.meta_options: t.OrderedDict[str, t.List[t.Tuple[str, str]]] = kwargs.pop(
             "meta_options", None
         )

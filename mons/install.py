@@ -75,7 +75,7 @@ class Install:
             version_str += f"-{self.framework.upper()}"
 
         if isinstance(self.everest_version, NOVERSION):
-            version_str += f" + Everest(unknown version)"
+            version_str += " + Everest(unknown version)"
         elif self.everest_version:
             version_str += f" + {self.everest_version}"
 

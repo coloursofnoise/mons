@@ -10,10 +10,14 @@ from gettext import ngettext
 
 import click
 from click import echo
+from tqdm import tqdm
 
 import mons.clickExt as clickExt
 import mons.fs as fs
-from mons.baseUtils import *
+from mons.baseUtils import invert
+from mons.baseUtils import multi_partition
+from mons.baseUtils import partition
+from mons.baseUtils import read_with_progress
 from mons.downloading import download_threaded
 from mons.downloading import download_with_progress
 from mons.downloading import get_download_size
@@ -43,7 +47,7 @@ from mons.version import Version
 @click.group(name="mods")
 @click.pass_context
 def cli(ctx: click.Context):
-    """Manage Everest Mods
+    """Manage Everest mods
     \f
 
     |full_reference-mods|"""
@@ -111,8 +115,8 @@ def list_mods(
     color: t.Optional[bool],
 ):
     """List installed mods."""
-    if valid == False:
-        if dll == True:
+    if valid is False:
+        if dll is True:
             raise click.BadOptionUsage(
                 "--dll", "--dll cannot be used with the --invalid flag."
             )
@@ -664,7 +668,7 @@ def remove(name: Install, mods: t.List[str], recurse: bool):
     removable = []
     if recurse:
         all_dependencies = resolve_dependencies(
-            [meta for meta in installed_list.values() if not meta.Name in mods],
+            [meta for meta in installed_list.values() if meta.Name not in mods],
             installed_list,
         )
 

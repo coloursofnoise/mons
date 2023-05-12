@@ -1,5 +1,6 @@
-import click
 import typing as t
+
+import click
 
 
 class EmptyFileError(Exception):

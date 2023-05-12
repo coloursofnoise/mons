@@ -386,7 +386,7 @@ def is_version(string: str):
     try:
         ver = Version.parse(string)
         return not isinstance(ver, NOVERSION)
-    except:
+    except ValueError:
         return False
 
 
@@ -518,7 +518,7 @@ def validate_configuration(ctx, param, value: t.Optional[str]):
     cls=clickExt.CommandExt,
     usages=[
         ["NAME", "[VERSIONSPEC | PATH | URL]"],
-        ["NAME", "--src", "[--no-build]", "[PATH]"],
+        ["NAME", "--src", "[--no-build]", "[PATH] [BUILD ARGS...]"],
     ],
 )
 @clickExt.install("install", metavar="NAME")
@@ -619,7 +619,7 @@ def install(
                 source_dir, configuration, install.path, publish
             )
             if copied == 0:
-                echo(f"No files were changed.")
+                echo("No files were changed.")
             else:
                 echo(f"Copied {copied} files.")
         artifact = None
@@ -729,7 +729,7 @@ def downgrade_core(name: Install, verbose: bool):
         dest_path = os.path.join(restore_dest, filename)
 
         # MacOS is special
-        if os.uname().sysname == "Darwin":
+        if sys.platform == "darwin":
             macos_path = os.path.join(os.path.dirname(name.path), "MacOS")
             if filename.casefold() == "Celeste".casefold():
                 restore_dest = os.path.join(macos_path, "Celeste")

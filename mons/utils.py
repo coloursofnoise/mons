@@ -20,6 +20,7 @@ from mons import fs
 from mons.baseUtils import GeneratorWithLen
 from mons.modmeta import ModMeta
 from mons.modmeta import read_mod_info
+from mons.version import NOVERSION
 from mons.version import Version
 
 
@@ -154,7 +155,7 @@ def parseExeInfo(path: fs.File):
     if everestBuild:
         return Version(1, int(everestBuild), 0), framework
     if hasEverest:
-        return Version(0, 0), framework
+        return NOVERSION(), framework
 
     return None, framework
 

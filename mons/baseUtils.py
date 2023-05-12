@@ -76,7 +76,7 @@ def multi_partition(*predicates: t.Callable[[T], bool], iterable: t.Iterable[T])
 def tryExec(func: t.Callable[..., t.Any], *params: t.Any):
     try:
         func(*params)
-    except:
+    except Exception:
         pass
 
 
