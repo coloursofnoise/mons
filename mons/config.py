@@ -117,22 +117,28 @@ def dataclass_fromdict(data: t.Dict[str, t.Any], type: t.Type[T]) -> T:
 
 
 _cache: t.Dict[str, t.Any] = dict()
+_cache_loaded = False
 
 
-def load_cache(install: Install):
+def load_cache():
+    global _cache_loaded
+    _cache_loaded = True
+
+    with open(CACHE_FILE) as file:
+        data: t.Dict[str, t.Any] = yaml.safe_load(file)
+    if not data:
+        raise EmptyFileError
+    _cache.update(data)
+
+
+def load_install_cache(install: Install):
     if install.name in _cache:
         return populate_cache(install, _cache[install.name])
 
     try:
-        with open(CACHE_FILE) as file:
-            data: t.Dict[str, t.Any] = yaml.safe_load(file)
-        if not data:
-            raise EmptyFileError
-
-        if install.name in data:
-            return populate_cache(install, data[install.name])
-
-        _cache.update(data)
+        load_cache()
+        if install.name in _cache:
+            return populate_cache(install, _cache[install.name])
     except (FileNotFoundError, EmptyFileError):
         pass
     return False
@@ -140,7 +146,7 @@ def load_cache(install: Install):
 
 def populate_cache(install: Install, data: t.Dict[str, t.Any]):
     try:
-        install.update_cache(
+        install.get_cache().update(
             {
                 "hash": data["hash"],
                 "framework": data["framework"],
@@ -198,7 +204,7 @@ class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgu
                     raise EmptyFileError(INSTALLS_FILE)
 
                 self._installs = {
-                    k: Install(k, **v, _cache_loader=load_cache)
+                    k: Install(k, **v, _cache_loader=load_install_cache)
                     for (k, v) in data.items()
                 }
             except (FileNotFoundError, EmptyFileError):
@@ -225,15 +231,20 @@ class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgu
                     )
                 # /tmp is very likely to be a tmpfs, os.rename/replace cannot handle cross-fs move
                 shutil.move(temp, INSTALLS_FILE)
+
+            cache_updates = {
+                install.name: install.get_cache()
+                for install in self._installs.values()
+                if install.hash
+            }
+            if not _cache_loaded and cache_updates:
+                load_cache()
+            _cache.update(cache_updates)
+            if not _cache:
+                return
+
             with fs.temporary_file() as temp:
                 with open(temp, "w") as file:
-                    _cache.update(
-                        {
-                            install.name: install.get_cache()
-                            for install in self._installs.values()
-                            if install.hash
-                        }
-                    )
                     yaml.safe_dump(_cache, file)
                 shutil.move(temp, CACHE_FILE)
 

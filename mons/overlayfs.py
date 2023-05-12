@@ -243,6 +243,13 @@ def activate(ctx, install: Install):
                     "Unprivileged user namespaces available, running program in new namespace.."
                 )
 
+                # Make sure any files opened within a ctx (such as UserInfo.cache) are saved
+                # *before* running the nested process. Otherwise any changes made by the
+                # nested process are lost.
+                while ctx:
+                    ctx.close()
+                    ctx = ctx.parent
+
                 # Run the current command again within a new namespace
                 ret = subprocess.run(
                     ["unshare", "--mount", "--user", "--map-root-user", *sys.argv]
