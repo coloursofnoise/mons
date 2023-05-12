@@ -194,7 +194,7 @@ read-only when using an overlay install.
             )
 
 
-def activate(install: Install):
+def activate(ctx, install: Install):
     assert install.overlay_base
 
     lowerdir = install.overlay_base
@@ -208,7 +208,9 @@ def activate(install: Install):
     os.makedirs(upperdir, exist_ok=True)
     os.makedirs(workdir, exist_ok=True)
 
-    if not in_namespace():
+    if in_namespace():
+        echo("Overlay successfully mounted using unprivileged user namespace.")
+    else:
         echo(f"Overlay for {install.name} not mounted.")
 
     mount_cmd = [
@@ -228,12 +230,24 @@ def activate(install: Install):
 
         if not in_namespace():
             echo("Attempting to mount using unprivileged user namespace...")
-            # Run the current command again within the new namespace
-            if subprocess.run(
-                ["unshare", "--mount", "--user", "--map-root-user", *sys.argv]
+            # First check that creating the ns works, we don't have a way to
+            # know if a faliure is from 'unshare' or the command it ran
+            if (
+                subprocess.run(
+                    ["unshare", "--mount", "--user", "--map-root-user", "echo"],
+                    capture_output=True,
+                ).returncode
+                == 0
             ):
-                # echo("Overlay successfully mounted using unprivileged user namespace.")
-                exit(0)
+                echo(
+                    "Unprivileged user namespaces available, running program in new namespace.."
+                )
+
+                # Run the current command again within a new namespace
+                ret = subprocess.run(
+                    ["unshare", "--mount", "--user", "--map-root-user", *sys.argv]
+                ).returncode
+                exit(ret)
 
         if not shutil.which("sudo"):
             raise click.ClickException(
@@ -261,9 +275,9 @@ def activate(install: Install):
     echo("Overlay successfully mounted as superuser.")
 
 
-def reset(install: Install):
+def reset(ctx, install: Install):
     data_dir = os.path.join(DATA_DIR, "overlayfs", install.name)
     subprocess.run(["umount", install.path])
     shutil.rmtree(data_dir)
     os.mkdir(data_dir)
-    activate(install)
+    activate(ctx, install)

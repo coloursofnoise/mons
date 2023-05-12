@@ -207,7 +207,7 @@ class Install(ParamTypeG[t.Union[str, T_Install]]):
 
     def convert(self, value: t.Union[str, T_Install], param, ctx):
         userinfo = ctx and ctx.find_object(UserInfo)
-        if not userinfo:
+        if not (ctx and userinfo):
             return value
         installs = userinfo.installs
 
@@ -215,7 +215,7 @@ class Install(ParamTypeG[t.Union[str, T_Install]]):
             if not isinstance(value, T_Install):
                 try:
                     Install.validate_install(
-                        value, validate_path=self.validate_path, ctx=ctx
+                        ctx, value, validate_path=self.validate_path
                     )
                 except ValueError as err:
                     self.fail(str(err), param, ctx)
@@ -231,17 +231,17 @@ class Install(ParamTypeG[t.Union[str, T_Install]]):
         return value
 
     @classmethod
-    def validate_install(cls, install: str, validate_path=True, ctx=None):
-        userinfo: UserInfo = (ctx or click.get_current_context()).obj
+    def validate_install(cls, ctx: click.Context, install: str, validate_path=True):
+        userinfo = (ctx or click.get_current_context()).ensure_object(UserInfo)
         installs = userinfo.installs
 
         if install not in installs:
-            raise ValueError(f"Install {install} does not exist")
+            raise ValueError(f"Install {install} does not exist.")
 
         if validate_path:
             path = installs[install].path
             if installs[install].overlay_base:
-                overlayfs.activate(installs[install])
+                overlayfs.activate(ctx, installs[install])
             try:
                 find_celeste_asm(path)
             except FileNotFoundError as err:

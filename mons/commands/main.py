@@ -169,7 +169,8 @@ def remove(userInfo: UserInfo, name: str):
 @cli.command(name="list")
 # @click.option("--json", is_flag=True, hidden=True)
 @pass_userinfo
-def list_cmd(userInfo: UserInfo):
+@click.pass_context
+def list_cmd(ctx: click.Context, userInfo: UserInfo):
     """List existing installs"""
     output = {}
     if not userInfo.installs:
@@ -177,7 +178,7 @@ def list_cmd(userInfo: UserInfo):
 
     for name, install in userInfo.installs.items():
         try:
-            clickExt.Install.validate_install(name, validate_path=True)
+            clickExt.Install.validate_install(ctx, name, validate_path=True)
             output[name] = install.version_string()
         except Exception as err:
             raise click.UsageError(str(err))
@@ -658,12 +659,13 @@ if sys.platform == "linux":
 
     @cli.command
     @clickExt.install("name")
-    def uninstall(name: Install):
+    @click.pass_context
+    def uninstall(ctx, name: Install):
         if not name.overlay_base:
             raise click.UsageError(
                 "Uninstalling is currently only supported for overlay installs."
             )
-        overlayfs.reset(name)
+        overlayfs.reset(ctx, name)
 
 
 # fmt: off
