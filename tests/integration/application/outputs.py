@@ -1,0 +1,5 @@
+INSTALL_SUCCESS = "Everest was installed"
+FOUND_INSTALL = "Found Celeste install"
+NO_INSTALLS_FOUND = "No installs found"
+RENAMED_INSTALL = "Renamed install"
+REMOVED_INSTALL = "Removed install"

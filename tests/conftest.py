@@ -3,13 +3,13 @@ import os
 
 import pytest
 
-from mons.utils import find_celeste_file
+from mons.utils import find_celeste_asm
 
 
 def path_exists(path):
     if os.path.exists(path):
         try:
-            return find_celeste_file(path, "Celeste.exe")
+            return find_celeste_asm(path)
         except FileNotFoundError as e:
             raise argparse.ArgumentTypeError(e)
     raise argparse.ArgumentTypeError(f"Path {path} does not exist.")

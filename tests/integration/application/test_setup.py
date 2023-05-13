@@ -1,5 +1,6 @@
 import typing as t
 
+import outputs
 import pytest
 
 from mons.mons import cli as mons_cli
@@ -15,7 +16,7 @@ TEST_INSTALL = "_mons_testing"
 def test_add(runner: "CliRunner", test_install):
     result = runner.invoke(mons_cli, ["add", TEST_INSTALL, test_install])
     assert result.exit_code == 0, result.output
-    assert "Found Celeste.exe" in result.output
+    assert outputs.FOUND_INSTALL in result.output
 
 
 def setup_install(runner: "CliRunner", test_install):
@@ -31,7 +32,7 @@ def test_rename(runner, test_install):
 
     result = runner.invoke(mons_cli, ["rename", TEST_INSTALL, RENAMED_INSTALL])
     assert result.exit_code == 0, result.output
-    assert "Renamed install" in result.output
+    assert outputs.RENAMED_INSTALL in result.output
 
 
 def test_set_path(runner, test_install):
@@ -39,7 +40,7 @@ def test_set_path(runner, test_install):
 
     result = runner.invoke(mons_cli, ["set-path", TEST_INSTALL, test_install])
     assert result.exit_code == 0, result.output
-    assert "Found Celeste.exe" in result.output
+    assert outputs.FOUND_INSTALL in result.output
 
 
 def test_remove(runner: "CliRunner", test_install):
@@ -47,13 +48,13 @@ def test_remove(runner: "CliRunner", test_install):
 
     result = runner.invoke(mons_cli, ["remove", TEST_INSTALL, "--force"])
     assert result.exit_code == 0, result.output
-    assert f"Removed install {TEST_INSTALL}" in result.output
+    assert outputs.REMOVED_INSTALL in result.output
 
 
 def test_list(runner: "CliRunner", test_install):
     result = runner.invoke(mons_cli, ["list"])
     assert result.exit_code != 0
-    assert "No installs found" in result.output
+    assert outputs.NO_INSTALLS_FOUND in result.output
 
     setup_install(runner, test_install)
 

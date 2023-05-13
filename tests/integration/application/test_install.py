@@ -3,6 +3,7 @@ import shutil
 import urllib.request
 import zipfile
 
+import outputs
 import pytest
 
 from mons.mons import cli as mons_cli
@@ -22,37 +23,39 @@ def test_install(runner, test_install, cache: pytest.Cache):
     # install preferred branch (defaults to stable)
     result = runner.invoke(mons_cli, ["install", TEST_INSTALL])
     assert result.exit_code == 0, result.output
-    assert "Install success" in result.output
+    assert outputs.INSTALL_SUCCESS in result.output
 
 
-def try_get_artifact(test_install):
-    install_dir = os.path.dirname(test_install)
-    if os.path.exists(os.path.join(install_dir, "olympus-build.zip")):
-        return os.path.join(install_dir, "olympus-build.zip")
-    elif os.path.exists(os.path.join(install_dir, "main.zip")):
-        return os.path.join(install_dir, "main.zip")
-    else:
-        pytest.skip("Everest build artifact not available")
+def test_install_branch(runner, test_install):
+    setup_install(runner, test_install)
+
+    result = runner.invoke(mons_cli, ["install", TEST_INSTALL, "stable"])
+    assert result.exit_code == 0, result.output
+    assert outputs.INSTALL_SUCCESS in result.output
 
 
 def test_install_url(runner, test_install):
-    url = "file://" + try_get_artifact(test_install)
+    url = f"{GITHUB_REPO}/releases/latest/download/main.zip"
 
     setup_install(runner, test_install)
 
-    result = runner.invoke(mons_cli, ["install", TEST_INSTALL, "--url", url])
+    result = runner.invoke(mons_cli, ["install", TEST_INSTALL, url])
     assert result.exit_code == 0, result.output
-    assert "Install success" in result.output
+    assert outputs.INSTALL_SUCCESS in result.output
 
 
-def test_install_zip(runner, test_install):
-    url = try_get_artifact(test_install)
+def test_install_zip(runner, test_install, tmp_path):
+    url = f"{GITHUB_REPO}/releases/latest/download/olympus-build.zip"
+    file = os.path.join(tmp_path, "olympus-build.zip")
+    urllib.request.urlretrieve(url, file)
+
+    assert os.path.isfile(file)
 
     setup_install(runner, test_install)
 
-    result = runner.invoke(mons_cli, ["install", TEST_INSTALL, "--zip", url])
+    result = runner.invoke(mons_cli, ["install", TEST_INSTALL, file])
     assert result.exit_code == 0, result.output
-    assert "Install success" in result.output
+    assert outputs.INSTALL_SUCCESS in result.output
 
 
 @pytest.mark.xfail(
@@ -72,6 +75,6 @@ def test_install_src(runner, test_install, tmp_path):
 
     setup_install(runner, test_install)
 
-    result = runner.invoke(mons_cli, ["install", TEST_INSTALL, f"--src={source_dir}"])
+    result = runner.invoke(mons_cli, ["install", TEST_INSTALL, "--src", source_dir])
     assert result.exit_code == 0, result.output
-    assert "Install success" in result.output
+    assert outputs.INSTALL_SUCCESS in result.output

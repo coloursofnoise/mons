@@ -1,6 +1,8 @@
 import errno
 import os
 import pathlib
+import sys
+from importlib import reload
 
 import pytest
 
@@ -45,7 +47,15 @@ def set_env(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def isolated_filesystem(monkeypatch, tmp_path):
+def isolated_filesystem(monkeypatch: pytest.MonkeyPatch, tmp_path):
     """Isolate all referenced files to temp folder"""
-    monkeypatch.setattr("mons.config.config_dir", os.path.join(tmp_path, ".config"))
-    return {"config_dir": os.path.join(tmp_path, ".config")}
+    user_dirs = ["config", "cache", "data"]
+    ret = dict()
+    for dir in user_dirs:
+        monkeypatch.setattr(
+            f"mons.config.PlatformDirs.user_{dir}_dir", os.path.join(tmp_path, dir)
+        )
+        ret[f"{dir}_dir"] = os.path.join(tmp_path, dir)
+    # reload the config module to re-assign global constants
+    reload(sys.modules["mons.config"])
+    return ret

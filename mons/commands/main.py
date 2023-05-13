@@ -623,7 +623,7 @@ def install(
             else:
                 echo(f"Copied {copied} files.")
         artifact = None
-    elif source and fs.isdir(source):
+    elif source and fs.isfile(source):
         artifact = clickExt.type_cast_value(ctx, click.File(mode="rb"), source)
 
     else:
@@ -657,10 +657,11 @@ def install(
 
 if sys.platform == "linux":
 
-    @cli.command
+    @cli.command(no_args_is_help=True)
     @clickExt.install("name")
     @click.pass_context
     def uninstall(ctx, name: Install):
+        """Uninstall Everest from an overlay install."""
         if not name.overlay_base:
             raise click.UsageError(
                 "Uninstalling is currently only supported for overlay installs."

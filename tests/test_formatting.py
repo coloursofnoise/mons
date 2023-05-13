@@ -1,6 +1,7 @@
 import pytest
 
-from mons.formatting import *
+from mons.formatting import format_bytes
+from mons.formatting import format_columns
 
 
 @pytest.mark.parametrize("input, expected", [(1299999, "1.2 MiB")])

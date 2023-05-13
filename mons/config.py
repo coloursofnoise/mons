@@ -230,6 +230,7 @@ class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgu
                         file,
                     )
                 # /tmp is very likely to be a tmpfs, os.rename/replace cannot handle cross-fs move
+                os.makedirs(CONFIG_DIR, exist_ok=True)
                 shutil.move(temp, INSTALLS_FILE)
 
             cache_updates = {
