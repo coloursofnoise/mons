@@ -47,3 +47,8 @@ def pytest_runtest_makereport(item, call):
 def pytest_runtest_setup(item):
     if must_pass_failed is not None:
         pytest.skip(f"must_pass test failed ({must_pass_failed.name})")
+
+
+@pytest.fixture
+def test_name(request):
+    yield request.node.name

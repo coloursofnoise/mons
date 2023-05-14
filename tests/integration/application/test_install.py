@@ -8,28 +8,18 @@ import pytest
 
 from mons.mons import cli as mons_cli
 
-TEST_INSTALL = "_mons_testing"
 GITHUB_REPO = "https://github.com/EverestAPI/Everest"
 
 
-def setup_install(runner, test_install):
-    if runner.invoke(mons_cli, ["add", TEST_INSTALL, test_install]).exit_code != 0:
-        pytest.skip()
-
-
-def test_install(runner, test_install, cache: pytest.Cache):
-    setup_install(runner, test_install)
-
+def test_install_default(runner, test_install):
     # install preferred branch (defaults to stable)
-    result = runner.invoke(mons_cli, ["install", TEST_INSTALL])
+    result = runner.invoke(mons_cli, ["install", test_install])
     assert result.exit_code == 0, result.output
     assert outputs.INSTALL_SUCCESS in result.output
 
 
 def test_install_branch(runner, test_install):
-    setup_install(runner, test_install)
-
-    result = runner.invoke(mons_cli, ["install", TEST_INSTALL, "stable"])
+    result = runner.invoke(mons_cli, ["install", test_install, "stable"])
     assert result.exit_code == 0, result.output
     assert outputs.INSTALL_SUCCESS in result.output
 
@@ -37,9 +27,7 @@ def test_install_branch(runner, test_install):
 def test_install_url(runner, test_install):
     url = f"{GITHUB_REPO}/releases/latest/download/main.zip"
 
-    setup_install(runner, test_install)
-
-    result = runner.invoke(mons_cli, ["install", TEST_INSTALL, url])
+    result = runner.invoke(mons_cli, ["install", test_install, url])
     assert result.exit_code == 0, result.output
     assert outputs.INSTALL_SUCCESS in result.output
 
@@ -51,9 +39,7 @@ def test_install_zip(runner, test_install, tmp_path):
 
     assert os.path.isfile(file)
 
-    setup_install(runner, test_install)
-
-    result = runner.invoke(mons_cli, ["install", TEST_INSTALL, file])
+    result = runner.invoke(mons_cli, ["install", test_install, file])
     assert result.exit_code == 0, result.output
     assert outputs.INSTALL_SUCCESS in result.output
 
@@ -73,8 +59,6 @@ def test_install_src(runner, test_install, tmp_path):
     source_dir = os.path.join(tmp_path, "Everest-stable")
     assert os.listdir(source_dir), "Failed to download source artifact: " + source_dir
 
-    setup_install(runner, test_install)
-
-    result = runner.invoke(mons_cli, ["install", TEST_INSTALL, "--src", source_dir])
+    result = runner.invoke(mons_cli, ["install", test_install, "--src", source_dir])
     assert result.exit_code == 0, result.output
     assert outputs.INSTALL_SUCCESS in result.output
