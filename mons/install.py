@@ -100,7 +100,7 @@ class Install:
             # Cache is up to date
             return
 
-        if self._cache_loader and self._cache_loader(self):
+        if self._cache_loader and self._cache_loader(self) and self.hash == hash:
             return
 
         self.hash = hash
