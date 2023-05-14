@@ -2,6 +2,7 @@ import os
 import sys
 import typing as t
 from gettext import gettext as _
+from io import UnsupportedOperation
 from traceback import format_exception_only
 from traceback import format_tb
 from urllib import parse
@@ -39,7 +40,13 @@ def confirm_ext(*params, default, dangerous: bool = False, **attrs):
         elif env.skip_confirmation and not dangerous:
             return True
 
-    if not os.isatty(sys.stdin.fileno()):
+    tty = True
+    try:
+        tty = os.isatty(sys.stdin.fileno())
+    except UnsupportedOperation:
+        tty = False
+
+    if not tty:
         if dangerous:
             msg = "Use '--force' to skip error prompts."
         else:
@@ -91,7 +98,7 @@ def env_flag_option(
     var: str, *param_decls: str, help="", process_value: t.Any = None, **kwargs: t.Any
 ):
     def callback(ctx: click.Context, param: click.Parameter, value: bool):
-        env = ctx.find_object(Env)
+        env = ctx.ensure_object(Env)
         if process_value:
             value = process_value(ctx, param, value)
         setattr(env, var, value)

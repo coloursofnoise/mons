@@ -2,8 +2,49 @@ from urllib.parse import urlparse
 
 import click
 import pytest
+from click.testing import CliRunner
 
-import mons.clickExt as clickExt
+from mons import clickExt
+
+
+def test_confirm_ext(runner: CliRunner, test_name):
+    @click.command
+    @clickExt.yes_option()
+    @clickExt.force_option()
+    @click.option("--dangerous", is_flag=True)
+    def cli(dangerous):
+        return clickExt.confirm_ext(test_name, default=True, dangerous=dangerous)
+
+    result = runner.invoke(cli)
+    assert result.exception
+    assert "Error: Could not read from stdin" in result.output
+    assert "Use '--yes' to skip confirmation prompts." in result.output
+
+    result = runner.invoke(cli, ["--yes"], standalone_mode=False)
+    assert not result.exception
+    assert not result.output
+    assert result.return_value
+
+    result = runner.invoke(cli, ["--yes", "--dangerous"])
+    assert result.exception
+    assert "Error: Could not read from stdin" in result.output
+    assert "Use '--force' to skip error prompts." in result.output
+
+    result = runner.invoke(cli, ["--force"], standalone_mode=False)
+    assert not result.exception
+    assert not result.output
+    assert result.return_value
+
+    result = runner.invoke(cli, ["--force", "--dangerous"], standalone_mode=False)
+    assert not result.exception
+    assert not result.output
+    assert result.return_value
+
+
+def test_type_cast_value(ctx, test_name):
+    assert clickExt.type_cast_value(ctx, click.STRING, test_name) == test_name
+    with pytest.raises(click.BadParameter):
+        clickExt.type_cast_value(ctx, click.INT, test_name)
 
 
 def color_cmd():

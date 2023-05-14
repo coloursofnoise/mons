@@ -1,6 +1,7 @@
 import os
 import pathlib
 
+import click
 import pytest
 from click.testing import CliRunner
 
@@ -30,6 +31,17 @@ def get_commands(cli, *, prefix=""):
 )
 def command(request):
     yield request.param
+
+
+@pytest.fixture(scope="function")
+def ctx(runner):
+    @click.command
+    def cli():
+        pass
+
+    ctx = click.Context(cli)
+    with ctx:
+        yield ctx
 
 
 @pytest.fixture(scope="function")
