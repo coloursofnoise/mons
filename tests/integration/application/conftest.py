@@ -23,9 +23,7 @@ log_test_install_warning = True
 @pytest.fixture(scope="function")
 def test_install_path(pytestconfig: pytest.Config, cache: pytest.Cache):
     # prioritize cmdline arg so that it can be changed
-    install_path = pytestconfig.getoption("mons_test_install", None)  # type: ignore
-    if not install_path:
-        install_path = cache.get("mons/test_install", None)
+    install_path: str = pytestconfig.getoption("mons_test_install", cache.get("mons/test_install", None))  # type: ignore
 
     if not install_path:
         global log_test_install_warning
@@ -36,7 +34,7 @@ def test_install_path(pytestconfig: pytest.Config, cache: pytest.Cache):
             )
         pytest.skip()
 
-    if os.path.exists(install_path):  # type: ignore
+    if os.path.exists(install_path):
         cache.set("mons/test_install", install_path)
         return install_path
     else:

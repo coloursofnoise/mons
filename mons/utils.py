@@ -10,6 +10,7 @@ import zipfile
 from contextlib import contextmanager
 
 import dnfile  # https://github.com/malwarefrank/dnfile
+import typing_extensions as te
 from click import echo
 from pefile import (  # pyright:ignore[reportMissingTypeStubs]
     DIRECTORY_ENTRY,
@@ -24,7 +25,7 @@ from mons.version import NOVERSION
 from mons.version import Version
 
 
-VANILLA_HASH: t.Dict[str, t.Tuple[Version, t.Literal["FNA", "XNA"]]] = {
+VANILLA_HASH: t.Dict[str, t.Tuple[Version, te.Literal["FNA", "XNA"]]] = {
     "f1c4967fa8f1f113858327590e274b69": (Version(1, 4, 0, 0), "FNA"),
     "107cd146973f2c5ec9fb0b4f81c1588a": (Version(1, 4, 0, 0), "XNA"),
 }
