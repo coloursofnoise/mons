@@ -408,9 +408,9 @@ def fetch_artifact_source(ctx: click.Context, source: t.Optional[str]):
             return fetch_build_artifact_azure(build)
 
     build_list = fetch_build_list(ctx)
-    branches = {build["branch"]: build for build in build_list}
-    if source in branches:
-        return branches[source]["mainDownload"]
+    for build in build_list:
+        if source == build["branch"]:
+            return build["mainDownload"]
 
     if source.isdigit():
         build_num = int(source)
