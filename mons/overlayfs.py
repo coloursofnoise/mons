@@ -72,7 +72,7 @@ def build_fstab_comment():
     return "# Added by mons " + datetime.now().date().isoformat()
 
 
-def check_fstab(lowerdir, upperdir, workdir, mergeddir, fstab="/etc/fstab"):
+def check_fstab(lowerdir, upperdir, workdir, mergeddir, *, fstab="/etc/fstab"):
     with open(fstab) as file:
         for line in file.readlines():
             if line.startswith("#") or not line.strip():
