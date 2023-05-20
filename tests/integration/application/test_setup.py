@@ -67,3 +67,9 @@ def test_show(runner: "CliRunner", test_install):
     result = runner.invoke(mons_cli, ["show", test_install])
     assert result.exit_code == 0, result.output
     assert test_install in result.output
+
+
+def test_launch(runner: "CliRunner", test_install, test_install_path):
+    result = runner.invoke(mons_cli, ["launch", test_install, "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert os.path.join(os.path.dirname(test_install_path), "Celeste") in result.output
