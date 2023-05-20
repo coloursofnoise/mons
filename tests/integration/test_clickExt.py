@@ -1,3 +1,5 @@
+import itertools
+import os
 from urllib.parse import urlparse
 
 import click
@@ -5,6 +7,7 @@ import pytest
 from click.testing import CliRunner
 
 from mons import clickExt
+from mons import install
 
 
 def test_confirm_ext(runner: CliRunner, test_name):
@@ -41,6 +44,7 @@ def test_confirm_ext(runner: CliRunner, test_name):
     assert result.return_value
 
 
+@pytest.mark.prioritize
 def test_type_cast_value(ctx, test_name):
     assert clickExt.type_cast_value(ctx, click.STRING, test_name) == test_name
     with pytest.raises(click.BadParameter):
@@ -81,6 +85,81 @@ def test_color_option_bad(runner):
     result = runner.invoke(color_cmd(), ["--color", "invalid"], standalone_mode=False)
     assert isinstance(result.exception, click.BadParameter)
     assert "Possible values: auto, never, always" in result.exception.message
+
+
+class Fake_UserInfo:
+    def __init__(self, installs) -> None:
+        self.installs = installs
+
+
+def parametrize_bools(*args: str, filter_cond=None):
+    def filter_param(param):
+        return not filter_cond or filter_cond(
+            **{arg: val for arg, val in zip(args, param.values)}
+        )
+
+    params = (
+        pytest.param(*i, id=", ".join(itertools.compress(args, i)))
+        for i in itertools.product([False, True], repeat=len(args))
+    )
+
+    params = filter(filter_param, params)
+    return pytest.mark.parametrize(args, params)
+
+
+@parametrize_bools(
+    "exist",
+    "resolve_install",
+    "check_path",
+    filter_cond=lambda exist, resolve_install, **k: not (resolve_install and not exist),
+)
+def test_install_paramtype(
+    monkeypatch,
+    test_name,
+    tmp_path,
+    ctx,
+    exist: bool,
+    resolve_install: bool,
+    check_path,
+):
+    monkeypatch.setattr(clickExt, "UserInfo", Fake_UserInfo)
+    install_path = os.path.join(tmp_path, test_name)
+    if check_path:
+        os.mkdir(install_path)
+        open(os.path.join(install_path, "Celeste.exe"), "x").close()
+    installs = {test_name: install.Install(test_name, install_path)} if exist else {}
+    ctx.obj = Fake_UserInfo(installs)  # type: ignore
+    result = clickExt.type_cast_value(
+        ctx,
+        clickExt.Install(
+            exist=exist, resolve_install=resolve_install, check_path=check_path
+        ),
+        test_name,
+    )
+    if resolve_install:
+        assert isinstance(result, install.Install)
+        assert result.name == test_name
+    else:
+        assert result == test_name
+
+
+def test_install_paramtype_fail(monkeypatch, test_name, tmp_path, ctx):
+    monkeypatch.setattr(clickExt, "UserInfo", Fake_UserInfo)
+    install_path = os.path.join(tmp_path, test_name)
+    installs = {test_name: install.Install(test_name, install_path)}
+    ctx.obj = Fake_UserInfo(installs)
+
+    def test_install(value, **kwargs):
+        return clickExt.type_cast_value(ctx, clickExt.Install(**kwargs), value)
+
+    with pytest.raises(ValueError):
+        clickExt.Install(exist=False, resolve_install=True)
+    with pytest.raises(click.ClickException, match="does not have a valid path"):
+        test_install(test_name, check_path=True)
+    with pytest.raises(click.BadParameter, match="does not exist"):
+        test_install(test_name + "_doesnotexist", exist=True, check_path=False)
+    with pytest.raises(click.BadParameter, match="already exists"):
+        test_install(test_name, exist=False)
 
 
 @pytest.mark.parametrize(

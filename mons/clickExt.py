@@ -214,6 +214,8 @@ class Install(ParamTypeG[t.Union[str, T_Install]]):
     name = "Install"
 
     def __init__(self, exist=True, resolve_install=False, check_path=True) -> None:
+        if resolve_install and not exist:
+            raise ValueError("'resolve_install' cannot be True when 'exist' is False.")
         super().__init__()
         self.exist = exist
         self.resolve_install = resolve_install
