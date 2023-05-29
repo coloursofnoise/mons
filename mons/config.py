@@ -247,6 +247,7 @@ class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgu
             with fs.temporary_file() as temp:
                 with open(temp, "w") as file:
                     yaml.safe_dump(_cache, file)
+                os.makedirs(CACHE_DIR, exist_ok=True)
                 shutil.move(temp, CACHE_FILE)
 
 

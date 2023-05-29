@@ -170,4 +170,6 @@ def download_threaded(
 
             if late_downloads:
                 for file in os.listdir(temp_dir):
+                    if os.path.isfile(os.path.join(mod_folder, file)):
+                        os.remove(os.path.join(mod_folder, file))
                     shutil.move(os.path.join(temp_dir, file), mod_folder)

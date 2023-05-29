@@ -464,7 +464,7 @@ def run_installer(install: Install, verbose: bool):
             cwd=install_dir,
         )
 
-    uname = os.uname()
+    uname = os.uname() if os.name != "nt" else ""
     if uname.sysname == "Darwin":
         kickstart_dir = fs.joindir(install_dir, "..", "MacOS")
         with fs.copied_file(
