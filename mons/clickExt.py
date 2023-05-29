@@ -209,17 +209,21 @@ class Install(ParamTypeG[t.Union[str, T_Install]]):
     :param exist: Install must already exist in the Installs config file.
     :param resolve_install: Return an `Install` object instead of a path.
     :param check_path: Ensures the path exists and is a valid Celeste install (includes a Celeste asm).
+    :param require_everest: Requires the install to be patched with Everest.
     """
 
     name = "Install"
 
-    def __init__(self, exist=True, resolve_install=False, check_path=True) -> None:
+    def __init__(
+        self, exist=True, resolve_install=False, check_path=True, require_everest=False
+    ) -> None:
         if resolve_install and not exist:
             raise ValueError("'resolve_install' cannot be True when 'exist' is False.")
         super().__init__()
         self.exist = exist
         self.resolve_install = resolve_install
         self.validate_path = check_path
+        self.require_everest = require_everest
 
     def convert(self, value: t.Union[str, T_Install], param, ctx):
         userinfo = ctx and ctx.find_object(UserInfo)
@@ -237,6 +241,13 @@ class Install(ParamTypeG[t.Union[str, T_Install]]):
                     self.fail(str(err), param, ctx)
                 except FileNotFoundError as err:
                     raise click.ClickException(str(err))
+
+                if self.require_everest:
+                    installs[value].update_cache(read_exe=True)
+                    if not installs[value].everest_version:
+                        raise click.UsageError(
+                            "Requires a modded Celeste install. Use `mons install` to install Everest first."
+                        )
 
                 if self.resolve_install:
                     value = installs[value]
@@ -268,13 +279,13 @@ class Install(ParamTypeG[t.Union[str, T_Install]]):
                 )
 
 
-def install(*param_decls, resolve=True, **attrs):
+def install(*param_decls, resolve=True, require_everest=False, **attrs):
     """Alias for a `click.argument` of type `Install` that will use the default provided by `MONS_DEFAULT_INSTALL`
 
     Requires a command `cls` of `CommandExt`."""
     return click.argument(
         *param_decls,
-        type=Install(resolve_install=resolve),
+        type=Install(resolve_install=resolve, require_everest=require_everest),
         cls=OptionalArg,
         default=get_default_install,
         prompt="Install name",
