@@ -253,7 +253,9 @@ def prompt_mod_selection(options: t.Dict[str, t.Any], max=-1):
     return selection
 
 
-def resolve_dependencies(mods: t.Sequence[ModMeta]):
+def resolve_dependencies(
+    mods: t.Sequence[ModMeta], check_versions=True
+) -> tuple[list[ModMeta_Base], list[ModMeta_Base]]:
     """Resolves the dependency tree for a list of mods, as well as the optional dependencies of the tree.
 
     Optional dependencies are not resolved recursively.
@@ -267,6 +269,8 @@ def resolve_dependencies(mods: t.Sequence[ModMeta]):
     dependency_graph = fetch_dependency_graph()
 
     def check_supersedes(mod, compare, mod_optional=False, compare_optional=False):
+        if not check_versions:
+            return False
         try:
             return mod.Version.supersedes(compare.Version)
         except ValueError:
@@ -334,7 +338,7 @@ def resolve_dependencies(mods: t.Sequence[ModMeta]):
             dep = dependencies[mod.Name]
             # if an explicitly requested mod does not satisfy another's
             # dependency on it, raise an error
-            if not mod.Version.satisfies(dep.Version):
+            if check_versions and not mod.Version.satisfies(dep.Version):
                 raise ValueError(
                     "Incompatible dependencies encountered: "
                     + f"{mod} (explicit) does not satisfy dependency {dep}"
@@ -346,7 +350,7 @@ def resolve_dependencies(mods: t.Sequence[ModMeta]):
             dep = opt_dependencies[mod.Name]
             # if an explicitly requested mod does not satisfy another's
             # dependency on it, raise an error
-            if not mod.Version.satisfies(dep.Version):
+            if check_versions and not mod.Version.satisfies(dep.Version):
                 raise ValueError(
                     "Incompatible dependencies encountered: "
                     + f"{mod} (explicit) does not satisfy optional dependency {dep}"
@@ -761,8 +765,7 @@ def add(ctx, install: Install, mods: t.Tuple[str], search, random, no_deps):
 @clickExt.force_option()
 def remove(name: Install, mods: t.List[str], recurse: bool):
     """Remove installed mods."""
-    mod_folder = fs.joindir(name.path, "Mods")
-    installed_list = installed_mods(mod_folder, valid=True, with_size=True)
+    installed_list = installed_mods(name.mod_folder, valid=True, folder_size=True)
     installed_list = {
         meta.Name: meta
         for meta in tqdm(
@@ -789,27 +792,26 @@ def remove(name: Install, mods: t.List[str], recurse: bool):
     for mod in metas:
         echo(f"\t{mod}")
 
-    removable = []
+    removable_deps = []
     if recurse:
-        all_dependencies = resolve_dependencies(
-            [meta for meta in installed_list.values() if meta.Name not in mods],
-            installed_list,
+        dependencies, _opt_deps = resolve_dependencies(metas, check_versions=False)
+        other_dependencies, _opt_deps = resolve_dependencies(
+            [mod for name, mod in installed_list.items() if name not in mods],
+            check_versions=False,
         )
 
-        dependencies = resolve_dependencies(
-            metas, {mod: meta for mod, meta in installed_list.items() if mod in mods}
+        removable_deps = {dep.Name for dep in dependencies}.difference(
+            {dep.Name for dep in other_dependencies}
         )
+        removable_deps = [
+            installed_list[dep] for dep in removable_deps if dep in installed_list
+        ]
 
-        removable = {dep.Name for dep in dependencies}.difference(
-            {dep.Name for dep in all_dependencies}
-        )
-        removable = [installed_list[dep] for dep in removable if dep in installed_list]
-
-        echo(str(len(removable)) + " dependencies will also be removed:")
-        for dep in removable:
+        echo(str(len(removable_deps)) + " dependencies will also be removed:")
+        for dep in removable_deps:
             echo(f"\t{dep}")
 
-    total_size = sum(mod.Size for mod in itertools.chain(metas, removable))
+    total_size = sum(mod.Size for mod in itertools.chain(metas, removable_deps))
     echo(f"After this operation, {format_bytes(total_size)} disk space will be freed.")
 
     if not clickExt.confirm_ext("Remove mods?", default=True, dangerous=True):
@@ -817,9 +819,9 @@ def remove(name: Install, mods: t.List[str], recurse: bool):
 
     folders: t.List[ModMeta] = []
     with click.progressbar(
-        label="Deleting files", length=len(removable) + len(metas)
+        label="Deleting files", length=len(removable_deps) + len(metas)
     ) as progress:
-        for mod in itertools.chain(removable, metas):
+        for mod in itertools.chain(removable_deps, metas):
             # This should be handled by catching IsADirectoryError but for some reason it raises PermissionError instead so...
             if os.path.isdir(mod.Path):
                 folders.append(mod)
@@ -834,9 +836,8 @@ def remove(name: Install, mods: t.List[str], recurse: bool):
 
 
 @cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
-@clickExt.install("name")
+@clickExt.install("name", require_everest=True)
 # @click.argument('mod', required=False)
-@click.option("--all", is_flag=True, help="Update all installed mods.", required=True)
 @click.option(
     "--enabled", is_flag=True, help="Update currently enabled mods.", default=None
 )
@@ -846,114 +847,113 @@ def remove(name: Install, mods: t.List[str], recurse: bool):
 @clickExt.yes_option()
 @click.pass_context
 def update(
-    ctx, name: Install, all: bool, enabled: t.Optional[bool], upgrade_only: bool
+    ctx: click.Context,
+    name: Install,
+    enabled: t.Optional[bool],
+    upgrade_only: bool,
 ):
     """Update installed mods."""
-    if not all:
-        raise click.UsageError(
-            "this command can currently only be used with the --all option"
-        )
 
-    mod_list = fetch_mod_db(ctx)
     updates: t.List[UpdateInfo] = []
-    has_updates = False
-    total_size: int = 0
-    if all:
-        mods_folder = fs.joindir(name.path, "Mods")
-        installed = installed_mods(
-            mods_folder,
-            blacklisted=invert(enabled),
-            dirs=False,
-            valid=True,
-            with_size=True,
-            with_hash=True,
-        )
-        updater_blacklist = os.path.join(mods_folder, "updaterblacklist.txt")
-        updater_blacklist = fs.isfile(updater_blacklist) and read_blacklist(
-            updater_blacklist
-        )
-        for meta in installed:
-            if meta.Name in mod_list and (
-                not updater_blacklist
-                or os.path.basename(meta.Path) not in updater_blacklist
+    mod_db = fetch_mod_db(ctx)
+    installed = installed_mods(
+        name.mod_folder,
+        blacklisted=invert(enabled),
+        dirs=False,
+        valid=True,
+        folder_size=True,
+        with_hash=True,
+    )
+    updater_blacklist = os.path.join(name.mod_folder, "updaterblacklist.txt")
+    updater_blacklist = fs.isfile(updater_blacklist) and read_blacklist(
+        updater_blacklist
+    )
+    for meta in installed:
+        if meta.Name in mod_db and (
+            not updater_blacklist
+            or os.path.basename(meta.Path) not in updater_blacklist
+        ):
+            server = mod_db[meta.Name]
+            latest_hash = server["xxHash"][0]
+            latest_version = Version.parse(server["Version"])
+            if (
+                meta.Hash
+                and latest_hash != meta.Hash
+                and (not upgrade_only or latest_version > meta.Version)
             ):
-                server = mod_list[meta.Name]
-                latest_hash = server["xxHash"][0]
-                latest_version = Version.parse(server["Version"])
-                if (
-                    meta.Hash
-                    and latest_hash != meta.Hash
-                    and (not upgrade_only or latest_version > meta.Version)
-                ):
-                    update = UpdateInfo(
+                updates.append(
+                    UpdateInfo(
                         meta,
                         latest_version,
                         server["URL"],
+                        server["Mirror"],
+                        server["Size"],
                     )
-                    if not has_updates:
-                        echo("Updates available:")
-                        has_updates = True
-                    echo(f"\t{update.Old} -> {update.New}")
-                    updates.append(update)
-                    total_size += server["Size"] - update.Old.Size
+                )
 
-    if not has_updates:
+    if not updates:
         echo("All mods up to date")
         return
 
     echo(
         ngettext(
-            f"{len(updates)} update found",
-            f"{len(updates)} updates found",
+            f"{len(updates)} update found:",
+            f"{len(updates)} updates found:",
             len(updates),
         )
     )
+    for update in updates:
+        echo("  " + str(update))
 
-    if total_size >= 0:
+    update_size = sum(update.Size for update in updates)
+    if update_size >= 0:
         echo(
-            f"After this operation, an additional {format_bytes(total_size)} disk space will be used"
+            f"After this operation, an additional {format_bytes(update_size)} disk space will be used"
         )
     else:
         echo(
-            f"After this operation, {format_bytes(abs(total_size))} disk space will be freed"
+            f"After this operation, {format_bytes(abs(update_size))} disk space will be freed"
         )
 
     if not clickExt.confirm_ext("Continue?", default=True):
         raise click.Abort()
 
+    sorted_updates = sorted(updates, key=attrgetter("Size"))
     with timed_progress("Downloaded files in {time:.3f} seconds."):
-        download_threaded(name.dir, updates, thread_count=10)
+        download_threaded(
+            name.path,
+            sorted_updates,
+            thread_count=ctx.ensure_object(UserInfo).config.downloading.thread_count,
+        )
 
 
 @cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
-@clickExt.install("name")
+@clickExt.install("name", require_everest=True)
 # @click.argument('mod', required=False)
-@click.option("--all", is_flag=True, help="Resolve all installed mods.", required=True)
 @click.option(
     "--enabled", is_flag=True, help="Resolve currently enabled mods.", default=None
 )
 @click.option("--no-update", is_flag=True, help="Don't update outdated dependencies.")
 @clickExt.yes_option()
-@click.pass_context
-def resolve(ctx, name: Install, all: bool, enabled: t.Optional[bool], no_update: bool):
+def resolve(
+    name: Install,
+    enabled: t.Optional[bool],
+    no_update: bool,
+):
     """Resolve any missing or outdated dependencies."""
-    if not all:
-        raise click.UsageError(
-            "this command can currently only be used with the --all option"
-        )
-
     install = name
 
-    mods_folder = fs.joindir(install.path, "Mods")
-    installed = installed_mods(mods_folder, valid=True, blacklisted=invert(enabled))
+    installed = installed_mods(
+        install.mod_folder, valid=True, blacklisted=invert(enabled)
+    )
     installed = list(
         tqdm(installed, desc="Reading Installed Mods", leave=False, unit="")
     )
     installed_dict = {meta.Name: meta for meta in installed}
 
-    deps = resolve_dependencies(installed)
+    deps, _opt_deps = resolve_dependencies(installed)
 
-    special, deps_installed, deps_missing = multi_partition(
+    _special, deps_installed, deps_missing = multi_partition(
         lambda meta: meta.Name in ("Celeste", "Everest"),
         lambda meta: meta.Name in installed_dict,
         iterable=deps,
@@ -970,77 +970,19 @@ def resolve(ctx, name: Install, all: bool, enabled: t.Optional[bool], no_update:
     )
 
     if len(deps_missing) + len(deps_outdated) < 1:
+        echo("No issues found.")
         return
 
     echo(
         f'{len(deps_missing) + len(deps_outdated)} dependencies missing{" or outdated" if len(deps_outdated) else ""}, attempting to resolve...'
     )
 
-    mod_list = fetch_mod_db(ctx)
-    deps_install = [
-        get_mod_download(mod.Name, mod_list)
-        for mod in deps_missing
-        if mod.Name in mod_list
-    ]
-    deps_update = [
-        UpdateInfo(installed_dict[dep.Name], dep.Version, mod_list[dep.Name]["URL"])
-        for dep in deps_outdated
-        if dep.Name in mod_list
-    ]
-
-    unresolved = (len(deps_missing) + len(deps_outdated)) - (
-        len(deps_install) + len(deps_update)
+    # hand off to add mods command
+    mons_cli.main(
+        args=[
+            "mods",
+            "add",
+            install.name,
+            *[dep.Name for dep in itertools.chain(deps_missing, deps_outdated)],
+        ]
     )
-    if unresolved != 0:
-        echo(f"{unresolved} mods could not be resolved.")
-
-    if len(deps_install) > 0:
-        echo("\tTo Install:")
-    for mod in deps_install:
-        echo(mod.Meta)
-    if len(deps_update) > 0:
-        echo("\tTo Update:")
-    for mod in deps_update:
-        echo(f"{mod.Old} -> {mod.New}")
-
-    download_size_ref = [0]
-
-    def download_size_key(mod: t.Union[UpdateInfo, ModDownload]):
-        size = (
-            get_download_size(mod.Url, mod.Old.Size)
-            if isinstance(mod, UpdateInfo)
-            else mod.Meta.Size
-        )
-        download_size_ref[0] += size
-        return size
-
-    sorted_dep_downloads = sorted(
-        itertools.chain(deps_install, deps_update), key=download_size_key
-    )
-
-    download_size = download_size_ref[0]
-    if download_size >= 0:
-        echo(
-            f"After this operation, an additional {format_bytes(download_size)} disk space will be used"
-        )
-    else:
-        echo(
-            f"After this operation, {format_bytes(abs(download_size))} disk space will be freed"
-        )
-
-    if not clickExt.confirm_ext("Continue?", default=True):
-        raise click.Abort
-
-    with timed_progress("Downloaded files in {time:.3f} seconds."):
-        download_threaded(mods_folder, sorted_dep_downloads, thread_count=10)
-
-    everest_min = next(
-        (dep.Version for dep in special if dep.Name == "Everest"), Version(0, 0, 0)
-    )
-    current_everest = install.everest_version
-    if not (current_everest and current_everest.satisfies(everest_min)):
-        echo(
-            f"Installed Everest ({current_everest}) does not satisfy minimum requirement ({everest_min})."
-        )
-        if clickExt.confirm_ext("Update Everest?", default=True):
-            mons_cli.main(args=["install", install.name, str(everest_min)])
