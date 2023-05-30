@@ -120,21 +120,38 @@ class ModDownload:
         self.Url = url
         self.Mirror = mirror if mirror else url
 
+    @property
+    def Size(self):
+        return self.Meta.Size
+
+    def __str__(self) -> str:
+        return str(self.Meta)
+
 
 class UpdateInfo:
     def __init__(
-        self, meta: ModMeta, new: Version, url: str, mirror: t.Optional[str] = None
+        self,
+        meta: ModMeta,
+        new: Version,
+        url: str,
+        mirror: t.Optional[str] = None,
+        size=0,
     ):
         self.Meta = meta
         self.New = new
         self.Url = url
         self.Mirror = mirror if mirror else url
+        self._size = size
+
+    @property
+    def Size(self):
+        return self._size and self._size - self.Meta.Size
 
     def __str__(self) -> str:
         return str(self.Meta) + " -> " + str(self.New)
 
 
-def read_mod_info(mod: t.Union[str, t.IO[bytes]], with_size=False, with_hash=False):
+def read_mod_info(mod: t.Union[str, t.IO[bytes]], folder_size=False, with_hash=False):
     meta = None
     try:
         if not isinstance(mod, str) or fs.isfile(mod) and zipfile.is_zipfile(mod):
@@ -150,7 +167,7 @@ def read_mod_info(mod: t.Union[str, t.IO[bytes]], with_size=False, with_hash=Fal
                         if with_hash:
                             meta.Hash = xxhash.xxh64_hexdigest(zip.fp.read())
                         zip.fp.seek(0, os.SEEK_END)
-                        meta.Size = zip.fp.tell() if with_size else 0
+                        meta.Size = zip.fp.tell()
 
         elif fs.isdir(mod):
             everest_file = fs.find_file(mod, ("everest.yaml", "everest.yml"))
@@ -162,7 +179,7 @@ def read_mod_info(mod: t.Union[str, t.IO[bytes]], with_size=False, with_hash=Fal
                     if yml is None:
                         raise EmptyFileError()
                     meta = ModMeta(yml[0])
-                meta.Size = fs.folder_size(mod) if with_size else 0
+                meta.Size = fs.folder_size(mod) if folder_size else 0
     except (EmptyFileError, ScannerError):
         return None
     except Exception:

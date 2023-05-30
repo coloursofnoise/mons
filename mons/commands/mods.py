@@ -7,6 +7,7 @@ import typing as t
 import urllib.parse
 import urllib.request
 from gettext import ngettext
+from operator import attrgetter
 
 import click
 from click import echo
@@ -605,14 +606,20 @@ def add(ctx, install: Install, mods: t.Tuple[str], search, random, no_deps):
                         shutil.move(file, os.path.join(install.mod_folder, filename))
             unresolved.clear()
 
-    installed = {meta.Name: meta for meta in installed_mods(install.mod_folder)}
+    # no need to calculate folder size since any mods that are unzipped will be skipped
+    installed = {
+        meta.Name: meta
+        for meta in installed_mods(install.mod_folder, folder_size=False)
+    }
 
     resolved_update, resolved = partition(
         lambda m: m.Meta.Name in installed,
         resolved,
     )
     resolved_update = [
-        UpdateInfo(installed[mod.Meta.Name], mod.Meta.Version, mod.Url, mod.Mirror)
+        UpdateInfo(
+            installed[mod.Meta.Name], mod.Meta.Version, mod.Url, mod.Mirror, mod.Size
+        )
         for mod in resolved_update
     ]
 
@@ -655,7 +662,8 @@ def add(ctx, install: Install, mods: t.Tuple[str], search, random, no_deps):
             installed[dep.Name],
             dep.Version,
             mod_db[dep.Name]["URL"],
-            mod_db[dep.Name].get("MirrorURL", ""),
+            mod_db[dep.Name]["MirrorURL"],
+            mod_db[dep.Name]["Size"],
         )
         for dep in deps_outdated
     ]
@@ -686,22 +694,17 @@ def add(ctx, install: Install, mods: t.Tuple[str], search, random, no_deps):
         echo("No mods to install.")
         exit()
 
-    # Hack to allow assigning to a variable out of scope
-    download_size_ref = [0]
-
-    def mod_download_size(mod: t.Union[UpdateInfo, ModDownload]):
-        size = get_download_size(mod.Url, mod.Meta.Size)
-        download_size_ref[0] += size
-        return size
-
-    sorted_dep_downloads = sorted(
-        itertools.chain(deps_install, deps_update), key=mod_download_size
-    )
     sorted_main_downloads = sorted(
-        itertools.chain(resolved, resolved_update), key=mod_download_size
+        itertools.chain(resolved, resolved_update), key=attrgetter("Size")
+    )
+    sorted_dep_downloads = sorted(
+        itertools.chain(deps_install, deps_update), key=attrgetter("Size")
     )
 
-    download_size = download_size_ref[0]
+    download_size = sum(
+        mod.Size
+        for mod in itertools.chain(resolved, resolved_update, deps_install, deps_update)
+    )
     if download_size >= 0:
         echo(
             f"After this operation, an additional {format_bytes(download_size)} disk space will be used"
