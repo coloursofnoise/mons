@@ -45,6 +45,15 @@ class Version:
 
         return True
 
+    def supersedes(self, compare: "Version"):
+        """Checks if this version is greater than :param:`compare`.
+
+        Raises :type:`ValueError` if major versions differ.
+        """
+        if self.Major != compare.Major:
+            raise ValueError("Incompatible versions.")
+        return self > compare
+
     def __str__(self):
         out = "{}.{}".format(self.Major, self.Minor)
         if self.Build != -1:
@@ -80,6 +89,9 @@ class NOVERSION(Version):
 
     def satisfies(self, *_):
         return True
+
+    def supersedes(self, *_):
+        return False
 
     def __str__(self) -> str:
         return "NOVERSION"

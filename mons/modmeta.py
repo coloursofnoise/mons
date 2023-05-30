@@ -4,16 +4,18 @@ import zipfile
 
 import xxhash
 import yaml
-from click import echo
 from yaml.scanner import ScannerError
 
 from mons import fs
 from mons.baseUtils import find
 from mons.errors import EmptyFileError
+from mons.version import NOVERSION
 from mons.version import Version
 
 
-class _ModMeta_Base:
+class ModMeta_Base:
+    """Mod Name and Version"""
+
     def __init__(self, name: str, version: t.Union[str, Version]):
         self.Name = name
         if isinstance(version, str):
@@ -22,17 +24,19 @@ class _ModMeta_Base:
 
     @classmethod
     def _from_dict(cls, data: t.Dict[str, t.Any]):
-        return cls(str(data["Name"]), str(data.get("Version", "NoVersion")))
+        return cls(str(data["Name"]), str(data.get("Version", NOVERSION)))
 
     def __repr__(self) -> str:
         return f"{self.Name}: {self.Version}"
 
 
-class _ModMeta_Deps:
+class ModMeta_Deps:
+    """Mod Dependencies and Optional Dependencies"""
+
     def __init__(
         self,
-        dependencies: t.List[_ModMeta_Base],
-        optionals: t.List[_ModMeta_Base],
+        dependencies: t.List[ModMeta_Base],
+        optionals: t.List[ModMeta_Base],
     ):
         self.Dependencies = dependencies
         self.OptionalDependencies = optionals
@@ -53,30 +57,32 @@ class _ModMeta_Deps:
     def _from_dict(cls, data: t.Dict[str, t.Any]):
         return cls(
             [
-                _ModMeta_Base._from_dict(dep)  # pyright: ignore[reportPrivateUsage]
+                ModMeta_Base._from_dict(dep)  # pyright: ignore[reportPrivateUsage]
                 for dep in data["Dependencies"]
             ],
             [
-                _ModMeta_Base._from_dict(dep)  # pyright: ignore[reportPrivateUsage]
+                ModMeta_Base._from_dict(dep)  # pyright: ignore[reportPrivateUsage]
                 for dep in data["OptionalDependencies"]
             ],
         )
 
 
-class ModMeta(_ModMeta_Base, _ModMeta_Deps):
+class ModMeta(ModMeta_Base, ModMeta_Deps):
+    """Combination of :type:`ModMeta_Base` and :type:`ModMeta_Deps`"""
+
     Hash: t.Optional[str]
     Path: str
     Blacklisted: t.Optional[bool] = False
 
     def __init__(self, data: t.Dict[str, t.Any]):
-        _ModMeta_Base.__init__(
+        ModMeta_Base.__init__(
             self, str(data["Name"]), str(data.get("Version", "NoVersion"))
         )
-        _ModMeta_Deps.__init__(
+        ModMeta_Deps.__init__(
             self,
-            [_ModMeta_Base._from_dict(dep) for dep in data.get("Dependencies", [])],
+            [ModMeta_Base._from_dict(dep) for dep in data.get("Dependencies", [])],
             [
-                _ModMeta_Base._from_dict(dep)
+                ModMeta_Base._from_dict(dep)
                 for dep in data.get("OptionalDependencies", [])
             ],
         )
@@ -115,55 +121,17 @@ class ModDownload:
         self.Mirror = mirror if mirror else url
 
 
-def _merge_dependencies(dict: t.Dict[str, _ModMeta_Base], dep: _ModMeta_Base):
-    if dep.Name in dict:
-        if dep.Version.Major != dict[dep.Name].Version.Major:
-            raise ValueError(
-                "Incompatible dependencies encountered: "
-                + f"{dep.Name} {dep.Version} vs {dep.Name} {dict[dep.Name].Version}"
-            )
-        elif dep.Version > dict[dep.Name].Version:
-            dict[dep.Name] = dep
-    else:
-        dict[dep.Name] = dep
-
-
-def recurse_dependencies(
-    mods: t.Iterable[_ModMeta_Base],
-    database: t.Dict[str, t.Any],
-    dict: t.Dict[str, ModMeta],
-):
-    for mod in mods:
-        _merge_dependencies(dict, mod)  # type: ignore
-        if mod.Name in database:
-            recurse_dependencies(
-                _ModMeta_Deps.parse(database[mod.Name]).Dependencies, database, dict
-            )
-
-
-def combined_dependencies(
-    mods: t.Iterable[_ModMeta_Base], database: t.Dict[str, t.Any]
-) -> t.Dict[str, _ModMeta_Base]:
-    deps = {}
-    for mod in mods:
-        dependencies = None
-        if mod.Name in database:
-            dependencies = _ModMeta_Deps.parse(database[mod.Name]).Dependencies
-        elif isinstance(mod, _ModMeta_Deps):
-            dependencies = mod.Dependencies
-        if dependencies:
-            recurse_dependencies(dependencies, database, deps)
-    return deps
-
-
 class UpdateInfo:
     def __init__(
-        self, old: ModMeta, new: Version, url: str, mirror: t.Optional[str] = None
+        self, meta: ModMeta, new: Version, url: str, mirror: t.Optional[str] = None
     ):
-        self.Old = old
+        self.Meta = meta
         self.New = new
         self.Url = url
         self.Mirror = mirror if mirror else url
+
+    def __str__(self) -> str:
+        return str(self.Meta) + " -> " + str(self.New)
 
 
 def read_mod_info(mod: t.Union[str, t.IO[bytes]], with_size=False, with_hash=False):
@@ -198,8 +166,7 @@ def read_mod_info(mod: t.Union[str, t.IO[bytes]], with_size=False, with_hash=Fal
     except (EmptyFileError, ScannerError):
         return None
     except Exception:
-        echo(mod)
-        raise
+        return None
 
     if meta:
         meta.Path = mod if isinstance(mod, str) else ""

@@ -14,10 +14,12 @@ from tqdm import tqdm
 
 import mons.clickExt as clickExt
 import mons.fs as fs
+from mons.baseUtils import chain_partition
 from mons.baseUtils import invert
 from mons.baseUtils import multi_partition
 from mons.baseUtils import partition
 from mons.baseUtils import read_with_progress
+from mons.config import UserInfo
 from mons.downloading import download_threaded
 from mons.downloading import download_with_progress
 from mons.downloading import get_download_size
@@ -27,9 +29,10 @@ from mons.formatting import format_bytes
 from mons.formatting import format_columns
 from mons.formatting import TERM_COLORS
 from mons.install import Install
-from mons.modmeta import combined_dependencies
 from mons.modmeta import ModDownload
 from mons.modmeta import ModMeta
+from mons.modmeta import ModMeta_Base
+from mons.modmeta import ModMeta_Deps
 from mons.modmeta import read_mod_info
 from mons.modmeta import UpdateInfo
 from mons.mons import cli as mons_cli
@@ -191,6 +194,29 @@ def search(ctx, search: str):
             raise click.UsageError("Entry not found: " + str(item["GameBananaId"]))
 
 
+def search_mods(ctx, search):
+    mod_list = fetch_mod_db(ctx)
+    search_result = fetch_mod_search(search)
+    matches = {}
+    for item in search_result:
+        matches.update(
+            {
+                mod: data
+                for mod, data in mod_list.items()
+                if data["GameBananaId"] == item["GameBananaId"]
+            }
+        )
+
+    if len(matches) < 1:
+        echo("No results found.")
+        exit()
+
+    match = prompt_mod_selection(matches, max=9)
+    if not match:
+        raise click.Abort()
+    return match
+
+
 def prompt_mod_selection(options: t.Dict[str, t.Any], max=-1):
     matchKeys = sorted(
         options.keys(), key=lambda key: options[key]["LastUpdate"], reverse=True
@@ -226,14 +252,108 @@ def prompt_mod_selection(options: t.Dict[str, t.Any], max=-1):
     return selection
 
 
-def resolve_dependencies(
-    mods: t.Iterable[ModMeta], database: t.Optional[t.Dict[str, t.Any]] = None
-):
-    database = database or fetch_dependency_graph()
-    deps = combined_dependencies(mods, database)
-    sorted_deps = sorted(deps.values(), key=lambda dep: dep.Name)
+def resolve_dependencies(mods: t.Sequence[ModMeta]):
+    """Resolves the dependency tree for a list of mods, as well as the optional dependencies of the tree.
 
-    return sorted_deps
+    Optional dependencies are not resolved recursively.
+
+    :raises ValueError: Raises 'ValueError' if incompatible dependencies are encountered.
+    This can be differing major versions, or one of the :param:`mods` not satisfying a required dependency.
+    """
+
+    dependencies: t.Dict[str, ModMeta_Base] = {}
+    opt_dependencies: t.Dict[str, ModMeta_Base] = {}
+    dependency_graph = fetch_dependency_graph()
+
+    def check_supersedes(mod, compare, mod_optional=False, compare_optional=False):
+        try:
+            return mod.Version.supersedes(compare.Version)
+        except ValueError:
+            mod_str = str(mod) + (" (optional)" if mod_optional else "")
+            compare_str = str(compare) + (" (optional)" if compare_optional else "")
+            raise ValueError(
+                "Incompatible dependencies encountered: "
+                + f"{mod_str} has a different major version to {compare_str}"
+            )
+
+    def recurse_dependencies(mod: t.Union[ModMeta_Base, ModMeta_Deps]):
+        """Recursively resolve the highest required versions of the dependencies for a mod.
+
+        :raises ValueError: Raises `ValueError` for different major versions of the same dependency.
+        :raises RecursionError: Raises `RecursionError` for cyclical dependencies.
+        """
+        if not isinstance(mod, ModMeta_Deps):
+            if mod.Name not in dependency_graph:
+                return
+            mod = ModMeta_Deps.parse(dependency_graph[mod.Name])
+
+        for dep in mod.Dependencies:
+            if dep.Name in dependencies:
+                if not check_supersedes(dep, dependencies[dep.Name]):
+                    continue
+            dependencies[dep.Name] = dep
+            recurse_dependencies(dep)
+
+    for mod in mods:
+        # 'dependencies' is populated within the function, recursion is messy
+        recurse_dependencies(mod)
+
+    # Collect optional dependencies for requested mods and their dependencies.
+    # Optional dependencies are not resolved recursively. If they are going to be
+    # installed as non-optional dependencies they will already have been recursively resolved.
+    dep_deps = (
+        dep
+        if isinstance(dep, ModMeta_Deps)
+        else ModMeta_Deps.parse(dependency_graph[name])
+        for name, dep in dependencies.items()
+        if isinstance(dep, ModMeta_Deps) or name in dependency_graph
+    )
+
+    for opt_dep in itertools.chain.from_iterable(
+        mod.OptionalDependencies for mod in itertools.chain(mods, dep_deps)
+    ):
+        if opt_dep.Name in dependencies:
+            # Optional dependencies need to be satisfied if the mod is loaded as a dependency
+            if check_supersedes(opt_dep, dependencies[opt_dep.Name], mod_optional=True):
+                dependencies[opt_dep.Name] = opt_dep
+                continue
+        if opt_dep.Name in opt_dependencies:
+            if not check_supersedes(
+                opt_dep, opt_dependencies[opt_dep.Name], True, True
+            ):
+                continue
+        opt_dependencies[opt_dep.Name] = opt_dep
+
+    # Check if any explicitly requested mods conflict with a required dependency.
+    # Also check optional dependencies because they would conflict if the dep
+    # is loaded but does not satisfy the version.
+    # (Optional) dependencies that will be filled by an explicit mod are dropped.
+    for mod in mods:
+        if mod.Name in dependencies:
+            dep = dependencies[mod.Name]
+            # if an explicitly requested mod does not satisfy another's
+            # dependency on it, raise an error
+            if not mod.Version.satisfies(dep.Version):
+                raise ValueError(
+                    "Incompatible dependencies encountered: "
+                    + f"{mod} (explicit) does not satisfy dependency {dep}"
+                )
+            # dependency will be filled by an explicitly requested mod
+            del dependencies[mod.Name]
+
+        elif mod.Name in opt_dependencies:
+            dep = opt_dependencies[mod.Name]
+            # if an explicitly requested mod does not satisfy another's
+            # dependency on it, raise an error
+            if not mod.Version.satisfies(dep.Version):
+                raise ValueError(
+                    "Incompatible dependencies encountered: "
+                    + f"{mod} (explicit) does not satisfy optional dependency {dep}"
+                )
+            # dependency will be filled by an explicitly requested mod
+            del opt_dependencies[mod.Name]
+
+    return list(dependencies.values()), list(opt_dependencies.values())
 
 
 def get_mod_download(mod: str, mod_list: t.Dict[str, t.Any]):
@@ -242,20 +362,37 @@ def get_mod_download(mod: str, mod_list: t.Dict[str, t.Any]):
     return ModDownload(ModMeta(mod_info), mod_info["URL"], mod_info["MirrorURL"])
 
 
+def path_as_url(path: fs.Path):
+    return urllib.parse.urlunparse(
+        urllib.parse.ParseResult("file", "localhost", path, "", "", "")
+    )
+
+
 def resolve_mods(ctx, mods: t.Sequence[str]):
     resolved: t.List[ModDownload] = list()
     unresolved: t.List[str] = list()
     mod_list = fetch_mod_db(ctx)
+    dep_db = fetch_dependency_graph()
 
     for mod in mods:
+        # backwards compat shim
+        if mod.startswith("https://gamebanana.com/dl"):
+            mod = mod.replace(
+                "https://gamebanana.com/dl", "https://gamebanana.com/mmdl"
+            )
+
         parsed_url = urllib.parse.urlparse(mod)
         download = None
         url = None
 
+        db_matches = {key: val for key, val in mod_list.items() if mod == val["URL"]}
+        if db_matches:
+            download = prompt_mod_selection(db_matches)
+
         # Special case to try to resolve 1-Click install links through mod database
         if parsed_url.scheme == "everest":
             match = re.match(
-                "^(https://gamebanana.com/mmdl/.*),.*,.*$", parsed_url.path
+                r"^(https://gamebanana.com/mmdl/.*),.*,.*$", parsed_url.path
             )
             if match:
                 gb_url = match[1]
@@ -284,7 +421,9 @@ def resolve_mods(ctx, mods: t.Sequence[str]):
             mod_info = mod_list[mod]
             mod_info["Name"] = mod
             download = ModDownload(
-                ModMeta(mod_info), mod_info["URL"], mod_info["MirrorURL"]
+                ModMeta({**mod_info, **dep_db[mod]}),
+                mod_info["URL"],
+                mod_info["MirrorURL"],
             )
             echo(f'Mod found: {mod} {mod_info["Version"]}')
 
@@ -363,8 +502,20 @@ def resolve_mods(ctx, mods: t.Sequence[str]):
     return resolved, unresolved
 
 
+def update_everest(install: Install, required: Version):
+    current = install.everest_version
+    if current and current.satisfies(required):
+        return
+
+    echo(
+        f"Installed Everest ({current}) does not satisfy minimum requirement ({required})."
+    )
+    if clickExt.confirm_ext("Update Everest?", default=True):
+        mons_cli.main(args=["install", install.name, str(required)])
+
+
 @cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
-@clickExt.install("name")
+@clickExt.install("install", metavar="NAME", require_everest=True)
 @click.argument("mods", nargs=-1)
 @click.option(
     "--search", is_flag=True, help="Use the Celeste mod search API to find a mod."
@@ -373,20 +524,11 @@ def resolve_mods(ctx, mods: t.Sequence[str]):
 @click.option(
     "--no-deps", is_flag=True, default=False, help="Skip installing dependencies."
 )
-@click.option("--optional-deps", is_flag=True, default=False, hidden=True)
 @clickExt.yes_option()
 @clickExt.force_option()
 @click.pass_context
-def add(
-    ctx: click.Context,
-    name: Install,
-    mods: t.Tuple[str, ...],
-    search: bool,
-    random: bool,
-    no_deps: bool,
-    optional_deps: bool,
-):
-    """Add one or more mods.
+def add(ctx, install: Install, mods: t.Tuple[str], search, random, no_deps):
+    """Add mods.
 
     MODS can be one or more of: mod ID, local zip, zip URL, 1-Click install link, Google Drive share link, GameBanana page, or GameBanana submission ID.
     """
@@ -395,234 +537,213 @@ def add(
         echo("Selected a random mod: " + str(mods[0]))
 
     if not mods:
-        param = next(param for param in ctx.command.params if param.name == "mods")
-        raise click.MissingParameter(ctx=ctx, param=param)
+        echo("No mods to add.")
+        exit()
 
-    install = name
-    mod_folder = fs.joindir(install.path, "Mods")
-    mod_list = fetch_mod_db(ctx)
+    resolved: t.List[ModDownload] = []
+    unresolved: t.List[str] = []
 
-    installed_list = installed_mods(mod_folder, valid=True, with_size=True)
-    installed_list = {
-        meta.Name: meta
-        for meta in tqdm(
-            installed_list, desc="Reading Installed Mods", leave=False, unit=""
-        )
-    }
-
-    resolved: t.List[ModDownload] = list()
-    unresolved: t.List[str] = list()
-
-    def process_zip(zip: str, name: str):
-        meta = read_mod_info(zip)
-        if meta:
-            if meta.Name in installed_list:
-                if os.path.isdir(installed_list[meta.Name].Path):
-                    raise IsADirectoryError("Could not overwrite non-zipped mod.")
-                shutil.move(zip, installed_list[meta.Name].Path)
-            else:
-                resolved.append(
-                    ModDownload(meta, f"file:{urllib.request.pathname2url(zip)}")
-                )
-        elif clickExt.confirm_ext(
-            f"'{name}' does not seem to be an Everest mod.\nInstall anyways?",
-            default=False,
-            dangerous=True,
-        ):
-            filename = click.prompt("Save as file")
-            if filename:
-                filename = filename if filename.endswith(".zip") else filename + ".zip"
-                shutil.move(zip, os.path.join(mod_folder, filename))
-        else:
-            echo(f"Skipped install for {name}.")
-
-    # Query mod search API
     if search:
-        mod_list = fetch_mod_db(ctx)
-        search_result = fetch_mod_search(" ".join(mods))
-        matches = {}
-        for item in search_result:
-            matches.update(
-                {
-                    mod: data
-                    for mod, data in mod_list.items()
-                    if data["GameBananaId"] == item["GameBananaId"]
-                }
-            )
-
-        if len(matches) < 1:
-            echo("No results found.")
-            exit()
-
-        match = prompt_mod_selection(matches, max=9)
-        if not match:
-            raise click.Abort()
-        resolved = [match]
-
-    # Read from stdin
+        resolved = [search_mods(ctx, " ".join(mods))]
     elif mods == ("-",):
+        # Special case for handling stdin.
+        # More code should be shared with unresolved mods handler,
+        # since currently the data will be saved to two different temp files.
         with click.open_file("-", mode="rb") as stdin:
+            if stdin.isatty():
+                raise TTYError("no input.")
+
             with fs.temporary_file(persist=True) as temp:
-                if stdin.isatty():
-                    raise TTYError("no input.")
                 with click.open_file(temp, mode="wb") as file:
                     read_with_progress(
-                        stdin, file, label="Reading from stdin", clear_progress=True  # type: ignore
+                        stdin,
+                        file,
+                        label="Reading from stdin",
+                        clear_progress=True,
                     )
-                process_zip(temp, "stdin")
 
+                file_url = path_as_url(temp)
+                meta = read_mod_info(temp)
+                if meta:
+                    resolved = [ModDownload(meta, file_url)]
+                else:
+                    unresolved = [file_url]
     else:
         resolved, unresolved = resolve_mods(ctx, mods)
 
-    if len(unresolved) > 0:
+    if unresolved:
         echo("The following mods could not be resolved:")
         for s in unresolved:
             echo(f"\t{s}")
+
         download_size = sum(get_download_size(url) for url in unresolved)
         echo(
-            f"Downloading them all will use up to {format_bytes(download_size)} disk space."
+            f"Downloading them all will use up to {format_bytes(download_size)} of disk space."
         )
         if clickExt.confirm_ext(
             "Download and attempt to resolve them before continuing?", default=True
         ):
+            non_mods = []
             for url in unresolved:
                 with fs.temporary_file(persist=True) as file:
+                    # TODO: multithreaded download
                     download_with_progress(url, file, f"Downloading {url}", clear=True)
-                    process_zip(file, url)
-
-            unresolved = []
-
-    if len(resolved) > 0:
-        installed, resolved = partition(
-            lambda mod: mod.Meta.Name in installed_list, resolved
-        )
-        if len(installed) > 0:
-            echo("Already installed:")
-            for mod in installed:
-                echo(installed_list[mod.Meta.Name])
-
-    if len(resolved) > 0:
-        if not no_deps:
-            echo("Resolving dependencies...")
-            dependencies = resolve_dependencies(map(lambda d: d.Meta, resolved))
-            special, dependencies = partition(
-                lambda mod: mod.Name in ("Celeste", "Everest"), dependencies
-            )
-            deps_install: t.List[t.Any] = []
-            deps_update: t.List[UpdateInfo] = []
-            deps_blacklisted: t.List[ModMeta] = []
-            for dep in dependencies:
-                if dep.Name in installed_list:
-                    installed_mod = installed_list[dep.Name]
-                    if installed_mod.Version.satisfies(dep.Version):
-                        if installed_mod.Blacklisted:
-                            deps_blacklisted.append(installed_mod)
+                    meta = read_mod_info(file)
+                    if meta:
+                        resolved.append(ModDownload(meta, path_as_url(file)))
                     else:
-                        deps_update.append(
-                            UpdateInfo(
-                                installed_mod, dep.Version, mod_list[dep.Name]["URL"]
-                            )
-                        )
-                else:
-                    deps_install.append(dep)
+                        non_mods.append(file)
 
-            deps_install, unregistered = partition(
-                lambda mod: mod.Name in mod_list, deps_install
-            )
-            if len(unregistered) > 0:
-                echo(f"{len(unregistered)} dependencies could not be found:")
-                for mod in unregistered:
-                    echo(mod)
-                if not clickExt.confirm_ext(
-                    "Install without missing dependencies?",
-                    default=True,
+            for file in non_mods:
+                if clickExt.confirm_ext(
+                    f"'{file}' does not seem to be an Everest mod.\nInstall anyways?",
+                    default=False,
                     dangerous=True,
                 ):
-                    raise click.Abort()
+                    filename: str = click.prompt("Save as file")
+                    if filename:
+                        shutil.move(file, os.path.join(install.mod_folder, filename))
+            unresolved.clear()
 
-            deps_install = [
-                get_mod_download(mod.Name, mod_list) for mod in deps_install
-            ]
-        else:
-            deps_install = deps_update = deps_blacklisted = []
-        count = len(deps_install) + len(resolved)
-        if count > 0:
-            echo(f"\t{count} To Install:")
-            for download in itertools.chain(deps_install, resolved):
-                echo(download.Meta)
-        count = len(deps_update)
-        if count > 0:
-            echo(f"\t{count} To Update:")
-            for mod in deps_update:
-                echo(f"{mod.Old} -> {mod.New}")
-        count = len(deps_blacklisted)
-        if count > 0:
-            echo(f"\t{count} To Enable:")
-            for mod in deps_blacklisted:
-                echo(mod)
+    installed = {meta.Name: meta for meta in installed_mods(install.mod_folder)}
 
-        # Hack to allow assigning to a variable out of scope
-        download_size_ref = [0]
+    resolved_update, resolved = partition(
+        lambda m: m.Meta.Name in installed,
+        resolved,
+    )
+    resolved_update = [
+        UpdateInfo(installed[mod.Meta.Name], mod.Meta.Version, mod.Url, mod.Mirror)
+        for mod in resolved_update
+    ]
 
-        def download_size_key(mod: t.Union[UpdateInfo, ModDownload]):
-            size = (
-                get_download_size(mod.Url, mod.Old.Size)
-                if isinstance(mod, UpdateInfo)
-                else mod.Meta.Size
-            )
-            download_size_ref[0] += size
-            return size
+    deps, _opt_deps = (
+        resolve_dependencies([mod.Meta for mod in resolved])
+        if not no_deps
+        else ([], [])
+    )
 
-        sorted_dep_downloads = sorted(
-            itertools.chain(deps_install, deps_update), key=download_size_key
-        )
-        sorted_main_downloads = sorted(resolved, key=download_size_key)
+    deps_special, deps_missing, deps_outdated, _deps_installed = multi_partition(
+        lambda m: m.Name in ("Celeste", "Everest"),
+        lambda m: m.Name not in installed,
+        lambda m: not installed[m.Name].Version.satisfies(m.Version),
+        iterable=deps,
+    )
+    deps_outdated = (installed[dep.Name] for dep in deps_outdated)
+    del deps
 
-        download_size = download_size_ref[0]
-        if download_size >= 0:
-            echo(
-                f"After this operation, an additional {format_bytes(download_size)} disk space will be used"
-            )
-        else:
-            echo(
-                f"After this operation, {format_bytes(abs(download_size))} disk space will be freed"
-            )
+    mod_db = fetch_mod_db(ctx)
+    deps_unregistered, deps_missing, deps_outdated = chain_partition(
+        lambda m: m.Name not in mod_db,
+        deps_missing,
+        deps_outdated,
+    )
 
-        if not clickExt.confirm_ext("Continue?", default=True):
+    if len(deps_unregistered) > 0:
+        echo(f"{len(deps_unregistered)} dependencies could not be found:")
+        for mod in deps_unregistered:
+            echo(mod)
+        if not clickExt.confirm_ext(
+            "Install without missing dependencies?",
+            default=True,
+            dangerous=True,
+        ):
             raise click.Abort()
+    del deps_unregistered
 
-        with timed_progress("Downloaded files in {time:.3f} seconds."):
-            enable_mods(
-                mod_folder,
-                *itertools.chain(
-                    (os.path.basename(mod.Path) for mod in deps_blacklisted),
-                    (os.path.basename(mod.Old.Path) for mod in deps_update),
-                    # blindly attempt to enable any other mods that will be downloaded
-                    (f"{mod.Meta.Name}.zip" for mod in deps_install),
-                ),
-            )
+    deps_update = [
+        UpdateInfo(
+            installed[dep.Name],
+            dep.Version,
+            mod_db[dep.Name]["URL"],
+            mod_db[dep.Name].get("MirrorURL", ""),
+        )
+        for dep in deps_outdated
+    ]
+    deps_install = [get_mod_download(m.Name, mod_db) for m in deps_missing]
+    del deps_outdated, deps_missing
 
-            download_threaded(
-                mod_folder,
-                sorted_dep_downloads,
-                late_downloads=sorted_main_downloads,
-                thread_count=10,
-            )
+    skip_updates, resolved_update, deps_update = chain_partition(
+        lambda m: fs.isdir(m.Meta.Path), resolved_update, deps_update
+    )
+    if skip_updates:
+        echo("Unzipped mods will not be updated:")
+        for update in skip_updates:
+            echo("  " + str(update))
+    del skip_updates
 
-        if no_deps:
-            exit()
+    install_count = len(resolved) + len(deps_install)
+    if install_count > 0:
+        echo(f"{install_count} mods to install:")
+        for download in itertools.chain(resolved, deps_install):
+            echo("  " + str(download.Meta))
+    update_count = len(resolved_update) + len(deps_update)
+    if update_count > 0:
+        echo(f"{update_count} mods to update:")
+        for update in itertools.chain(resolved_update, deps_update):
+            echo("  " + str(update))
 
-        everest_min = next(
-            (dep.Version for dep in special if dep.Name == "Everest"), Version(0, 0, 0)  # type: ignore
+    if install_count + update_count < 1:
+        echo("No mods to install.")
+        exit()
+
+    # Hack to allow assigning to a variable out of scope
+    download_size_ref = [0]
+
+    def mod_download_size(mod: t.Union[UpdateInfo, ModDownload]):
+        size = get_download_size(mod.Url, mod.Meta.Size)
+        download_size_ref[0] += size
+        return size
+
+    sorted_dep_downloads = sorted(
+        itertools.chain(deps_install, deps_update), key=mod_download_size
+    )
+    sorted_main_downloads = sorted(
+        itertools.chain(resolved, resolved_update), key=mod_download_size
+    )
+
+    download_size = download_size_ref[0]
+    if download_size >= 0:
+        echo(
+            f"After this operation, an additional {format_bytes(download_size)} disk space will be used"
+        )
+    else:
+        echo(
+            f"After this operation, {format_bytes(abs(download_size))} disk space will be freed"
         )
 
-        current_everest = install.everest_version
-        if not (current_everest and current_everest.satisfies(everest_min)):
-            echo(
-                f"Installed Everest ({current_everest}) does not satisfy minimum requirement ({everest_min})."
-            )
-            if clickExt.confirm_ext("Update Everest?", default=True):
-                mons_cli.main(args=["install", install.name, str(everest_min)])
+    if not clickExt.confirm_ext("Continue?", default=True):
+        raise click.Abort()
+
+    with timed_progress("Installed mods in {time:.3f} seconds."):
+        download_threaded(
+            install.mod_folder, sorted_dep_downloads, sorted_main_downloads
+        )
+
+    # retrieve installed mods again since mods may have been added
+    installed = {meta.Name: meta for meta in installed_mods(install.mod_folder)}
+    # all mods should now be installed
+    assert all(
+        mod.Meta.Name in installed
+        for mod in itertools.chain(resolved, resolved_update, deps_install, deps_update)
+    )
+
+    blacklisted = [
+        installed[mod.Meta.Name]
+        for mod in itertools.chain(resolved, resolved_update, deps_install, deps_update)
+        if installed[mod.Meta.Name].Blacklisted
+    ]
+    if blacklisted:
+        echo("The following mods will be automatically removed from the blacklist:")
+        echo(" ".join([str(mod) for mod in blacklisted]))
+        enable_mods(
+            install.mod_folder, *(os.path.basename(mod.Path) for mod in blacklisted)
+        )
+
+    everest_min = next(
+        (dep.Version for dep in deps_special if dep.Name == "Everest"), None
+    )
+    if everest_min:
+        update_everest(install, everest_min)
 
 
 @cli.command(no_args_is_help=True, cls=clickExt.CommandExt)

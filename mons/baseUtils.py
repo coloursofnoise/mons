@@ -59,18 +59,30 @@ def multi_partition(*predicates: t.Callable[[T], bool], iterable: t.Iterable[T])
     results.append([])
 
     for item in iterable:
-        i = 0
         matched = False
-        for pred in predicates:
+        for i, pred in enumerate(predicates):
             if pred(item):
                 results[i].append(item)
                 matched = True
                 break
-            i += 1
         if not matched:
             results[-1].append(item)
 
     return tuple(results)
+
+
+def chain_partition(predicate: t.Callable[[T], bool], *iterables: t.Iterable[T]):
+    """Partition a series of lists based on a :param:`predicate`."""
+    matches: t.List[T] = []
+    non_matches: t.List[t.List[T]] = [[] for _ in iterables]
+
+    for i, iterable in enumerate(iterables):
+        for item in iterable:
+            if predicate(item):
+                matches.append(item)
+            else:
+                non_matches[i].append(item)
+    return tuple((matches, *non_matches))
 
 
 def tryExec(func: t.Callable[..., t.Any], *params: t.Any):

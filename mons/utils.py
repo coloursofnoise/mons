@@ -216,9 +216,9 @@ def installed_mods(
     return GeneratorWithLen(_iter(), len(files))
 
 
-def enable_mods(path: str, *mods: str):
+def enable_mods(path: fs.Directory, *mods: str):
     blacklist_path = os.path.join(path, "blacklist.txt")
-    if os.path.isfile(blacklist_path):
+    if fs.isfile(blacklist_path):
         with open(blacklist_path) as file:
             blacklist = file.readlines()
         i = 0

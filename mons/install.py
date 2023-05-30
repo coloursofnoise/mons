@@ -24,6 +24,10 @@ class Install:
     def asm(self):
         return find_celeste_asm(self.path)
 
+    @property
+    def mod_folder(self):
+        return fs.joindir(self.path, "Mods")
+
     _cache: t.Dict[str, t.Any] = field(default_factory=dict, init=False)
 
     def get_cache(self):
