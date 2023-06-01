@@ -183,7 +183,7 @@ def installed_mods(
     dirs: t.Optional[bool] = None,
     valid: t.Optional[bool] = None,
     blacklisted: t.Optional[bool] = None,
-    with_size=False,
+    folder_size=False,
     with_hash=False,
 ) -> t.Iterator[ModMeta]:
     files = os.listdir(path)
@@ -202,7 +202,7 @@ def installed_mods(
                 if dirs ^ bool(fs.isdir(modpath)):
                     continue
 
-            mod = read_mod_info(modpath, with_size=with_size, with_hash=with_hash)
+            mod = read_mod_info(modpath, folder_size=folder_size, with_hash=with_hash)
             if valid is not None:
                 if valid ^ bool(mod):
                     continue

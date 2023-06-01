@@ -303,6 +303,16 @@ def resolve_dependencies(
         # 'dependencies' is populated within the function, recursion is messy
         recurse_dependencies(mod)
 
+    # Without version checking, dependencies should be returned as-is.
+    # FIXME: This means that the list of dependencies can differ depending on
+    # `check_versions` due to redundant (optional)dependencies being removed,
+    # which could be misleading.
+    # This should be clearly documented, or this function should be split up
+    # to require handling version checks (and discarding redundant
+    # dependencies) explicitly.
+    if not check_versions:
+        return list(dependencies.values()), list(opt_dependencies.values())
+
     # Collect optional dependencies for requested mods and their dependencies.
     # Optional dependencies are not resolved recursively. If they are going to be
     # installed as non-optional dependencies they will already have been recursively resolved.
@@ -338,7 +348,7 @@ def resolve_dependencies(
             dep = dependencies[mod.Name]
             # if an explicitly requested mod does not satisfy another's
             # dependency on it, raise an error
-            if check_versions and not mod.Version.satisfies(dep.Version):
+            if not mod.Version.satisfies(dep.Version):
                 raise ValueError(
                     "Incompatible dependencies encountered: "
                     + f"{mod} (explicit) does not satisfy dependency {dep}"
@@ -350,7 +360,7 @@ def resolve_dependencies(
             dep = opt_dependencies[mod.Name]
             # if an explicitly requested mod does not satisfy another's
             # dependency on it, raise an error
-            if check_versions and not mod.Version.satisfies(dep.Version):
+            if not mod.Version.satisfies(dep.Version):
                 raise ValueError(
                     "Incompatible dependencies encountered: "
                     + f"{mod} (explicit) does not satisfy optional dependency {dep}"
@@ -753,6 +763,22 @@ def add(ctx, install: Install, mods: t.Tuple[str], search, random, no_deps):
         update_everest(install, everest_min)
 
 
+def resolve_exclusive_dependencies(
+    mods: t.List[ModMeta], installed: t.Dict[str, ModMeta]
+):
+    mod_names = [mod.Name for mod in mods]
+    dependencies, _opt_deps = resolve_dependencies(mods, check_versions=False)
+    other_dependencies, _opt_deps = resolve_dependencies(
+        [mod for name, mod in installed.items() if name not in mod_names],
+        check_versions=False,
+    )
+
+    unique_deps = {dep.Name for dep in dependencies}.difference(
+        {other.Name for other in other_dependencies}
+    )
+    return [installed[dep] for dep in unique_deps if dep in installed]
+
+
 @cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
 @clickExt.install("name")
 @click.argument("mods", nargs=-1, required=True)
@@ -792,21 +818,10 @@ def remove(name: Install, mods: t.List[str], recurse: bool):
     for mod in metas:
         echo(f"\t{mod}")
 
-    removable_deps = []
-    if recurse:
-        dependencies, _opt_deps = resolve_dependencies(metas, check_versions=False)
-        other_dependencies, _opt_deps = resolve_dependencies(
-            [mod for name, mod in installed_list.items() if name not in mods],
-            check_versions=False,
-        )
-
-        removable_deps = {dep.Name for dep in dependencies}.difference(
-            {dep.Name for dep in other_dependencies}
-        )
-        removable_deps = [
-            installed_list[dep] for dep in removable_deps if dep in installed_list
-        ]
-
+    removable_deps = (
+        resolve_exclusive_dependencies(metas, installed_list) if recurse else []
+    )
+    if removable_deps:
         echo(str(len(removable_deps)) + " dependencies will also be removed:")
         for dep in removable_deps:
             echo(f"\t{dep}")
