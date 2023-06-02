@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+import zipfile
 
 import pytest
 
@@ -32,6 +33,9 @@ def pytest_configure(config: pytest.Config):
     config.addinivalue_line("markers", "prioritize: prioritize this test")
     config.addinivalue_line(
         "markers", "must_pass: this test must pass in order to continue"
+    )
+    config.addinivalue_line(
+        "markers", "data_file_zip: pass arguments to the data_file_zip fixture"
     )
 
 
@@ -78,6 +82,23 @@ def data_file(request, tmp_path):
     with open(data_file, "w") as file:
         file.write(data)
     yield data_file
+
+
+@pytest.fixture
+def data_file_zip(request: pytest.FixtureRequest, tmp_path):
+    marker = request.node.get_closest_marker("data_file_zip")
+    data = marker.args[0] if marker else request.param
+    filenames = []
+    for i, file in enumerate(data if isinstance(data, list) else [data]):
+        filenames.append(os.path.join(tmp_path, f"data_file_{i}.zip"))
+        # indicator for missing file
+        if data is None:
+            continue
+
+        with zipfile.ZipFile(filenames[i], "w") as zip:
+            for filename, filedata in file.items():
+                zip.writestr(filename, filedata)
+    yield tuple(filenames)
 
 
 @pytest.fixture
