@@ -6,7 +6,9 @@ from importlib import reload
 
 import pytest
 
+import mons.install
 from mons.mons import cli as mons_cli
+from mons.version import Version
 
 
 def pytest_collection_modifyitems(session, config, items):
@@ -35,6 +37,7 @@ def test_install_path(pytestconfig: pytest.Config, cache: pytest.Cache):
         pytest.skip()
 
     if os.path.exists(install_path):
+        install_path = os.path.abspath(install_path)
         cache.set("mons/test_install", install_path)
         return install_path
     else:
@@ -42,7 +45,11 @@ def test_install_path(pytestconfig: pytest.Config, cache: pytest.Cache):
 
 
 @pytest.fixture(scope="function")
-def test_install(runner, test_name, test_install_path):
+def test_install(runner, test_name, test_install_path, monkeypatch):
+    monkeypatch.setattr(
+        mons.install, "parseExeInfo", lambda *args: (Version(0, 0, 0), "FNA")
+    )
+
     install_name = f"_pytest_{test_name}"
     result = runner.invoke(mons_cli, ["add", install_name, test_install_path])
     if result.exit_code != 0:
