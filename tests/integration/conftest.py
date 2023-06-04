@@ -1,5 +1,6 @@
 import os
 import pathlib
+from contextlib import contextmanager
 
 import click
 import pytest
@@ -56,3 +57,14 @@ def runner():
     ```
     """
     return CliRunner()
+
+
+@pytest.fixture
+def runner_result(runner, assertion_msg):
+    @contextmanager
+    def runner_result(*args, **kwargs):
+        result = runner.invoke(*args, **kwargs)
+        with assertion_msg(result.output):
+            yield result
+
+    return runner_result

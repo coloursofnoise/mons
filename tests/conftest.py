@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 import zipfile
+from contextlib import contextmanager
 
 import pytest
 
@@ -104,3 +105,15 @@ def data_file_zip(request: pytest.FixtureRequest, tmp_path):
 @pytest.fixture
 def test_name(request):
     yield request.node.name
+
+
+@pytest.fixture(autouse=True)
+def assertion_msg():
+    @contextmanager
+    def assertion_msg(msg: str):
+        try:
+            yield
+        except AssertionError:
+            raise AssertionError(msg)
+
+    return assertion_msg
