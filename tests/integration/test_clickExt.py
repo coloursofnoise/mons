@@ -128,7 +128,7 @@ def test_install_paramtype(
         os.mkdir(install_path)
         open(os.path.join(install_path, "Celeste.exe"), "x").close()
     installs = {test_name: install.Install(test_name, install_path)} if exist else {}
-    ctx.obj = Fake_UserInfo(installs)  # type: ignore
+    ctx.obj = Fake_UserInfo(installs)
     result = clickExt.type_cast_value(
         ctx,
         clickExt.Install(

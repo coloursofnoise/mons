@@ -144,7 +144,7 @@ def list_mods(
             lambda meta: next(
                 filter(lambda d: dependency == d.Name, meta.Dependencies),
                 t.cast(t.Any, None),
-            ),
+            ),  # type: ignore
             gen,
         )
 
@@ -427,7 +427,8 @@ def resolve_mods(ctx, mods: t.Sequence[str]):
             meta = read_mod_info(parsed_url.path)
             if meta:
                 download = ModDownload(
-                    meta, urllib.parse.urlunparse(parsed_url)  # type:ignore
+                    meta,
+                    urllib.parse.urlunparse(parsed_url),  # type:ignore
                 )
                 echo(f"Mod found: {meta}")
 
@@ -542,7 +543,14 @@ def update_everest(install: Install, required: Version):
 @clickExt.yes_option()
 @clickExt.force_option()
 @click.pass_context
-def add(ctx, install: Install, mods: t.Tuple[str], search, random, no_deps):
+def add(
+    ctx: click.Context,
+    install: Install,
+    mods: t.Tuple[str],
+    search=False,
+    random=False,
+    no_deps=False,
+):
     """Add mods.
 
     MODS can be one or more of: mod ID, local zip, zip URL, 1-Click install link, Google Drive share link, GameBanana page, or GameBanana submission ID.

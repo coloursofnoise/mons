@@ -1,5 +1,4 @@
 import typing as t
-from io import IOBase
 
 from click import Abort
 from tqdm import tqdm
@@ -100,8 +99,8 @@ _download_interrupt = False
 
 
 def read_with_progress(
-    input: IOBase,
-    output: IOBase,
+    input: t.IO[t.AnyStr],
+    output: t.IO[t.AnyStr],
     size=0,
     blocksize=4096,
     label: t.Optional[str] = "",

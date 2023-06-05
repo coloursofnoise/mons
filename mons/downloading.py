@@ -9,10 +9,11 @@ from io import BytesIO
 from tempfile import TemporaryDirectory
 from urllib.error import URLError
 
-import urllib3
+import urllib3.util
 from click import Abort
 from tqdm import tqdm
 from urllib3.exceptions import HTTPError
+from urllib3.response import BaseHTTPResponse
 
 from mons import baseUtils  # required to set module variable
 from mons import fs
@@ -25,8 +26,8 @@ def get_download_size(
     url: str, initial_size=0, http_pool: t.Optional[urllib3.PoolManager] = None
 ):
     http = http_pool or urllib3.PoolManager()
-    response: urllib3.HTTPResponse = http.request("HEAD", url)
-    return int(response.headers.get("Content-Length")) - initial_size
+    response: BaseHTTPResponse = http.request("HEAD", url)
+    return int(response.headers.get("Content-Length", initial_size)) - initial_size
 
 
 def download_with_progress(
