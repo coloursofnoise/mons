@@ -255,7 +255,7 @@ def prompt_mod_selection(options: t.Dict[str, t.Any], max=-1):
 
 def resolve_dependencies(
     mods: t.Sequence[ModMeta], check_versions=True
-) -> tuple[list[ModMeta_Base], list[ModMeta_Base]]:
+) -> t.Tuple[t.List[ModMeta_Base], t.List[ModMeta_Base]]:
     """Resolves the dependency tree for a list of mods, as well as the optional dependencies of the tree.
 
     Optional dependencies are not resolved recursively.

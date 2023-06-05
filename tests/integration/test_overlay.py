@@ -1,3 +1,4 @@
+import builtins
 from unittest.mock import mock_open
 
 import pytest
@@ -12,7 +13,7 @@ pytestmark = pytest.mark.linux
 def test_in_namespace(monkeypatch: pytest.MonkeyPatch):
     test_uid_map = "         0       1000          1\n"
     with monkeypatch.context() as m:
-        m.setitem(overlayfs.__builtins__, "open", mock_open(read_data=test_uid_map))
+        m.setattr(builtins, "open", mock_open(read_data=test_uid_map))
         assert overlayfs.in_namespace()
 
 
