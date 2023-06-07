@@ -21,6 +21,13 @@ class Version:
         arr += [-1] * (4 - len(arr))
         return cls(*arr)
 
+    @classmethod
+    def is_valid(cls, version: str):
+        try:
+            return not isinstance(cls.parse(version), NOVERSION)
+        except ValueError:
+            return False
+
     def satisfies(self, required: "Version"):
         """Checks if this version satisfies the :param:`required` version."""
         # Special case: Always True if version == 0.0.*

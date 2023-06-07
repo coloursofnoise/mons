@@ -42,7 +42,7 @@ def confirm_ext(*params, default, dangerous: bool = False, **attrs):
 
     tty = True
     try:
-        tty = os.isatty(sys.stdin.fileno())
+        tty = sys.stdin.isatty()
     except UnsupportedOperation:
         tty = False
 

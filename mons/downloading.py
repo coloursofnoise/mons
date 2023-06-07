@@ -5,15 +5,16 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import wait
 from contextlib import nullcontext
+from http.client import HTTPResponse
 from io import BytesIO
 from tempfile import TemporaryDirectory
 from urllib.error import URLError
 
+import typing_extensions as te
 import urllib3.util
 from click import Abort
 from tqdm import tqdm
 from urllib3.exceptions import HTTPError
-from urllib3.response import BaseHTTPResponse
 
 from mons import baseUtils  # required to set module variable
 from mons import fs
@@ -26,20 +27,60 @@ def get_download_size(
     url: str, initial_size=0, http_pool: t.Optional[urllib3.PoolManager] = None
 ):
     http = http_pool or urllib3.PoolManager()
-    response: BaseHTTPResponse = http.request("HEAD", url)
+    response = http.request("HEAD", url)
     return int(response.headers.get("Content-Length", initial_size)) - initial_size
 
 
+@t.overload
 def download_with_progress(
-    src: t.Union[str, urllib.request.Request, urllib3.HTTPResponse],
+    src: t.Union[str, urllib.request.Request, HTTPResponse],
+    dest: str,
+    label: t.Optional[str] = ...,
+    atomic: te.Literal[True] = ...,
+    clear: bool = ...,
+    *,
+    response_handler: t.Optional[t.Callable[[HTTPResponse], HTTPResponse]] = ...,
+    pool_manager: t.Optional[urllib3.PoolManager] = ...,
+) -> None:
+    ...
+
+
+@t.overload
+def download_with_progress(
+    src: t.Union[str, urllib.request.Request, HTTPResponse],
+    dest: None,
+    label: t.Optional[str] = ...,
+    atomic: te.Literal[False] = ...,
+    clear: bool = ...,
+    *,
+    response_handler: t.Optional[t.Callable[[HTTPResponse], HTTPResponse]] = ...,
+    pool_manager: t.Optional[urllib3.PoolManager] = ...,
+) -> BytesIO:
+    ...
+
+
+@t.overload
+def download_with_progress(
+    src: t.Union[str, urllib.request.Request, HTTPResponse],
+    dest: str,
+    label: t.Optional[str] = ...,
+    atomic: te.Literal[False] = ...,
+    clear: bool = ...,
+    *,
+    response_handler: t.Optional[t.Callable[[HTTPResponse], HTTPResponse]] = ...,
+    pool_manager: t.Optional[urllib3.PoolManager] = ...,
+) -> None:
+    ...
+
+
+def download_with_progress(
+    src: t.Union[str, urllib.request.Request, HTTPResponse],
     dest: t.Optional[str],
     label: t.Optional[str] = None,
-    atomic: t.Optional[bool] = False,
+    atomic=False,
     clear=False,
     *,
-    response_handler: t.Optional[
-        t.Callable[[urllib3.HTTPResponse], urllib3.HTTPResponse]
-    ] = None,
+    response_handler: t.Optional[t.Callable[[HTTPResponse], HTTPResponse]] = None,
     pool_manager: t.Optional[urllib3.PoolManager] = None,
 ):
     if not dest and atomic:
@@ -49,11 +90,14 @@ def download_with_progress(
 
     if isinstance(src, (str, urllib.request.Request)):
         try:
-            response: urllib3.HTTPResponse = http.request(
-                "GET",
-                src,
-                preload_content=False,
-                timeout=urllib3.Timeout(connect=3, read=10),
+            response = t.cast(
+                HTTPResponse,
+                http.request(
+                    "GET",
+                    src,  # type: ignore
+                    preload_content=False,
+                    timeout=urllib3.Timeout(connect=3, read=10),
+                ),
             )
         except HTTPError as e:
             try:
@@ -68,22 +112,22 @@ def download_with_progress(
     size = int(response.headers.get("Content-Length", None) or 100)
     blocksize = 8192
 
+    if dest is None:
+        io = BytesIO()
+        read_with_progress(content, io, size, blocksize, label, clear)
+        io.seek(0)
+        return io
+
     with fs.temporary_file(persist=False) if atomic else nullcontext(dest) as file:
-        with open(file, "wb") if file else nullcontext(BytesIO()) as io:
+        with open(file, "wb") as io:
             read_with_progress(content, io, size, blocksize, label, clear)
 
-            if dest is None and isinstance(io, BytesIO):
-                # io will not be closed by contextmanager because it used nullcontext
-                io.seek(0)
-                return io
-
         if atomic:
-            dest = t.cast(str, dest)
             if os.path.isfile(dest):
                 os.remove(dest)
-            shutil.move(t.cast(str, file), dest)
+            shutil.move(file, dest)
 
-    return BytesIO()
+    return None
 
 
 def downloader(
@@ -114,22 +158,12 @@ def mod_downloader(
     download: t.Union[ModDownload, UpdateInfo],
     http_pool: urllib3.PoolManager,
 ):
-    if isinstance(download, ModDownload):
-        src, mirror, dest, name = (
-            download.Url,
-            download.Mirror,
-            os.path.join(mod_folder, download.Meta.Name + ".zip"),
-            str(download.Meta),
-        )
-    else:
-        src, mirror, dest, name = (
-            download.Url,
-            download.Mirror,
-            download.Old.Path,
-            str(download.Old),
-        )
-
-    downloader(src, dest, name, mirror, http_pool)
+    dest = (
+        download.Meta.Path
+        if isinstance(download, UpdateInfo)
+        else os.path.join(mod_folder, download.Meta.Name + ".zip")
+    )
+    downloader(download.Url, dest, str(download.Meta), download.Mirror, http_pool)
 
 
 def download_threaded(

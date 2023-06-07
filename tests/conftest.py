@@ -40,7 +40,7 @@ def pytest_configure(config: pytest.Config):
     )
 
 
-@pytest.hookimpl(tryfirst=True)
+@pytest.hookimpl(tryfirst=True)  # pyright:ignore[reportUntypedFunctionDecorator]
 def pytest_collection_modifyitems(session, config, items):
     items.sort(key=lambda i: 0 if i.get_closest_marker("prioritize") else 1)
 

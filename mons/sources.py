@@ -4,6 +4,7 @@ import time
 import typing as t
 import urllib.parse
 from functools import update_wrapper
+from http.client import HTTPResponse
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
@@ -123,18 +124,18 @@ def fetch_latest_build(ctx, branch: str):
 
 
 def fetch_latest_build_azure(branch: str):
-    response: urllib3.HTTPResponse = urllib3.PoolManager().request(
+    response = urllib3.PoolManager().request(
         "GET",
         "https://dev.azure.com/EverestAPI/Everest/_apis/build/builds",
         fields={
-            "definitions": 3,
+            "definitions": "3",
             "statusFilter": "completed",
             "resultFilter": "succeeded",
             "branchName": branch
             if branch == "" or branch.startswith(("refs/heads/", "refs/pull/"))
             else "refs/heads/" + branch,
-            "api-version": 6.0,
-            "$top": 1,
+            "api-version": "6.0",
+            "$top": "1",
         },
     )
 
@@ -181,29 +182,33 @@ updateURLLookup = {
 }
 
 
-def fetch_build_artifact(ctx, build: int, artifactName: str) -> urllib3.HTTPResponse:
+def fetch_build_artifact(ctx, build: int, artifactName: str):
     build_list = fetch_build_list(ctx)
     for b in build_list:
         if build == int(b["version"]):
-            return urllib3.PoolManager().request(
-                "GET", b[updateURLLookup[artifactName]], preload_content=False
+            return t.cast(
+                HTTPResponse,
+                urllib3.PoolManager().request(
+                    "GET", b[updateURLLookup[artifactName]], preload_content=False
+                ),
             )
 
     return fetch_build_artifact_azure(build, artifactName)
 
 
-def fetch_build_artifact_azure(
-    build: int, artifactName="olympus-build"
-) -> urllib3.HTTPResponse:
-    return urllib3.PoolManager().request(
-        "GET",
-        f"https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts",
-        fields={
-            "artifactName": artifactName,
-            "api-version": 6.0,
-            "$format": "zip",
-        },
-        preload_content=False,
+def fetch_build_artifact_azure(build: int, artifactName="olympus-build"):
+    return t.cast(
+        HTTPResponse,
+        urllib3.PoolManager().request(
+            "GET",
+            f"https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts",
+            fields={
+                "artifactName": artifactName,
+                "api-version": "6.0",
+                "$format": "zip",
+            },
+            preload_content=False,
+        ),
     )
 
 

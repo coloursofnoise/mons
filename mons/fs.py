@@ -88,7 +88,7 @@ def copy_recursive_force(
         return 1
 
     if not isdir(src):
-        raise OSError(src)
+        raise NotADirectoryError(src)
 
     if not isdir(dest):
         os.makedirs(dest)

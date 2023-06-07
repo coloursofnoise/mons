@@ -1,3 +1,4 @@
+import io
 import typing as t
 
 from click import Abort
@@ -84,9 +85,9 @@ def chain_partition(predicate: t.Callable[[T], bool], *iterables: t.Iterable[T])
     return tuple((matches, *non_matches))
 
 
-def tryExec(func: t.Callable[..., t.Any], *params: t.Any):
+def tryExec(func: t.Callable[..., T], *params: t.Any, **kwargs: t.Any) -> t.Optional[T]:
     try:
-        func(*params)
+        func(*params, **kwargs)
     except Exception:
         pass
 
@@ -99,8 +100,8 @@ _download_interrupt = False
 
 
 def read_with_progress(
-    input: t.IO[t.AnyStr],
-    output: t.IO[t.AnyStr],
+    input: t.Union[io.IOBase, t.IO[t.AnyStr]],
+    output: t.Union[io.IOBase, t.IO[t.AnyStr]],
     size=0,
     blocksize=4096,
     label: t.Optional[str] = "",

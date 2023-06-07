@@ -6,11 +6,11 @@ import subprocess
 import sys
 import typing as t
 import urllib.parse
+from http.client import HTTPResponse
 from zipfile import ZipFile
 
 import click
 from click import echo
-from urllib3 import HTTPResponse
 
 if sys.platform == "linux":
     from mons import overlayfs
@@ -30,7 +30,6 @@ from mons.sources import fetch_latest_build_azure
 from mons.utils import find_celeste_asm
 from mons.utils import getMD5Hash
 from mons.utils import unpack
-from mons.version import NOVERSION
 from mons.version import Version
 
 
@@ -382,14 +381,6 @@ def copy_source_artifacts(
     return changed_files
 
 
-def is_version(string: str):
-    try:
-        ver = Version.parse(string)
-        return not isinstance(ver, NOVERSION)
-    except ValueError:
-        return False
-
-
 def fetch_artifact_source(ctx: click.Context, source: t.Optional[str]):
     try:
         url = clickExt.type_cast_value(ctx, clickExt.URL(require_path=True), source)
@@ -421,7 +412,7 @@ def fetch_artifact_source(ctx: click.Context, source: t.Optional[str]):
             if build["version"] == build_num:
                 return Version(1, build_num, 0), build["mainDownload"]
 
-    if is_version(source):
+    if Version.is_valid(source):
         parsed_ver = Version.parse(source)
         for build in build_list:
             if build["version"] == parsed_ver.Minor:
