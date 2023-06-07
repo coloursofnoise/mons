@@ -51,6 +51,20 @@ def test_install_zip(runner, test_install, cache):
     assert outputs.INSTALL_SUCCESS in result.output
 
 
+def test_install_stdin(runner, test_install, cache):
+    url = f"{GITHUB_REPO}/releases/latest/download/olympus-build.zip"
+    file = os.path.join(cache.mkdir("mons_test_install"), "olympus-build.zip")
+    if not os.path.exists(file):
+        urllib.request.urlretrieve(url, file)
+
+    assert os.path.isfile(file)
+
+    with open(file) as data:
+        result = runner.invoke(mons_cli, ["install", test_install, "-"], input=data)
+    assert result.exit_code == 0, result.output
+    assert outputs.INSTALL_SUCCESS in result.output
+
+
 @pytest.mark.xfail(
     not (shutil.which("dotnet") or shutil.which("msbuild")),
     reason="no .NET build tool found",

@@ -619,7 +619,7 @@ def install(
             else:
                 echo(f"Copied {copied} files.")
         artifact = None
-    elif source and fs.isfile(source):
+    elif source and (fs.isfile(source) or source == "-"):
         artifact = clickExt.type_cast_value(ctx, click.File(mode="rb"), source)
 
     else:
