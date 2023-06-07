@@ -26,6 +26,9 @@ from mons.modmeta import UpdateInfo
 def get_download_size(
     url: str, initial_size=0, http_pool: t.Optional[urllib3.PoolManager] = None
 ):
+    parsed = urllib3.util.parse_url(url)
+    if parsed.scheme == "file":
+        return os.path.getsize(parsed.path or "")
     http = http_pool or urllib3.PoolManager()
     response = http.request("HEAD", url)
     return int(response.headers.get("Content-Length", initial_size)) - initial_size

@@ -85,7 +85,7 @@ def format_mod_info(meta: ModMeta):
     no_args_is_help=True,
     cls=clickExt.CommandExt,
 )
-@clickExt.install("name")
+@clickExt.install("name", require_everest=True)
 @click.option(
     "--enabled/--disabled", help="Filter by enabled/disabled mods.", default=None
 )
@@ -129,7 +129,7 @@ def list_mods(
                 "--dependency", "--dependency cannot be used with the --invalid flag."
             )
 
-    basePath = fs.joindir(name.path, "Mods")
+    basePath = name.mod_folder
 
     installed = installed_mods(
         basePath, dirs=dir, valid=valid, blacklisted=invert(enabled)
@@ -248,7 +248,9 @@ def prompt_mod_selection(options: t.Dict[str, t.Any], max=-1):
             key = matchKeys[choice - 1]
             echo(f'Selected mod: {key} {options[key]["Version"]}')
             options[key]["Name"] = key
-            selection = ModDownload(options[key], options[key]["URL"])
+            selection = ModDownload(
+                options[key], options[key]["URL"], options[key]["Mirror"]
+            )
 
     return selection
 
@@ -741,7 +743,10 @@ def add(
 
     with timed_progress("Installed mods in {time:.3f} seconds."):
         download_threaded(
-            install.mod_folder, sorted_dep_downloads, sorted_main_downloads
+            install.mod_folder,
+            sorted_dep_downloads,
+            sorted_main_downloads,
+            ctx.ensure_object(UserInfo).config.downloading.thread_count,
         )
 
     # retrieve installed mods again since mods may have been added

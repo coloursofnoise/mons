@@ -63,7 +63,7 @@ def find_celeste_asm(path: fs.Path):
 
     raise FileNotFoundError(
         errno.ENOENT,
-        f"'{'Celeste.exe' if os.uname().sysname == 'nt' else 'Celeste.exe or Celeste.dll'}' could not be found in '{path}'",
+        f"'{'Celeste.exe' if os.uname().sysname == 'nt' else 'Celeste.exe or Celeste.dll'}' could not be found",
         path,
     )
 

@@ -84,7 +84,7 @@ def copy_recursive_force(
     """
 
     if isfile(src):
-        shutil.copyfile(src, dest)
+        shutil.copy2(src, dest)
         return 1
 
     if not isdir(src):

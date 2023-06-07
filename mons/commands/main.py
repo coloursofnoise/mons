@@ -657,7 +657,7 @@ def install(
 if sys.platform == "linux":
 
     @cli.command(no_args_is_help=True)
-    @clickExt.install("name")
+    @clickExt.install("name", require_everest=True)
     @click.pass_context
     def uninstall(ctx, name: Install):
         """Uninstall Everest from an overlay install."""
