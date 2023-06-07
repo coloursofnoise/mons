@@ -64,7 +64,8 @@ def runner_result(runner, assertion_msg):
     @contextmanager
     def runner_result(*args, **kwargs):
         result = runner.invoke(*args, **kwargs)
-        with assertion_msg(result.output):
+        error_msg = "=" * 10 + "\nCOMMAND OUTPUT\n\n" + result.output + "=" * 10
+        with assertion_msg(error_msg):
             yield result
 
     return runner_result

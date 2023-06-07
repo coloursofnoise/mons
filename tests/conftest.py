@@ -113,7 +113,8 @@ def assertion_msg():
     def assertion_msg(msg: str):
         try:
             yield
-        except AssertionError:
-            raise AssertionError(msg)
+        except AssertionError as e:
+            e.args = (e.args[0] + "\n" + msg,)
+            raise
 
     return assertion_msg
