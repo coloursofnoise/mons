@@ -394,37 +394,40 @@ def fetch_artifact_source(ctx: click.Context, source: t.Optional[str]):
     try:
         url = clickExt.type_cast_value(ctx, clickExt.URL(require_path=True), source)
         if url:
-            return str(urllib.parse.urlunparse(url))
+            return None, str(urllib.parse.urlunparse(url))
     except click.BadParameter:
         pass
 
     if not source:
         build_list = fetch_build_list(ctx)
-        return build_list[0]["mainDownload"]
+        return (
+            Version(1, int(build_list[0]["version"]), 0),
+            build_list[0]["mainDownload"],
+        )
 
     if source.startswith("refs/"):
         build = fetch_latest_build_azure(source)
         if build:
-            return fetch_build_artifact_azure(build)
+            return Version(1, build, 0), fetch_build_artifact_azure(build)
 
     build_list = fetch_build_list(ctx)
     for build in build_list:
         if source == build["branch"]:
-            return build["mainDownload"]
+            return Version(1, int(build["version"]), 0), build["mainDownload"]
 
     if source.isdigit():
         build_num = int(source)
         for build in build_list:
             if build["version"] == build_num:
-                return build["mainDownload"]
+                return Version(1, build_num, 0), build["mainDownload"]
 
     if is_version(source):
         parsed_ver = Version.parse(source)
         for build in build_list:
             if build["version"] == parsed_ver.Minor:
-                return build["mainDownload"]
+                return parsed_ver, build["mainDownload"]
 
-    return None
+    return None, None
 
 
 def download_artifact(url: t.Union[HTTPResponse, str]) -> t.IO[bytes]:
@@ -592,6 +595,8 @@ def install(
             )
 
     # Install command start
+    requested_version = None
+
     if src:
         source_dir = fs.Directory(
             clickExt.type_cast_value(
@@ -627,7 +632,7 @@ def install(
         artifact = clickExt.type_cast_value(ctx, click.File(mode="rb"), source)
 
     else:
-        source_download = fetch_artifact_source(ctx, source)
+        requested_version, source_download = fetch_artifact_source(ctx, source)
         if not source_download:
             raise click.BadParameter(
                 f"Provided build or branch '{source}' does not exist.",
@@ -646,9 +651,12 @@ def install(
         )
     echo("Everest was installed.")
 
-    # install.update_cache(read_exe=True)
-    # if install.everest_version != version:
-    #    echo(f"Warning: Requested and installed versions do not match! ({install.everest_version} != {version})"
+    if requested_version:
+        install.update_cache(read_exe=True)
+        if install.everest_version != requested_version:
+            echo(
+                f"Requested and installed versions do not match! ({install.everest_version} != {requested_version})"
+            )
 
     if launch_game:
         echo("Launching Celeste...")
