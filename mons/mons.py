@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import logging
 import os
 import typing as t
 from importlib import import_module
@@ -8,6 +9,15 @@ import click
 import mons.clickExt as clickExt
 from mons.config import Env
 from mons.config import UserInfo
+from mons.logging import ClickFormatter
+from mons.logging import EchoHandler
+
+
+# This should be the root module logger, even though __name__ is 'mons.mons'
+logger = logging.getLogger("mons")
+handler = EchoHandler()
+handler.setFormatter(ClickFormatter())
+logger.handlers = [handler]
 
 
 @click.group(cls=clickExt.CatchErrorsGroup)

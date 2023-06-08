@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import typing as t
@@ -10,6 +11,7 @@ from urllib import parse
 import click
 
 from mons import overlayfs
+from mons.baseUtils import partition
 from mons.baseUtils import T
 from mons.config import Env
 from mons.config import get_default_install
@@ -133,27 +135,51 @@ def force_option(*param_decls: str, **kwargs: t.Any):
     )
 
 
+loglevel_flags = {
+    "--debug": logging.DEBUG,
+    "--verbose": logging.DEBUG,
+    "--quiet": logging.ERROR,
+}
+
+
 class CatchErrorsGroup(click.Group):
     def main(self, args=None, *params, **extra):
+        # preserve sys.argv to ensure nested processes get the same input
+        # FIXME (python 3.10): sys.orig_argv
+        sys_argv = sys.argv
+
         def pop_arg(arg):
-            if arg in sys.argv:
+            if arg in sys_argv:
                 if not args:
-                    sys.argv.remove(arg)
+                    sys_argv.remove(arg)
                 return True
             return False
 
-        debug = pop_arg("--debug")
+        module_logger = logging.getLogger("mons")
+        logflags, sys_argv = partition(lambda arg: arg in loglevel_flags, sys_argv)
+        debug = "--debug" in logflags or os.getenv("MONS_DEBUG", "").lower() in (
+            "true",
+            "yes",
+            "1",
+        )
+        if logflags:
+            module_logger.setLevel(loglevel_flags[logflags[-1]])
+        elif debug:
+            module_logger.setLevel(logging.DEBUG)
+        else:
+            module_logger.setLevel(logging.INFO)
+
         wait = pop_arg("--wait")
         if pop_arg("--prompt-install"):
             os.environ["MONS_PROMPT_INSTALL"] = "1"
         try:
-            super().main(args=args, *params, **extra)
+            super().main(args=args or sys_argv[1:], *params, **extra)
         except SystemExit as e:
             if wait:
                 click.pause()
             raise e
         except Exception as e:
-            if debug or os.environ.get("MONS_DEBUG", "false") == "true":
+            if debug:
                 click.echo(
                     colorize("An unhandled exception has occurred.", TERM_COLORS.ERROR)
                 )

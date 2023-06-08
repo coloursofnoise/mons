@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 import shutil
 import stat
@@ -31,6 +32,9 @@ from mons.utils import find_celeste_asm
 from mons.utils import getMD5Hash
 from mons.utils import unpack
 from mons.version import Version
+
+
+logger = logging.getLogger(__name__)
 
 
 @cli.command(no_args_is_help=True)
@@ -209,7 +213,6 @@ def build_source(
     srcdir: str,
     dest: str,
     publish: bool,
-    verbose: bool,
     configuration_target: t.Optional[str],
     build_args: t.List[str],
 ):
@@ -217,20 +220,26 @@ def build_source(
     if configuration_target:
         configuration, framework = configuration_target.split("/")
 
+    # MSBuild log levels get bumped down a bit, since they're not really the focus
+    msbuild_levels = [(logging.INFO, "minimal"), (logging.DEBUG, "normal")]
+    msbuild_verbosity = "quiet"
+    for level, arg in msbuild_levels:
+        if logger.isEnabledFor(level):
+            msbuild_verbosity = arg
+
     if shutil.which("dotnet"):
         build_command = [
             "dotnet",
             "publish" if publish else "build",
 
-            "--verbosity",     "normal"  if verbose else "minimal",
+            "--verbosity",     msbuild_verbosity,
          *(("--configuration", configuration) if configuration else ()),
          *(("--framework",     framework)     if framework     else ()),
             "--output",        dest,
             *build_args,
         ]  # fmt: skip
 
-        if verbose:
-            echo(" ".join(build_command))
+        logger.info(" ".join(build_command))
         return (
             subprocess.run(
                 build_command,
@@ -243,7 +252,7 @@ def build_source(
             "msbuild",
 
           *("-target:"    +  "Publish" if publish else ()),
-            "-verbosity:" + ("normal"  if verbose else "minimal"),
+            "-verbosity:" +  msbuild_verbosity,
 
           *("-property:"  +  "Configuration=" + configuration if configuration else ()),
           *("-property:"  +  "Framework="     + framework if framework else ()),
@@ -251,8 +260,7 @@ def build_source(
             *build_args,
         ]  # fmt: skip
 
-        if verbose:
-            echo(" ".join(build_command))
+        logger.info(" ".join(build_command))
         return (
             subprocess.run(
                 build_command,
@@ -343,7 +351,7 @@ def copy_source_artifacts(
             "Could not determine build artifact to copy. Use the '--configuration' option to specify."
         )
 
-    echo(f"Copying files for configuration '{configuration}'.")
+    logger.info(f"Copying files for configuration '{configuration}'...")
     changed_files = 0
     for proj in os.listdir(srcdir):
         if not (
@@ -354,7 +362,7 @@ def copy_source_artifacts(
 
         output_path = os.path.join(srcdir, proj, "bin", configuration)
         if explicit_configuration and not fs.isdir(output_path):
-            echo(
+            logger.warning(
                 f"Build artifacts for configuration '{explicit_configuration}' do not exist for project '{proj}'. Skipping project..."
             )
             continue
@@ -390,6 +398,7 @@ def fetch_artifact_source(ctx: click.Context, source: t.Optional[str]):
         pass
 
     if not source:
+        logger.debug("No source provided, downloading latest artifact.")
         build_list = fetch_build_list(ctx)
         return (
             Version(1, int(build_list[0]["version"]), 0),
@@ -399,31 +408,37 @@ def fetch_artifact_source(ctx: click.Context, source: t.Optional[str]):
     if source.startswith("refs/"):
         build = fetch_latest_build_azure(source)
         if build:
+            logger.debug("Found matching ref in azure builds.")
             return Version(1, build, 0), fetch_build_artifact_azure(build)
 
     build_list = fetch_build_list(ctx)
     for build in build_list:
         if source == build["branch"]:
+            logger.debug("Found matching branch in Everest update list.")
             return Version(1, int(build["version"]), 0), build["mainDownload"]
 
     if source.isdigit():
         build_num = int(source)
         for build in build_list:
             if build["version"] == build_num:
+                logger.debug("Found matching build number in Everest update list.")
                 return Version(1, build_num, 0), build["mainDownload"]
 
     if Version.is_valid(source):
         parsed_ver = Version.parse(source)
+        logger.debug("Source is a version, using Minor version number as build.")
         for build in build_list:
             if build["version"] == parsed_ver.Minor:
+                logger.debug("Found matching build number in Everest update list.")
                 return parsed_ver, build["mainDownload"]
 
+    logger.debug("Source did not satisfy any checks")
     return None, None
 
 
 def download_artifact(url: t.Union[HTTPResponse, str]) -> t.IO[bytes]:
     url_str = str(url.geturl() if isinstance(url, HTTPResponse) else url)
-    click.echo("Downloading artifact from " + url_str)
+    logger.info("Downloading artifact from " + url_str)
     with fs.temporary_file(persist=True) as file:
         download_with_progress(url, file, clear=True)
         return click.open_file(file, mode="rb")
@@ -447,10 +462,14 @@ def extract_artifact(install: Install, artifact: t.IO[bytes]):
             unpack(wrapper, dest, "main/")
 
 
-def run_installer(install: Install, verbose: bool):
-    stdout = None if verbose else subprocess.DEVNULL
+def run_installer(install: Install):
+    stdout = None if logger.isEnabledFor(logging.DEBUG) else subprocess.DEVNULL
     install_dir = install.path
     if os.name == "nt":
+        logger.debug(
+            "System is nt, running MiniInstaller natively:\n%s",
+            os.path.join(install_dir, "MiniInstaller.exe"),
+        )
         return subprocess.run(
             os.path.join(install_dir, "MiniInstaller.exe"),
             stdout=stdout,
@@ -465,6 +484,10 @@ def run_installer(install: Install, verbose: bool):
             fs.joinfile(kickstart_dir, "Celeste"),
             os.path.join(kickstart_dir, "MiniInstaller"),
         ) as miniinstaller:
+            logger.debug(
+                "System is Darwin, using MonoKickstart bundled with Celeste to run MiniInstaller:\n%s",
+                miniinstaller,
+            )
             return (
                 subprocess.run(
                     miniinstaller, stdout=stdout, stderr=None, cwd=install_dir
@@ -476,6 +499,10 @@ def run_installer(install: Install, verbose: bool):
     suffix = "x86_64" if uname.machine == "x86_64" else "x86"
     core_miniinstaller = os.path.join(install_dir, "MiniInstaller-linux")
     if fs.isfile(core_miniinstaller):
+        logger.debug(
+            "System is Linux with Everest Core, using native MiniInstaller executable:\n%s",
+            core_miniinstaller,
+        )
         # This file may not be marked as executable, especially when building from a zip artifact
         os.chmod(core_miniinstaller, os.stat(core_miniinstaller).st_mode | stat.S_IEXEC)
         return (
@@ -489,6 +516,10 @@ def run_installer(install: Install, verbose: bool):
         fs.joinfile(install_dir, f"Celeste.bin.{suffix}"),
         os.path.join(install_dir, f"MiniInstaller.bin.{suffix}"),
     ) as miniinstaller:
+        logger.debug(
+            "System is Linux, using MonoKickstart bundled with Celeste to run MiniInstaller:\n%s",
+            miniinstaller,
+        )
         return (
             subprocess.run(
                 miniinstaller, stdout=stdout, stderr=None, cwd=install_dir
@@ -517,7 +548,6 @@ def validate_configuration(ctx, param, value: t.Optional[str]):
 )
 @clickExt.install("install", metavar="NAME")
 @click.argument("source", required=False)
-@click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
 @click.option(
     "--latest", is_flag=True, help="Install latest available build, branch-ignorant."
 )
@@ -553,7 +583,6 @@ def install(
     userinfo: UserInfo,
     install: Install,
     source: t.Optional[str],
-    verbose: bool,
     latest: bool,
     src: bool,
     no_build: bool,
@@ -599,25 +628,24 @@ def install(
             )
         )
         if not no_build:
-            echo("Building Everest source...")
+            logger.info("Building Everest source...")
             # Build source straight to install path
             build_source(
                 source_dir,
                 install.path,
                 publish,
-                verbose,
                 configuration,
                 build_args=userinfo.config.build_args + ctx.args,
             )
         else:
-            echo("Copying new and updated files...")
+            logger.info("Copying new and updated files...")
             copied = copy_source_artifacts(
                 source_dir, configuration, install.path, publish
             )
             if copied == 0:
-                echo("No files were changed.")
+                logger.info("No files were changed.")
             else:
-                echo(f"Copied {copied} files.")
+                logger.info(f"Copied {copied} files.")
         artifact = None
     elif source and (fs.isfile(source) or source == "-"):
         artifact = clickExt.type_cast_value(ctx, click.File(mode="rb"), source)
@@ -635,8 +663,8 @@ def install(
     if artifact:
         extract_artifact(install, artifact)
 
-    echo("Running MiniInstaller...")
-    if not run_installer(install, verbose):
+    logger.info("Running MiniInstaller...")
+    if not run_installer(install):
         raise click.ClickException(
             "Installing Everest failed, consult the MiniInstaller log for details."
         )
@@ -645,12 +673,12 @@ def install(
     if requested_version:
         install.update_cache(read_exe=True)
         if install.everest_version != requested_version:
-            echo(
+            logger.warning(
                 f"Requested and installed versions do not match! ({install.everest_version} != {requested_version})"
             )
 
     if launch_game:
-        echo("Launching Celeste...")
+        logger.info("Launching Celeste...")
         ctx.invoke(launch, name=install)
 
 
@@ -707,7 +735,7 @@ def downgrade_core(name: Install, verbose: bool):
     WARNING: This command will leave the install in an unstable state.
     Make sure to re-install Everest after running it.
     """
-    echo("Removing residual .NET Core files...")
+    logger.info("Removing residual .NET Core files...")
     for filename in everest_core_filenames:
         path = os.path.join(name.path, filename)
         if fs.isfile(path):
@@ -716,10 +744,9 @@ def downgrade_core(name: Install, verbose: bool):
             shutil.rmtree(path)
         else:
             continue
-        if verbose:
-            echo(path)
+        echo(path)
 
-    echo("Restoring backup...")
+    logger.info("Restoring backup...")
     restore_dest = name.path
     for filename in os.listdir(os.path.join(restore_dest, "orig")):
         if filename in everest_backup_exclude:
@@ -746,8 +773,7 @@ def downgrade_core(name: Install, verbose: bool):
             os.rename(orig_path, dest_path)
         else:
             continue
-        if verbose:
-            echo(orig_path + " -> " + dest_path)
+        echo(orig_path + " -> " + dest_path)
 
 
 @cli.command(
@@ -792,7 +818,9 @@ def launch(ctx: click.Context, name: Install, wait: bool, dry_run: bool):
     if dry_run:
         echo(" ".join([path] + launch_args))
         exit(0)
+    logger.debug(" ".join([path] + launch_args))
 
     proc = subprocess.Popen([path] + launch_args, stdout=redirect, stderr=redirect)
     if wait:
+        logger.debug("Waiting for process to exit...")
         proc.wait()

@@ -15,6 +15,7 @@ options that can disable it again:
 https://man.archlinux.org/man/user_namespaces.7.en#Availability
 https://www.debian.org/releases/bullseye/amd64/release-notes/ch-information.en.html#linux-user-namespaces
 """
+import logging
 import os
 import shutil
 import stat
@@ -30,6 +31,9 @@ from mons import fs
 from mons.config import CACHE_DIR
 from mons.config import DATA_DIR
 from mons.install import Install
+
+
+logger = logging.getLogger(__name__)
 
 
 def build_mount_options(lowerdir, upperdir, workdir, fstab=True):
@@ -168,7 +172,7 @@ SEE ALSO user_namespaces(7)
             ).returncode
             != 0
         ):
-            echo(
+            logger.error(
                 "\n".join(
                     [
                         "Unable to append entry. Manually append the following to /etc/fstab:",
@@ -209,9 +213,9 @@ def activate(ctx, install: Install):
     os.makedirs(workdir, exist_ok=True)
 
     if in_namespace():
-        echo("Overlay successfully mounted using unprivileged user namespace.")
+        logger.info("Overlay successfully mounted using unprivileged user namespace.")
     else:
-        echo(f"Overlay for {install.name} not mounted.")
+        logger.debug(f"Overlay for {install.name} not mounted.")
 
     mount_cmd = [
         "mount",
@@ -223,13 +227,13 @@ def activate(ctx, install: Install):
         build_mount_options(lowerdir, upperdir, workdir, fstab=False),
     ]
     if os.geteuid() != 0:
-        echo("Attempting to mount without sudo...")
+        logger.debug("Attempting to mount without sudo...")
         if subprocess.run(mount_cmd, capture_output=True).returncode == 0:
-            echo("Overlay successfully mounted without sudo.")
+            logger.debug("Overlay successfully mounted without sudo.")
             return
 
         if not in_namespace():
-            echo("Attempting to mount using unprivileged user namespace...")
+            logger.debug("Attempting to mount using unprivileged user namespace...")
             # First check that creating the ns works, we don't have a way to
             # know if a faliure is from 'unshare' or the command it ran
             if (
@@ -239,7 +243,7 @@ def activate(ctx, install: Install):
                 ).returncode
                 == 0
             ):
-                echo(
+                logger.debug(
                     "Unprivileged user namespaces available, running program in new namespace.."
                 )
 
@@ -268,7 +272,7 @@ def activate(ctx, install: Install):
             )
         mount_cmd = ["sudo"] + mount_cmd
 
-    echo("Attempting to mount as superuser...")
+    logger.debug("Attempting to mount as superuser...")
     if subprocess.run(mount_cmd).returncode != 0:
         raise click.ClickException(
             "\n".join(
@@ -279,7 +283,7 @@ def activate(ctx, install: Install):
                 ]
             )
         )
-    echo("Overlay successfully mounted as superuser.")
+    logger.debug("Overlay successfully mounted as superuser.")
 
 
 def reset(ctx, install: Install):
