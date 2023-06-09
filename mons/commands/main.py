@@ -4,7 +4,6 @@ import os
 import shutil
 import stat
 import subprocess
-import sys
 import typing as t
 import urllib.parse
 from http.client import HTTPResponse
@@ -12,9 +11,6 @@ from zipfile import ZipFile
 
 import click
 from click import echo
-
-if sys.platform == "linux":
-    from mons import overlayfs
 
 import mons.clickExt as clickExt
 import mons.fs as fs
@@ -25,6 +21,9 @@ from mons.errors import TTYError
 from mons.formatting import format_columns
 from mons.install import Install
 from mons.mons import cli
+from mons.platforms import assert_platform
+from mons.platforms import is_os_64bit
+from mons.platforms import is_platform
 from mons.sources import fetch_build_artifact_azure
 from mons.sources import fetch_build_list
 from mons.sources import fetch_latest_build_azure
@@ -32,6 +31,9 @@ from mons.utils import find_celeste_asm
 from mons.utils import getMD5Hash
 from mons.utils import unpack
 from mons.version import Version
+
+if is_platform("Linux") and assert_platform("Linux"):
+    from mons import overlayfs
 
 
 logger = logging.getLogger(__name__)
@@ -45,7 +47,7 @@ logger = logging.getLogger(__name__)
     type=click.Path(exists=True, resolve_path=True),
     metavar="BASEINSTALL",
     help="Overlay this install on top of BASEINSTALL.",
-    hidden=sys.platform != "linux",
+    hidden=is_platform("Linux"),
 )
 @pass_userinfo
 @click.pass_context
@@ -57,7 +59,7 @@ def add(
     overlay: t.Optional[fs.Path] = None,
 ):
     """Add a Celeste install"""
-    if overlay and sys.platform == "linux":
+    if overlay and is_platform("Linux") and assert_platform("Linux"):
         return add_overlay(user_info, name, path, overlay)
 
     # This can't be done as during argument parsing because when `--overlay` is used the path doesn't have to exist yet.
@@ -78,7 +80,7 @@ def add(
     echo(new_install.version_string())
 
 
-if sys.platform == "linux":
+if is_platform("Linux") and assert_platform("Linux"):
 
     def add_overlay(
         user_info: UserInfo, name: str, install_path: str, overlay: fs.Path
@@ -465,9 +467,9 @@ def extract_artifact(install: Install, artifact: t.IO[bytes]):
 def run_installer(install: Install):
     stdout = None if logger.isEnabledFor(logging.DEBUG) else subprocess.DEVNULL
     install_dir = install.path
-    if os.name == "nt":
+    if is_platform("Windows") and assert_platform("Windows"):
         logger.debug(
-            "System is nt, running MiniInstaller natively:\n%s",
+            "System is Windows, running MiniInstaller natively:\n%s",
             os.path.join(install_dir, "MiniInstaller.exe"),
         )
         return subprocess.run(
@@ -477,8 +479,7 @@ def run_installer(install: Install):
             cwd=install_dir,
         )
 
-    uname = os.uname() if os.name != "nt" else ""
-    if uname.sysname == "Darwin":
+    if is_platform("Darwin") and assert_platform("Darwin"):
         kickstart_dir = fs.joindir(install_dir, "..", "MacOS")
         with fs.copied_file(
             fs.joinfile(kickstart_dir, "Celeste"),
@@ -496,7 +497,8 @@ def run_installer(install: Install):
             )
 
     # Linux
-    suffix = "x86_64" if uname.machine == "x86_64" else "x86"
+    assert_platform("Linux")
+    suffix = "x86_64" if is_os_64bit() else "x86"
     core_miniinstaller = os.path.join(install_dir, "MiniInstaller-linux")
     if fs.isfile(core_miniinstaller):
         logger.debug(
@@ -682,7 +684,7 @@ def install(
         ctx.invoke(launch, name=install)
 
 
-if sys.platform == "linux":
+if is_platform("Linux") and assert_platform("Linux"):
 
     @cli.command(no_args_is_help=True)
     @clickExt.install("name", require_everest=True)
@@ -756,7 +758,7 @@ def downgrade_core(name: Install, verbose: bool):
         dest_path = os.path.join(restore_dest, filename)
 
         # MacOS is special
-        if sys.platform == "darwin":
+        if is_platform("Darwin") and assert_platform("Darwin"):
             macos_path = os.path.join(os.path.dirname(name.path), "MacOS")
             if filename.casefold() == "Celeste".casefold():
                 restore_dest = os.path.join(macos_path, "Celeste")
@@ -799,13 +801,12 @@ def launch(ctx: click.Context, name: Install, wait: bool, dry_run: bool):
 
     Any additional arguments are passed to the launched process."""
     path = name.asm
-    if os.name != "nt":
-        if os.uname().sysname == "Darwin":
-            path = fs.File(
-                os.path.normpath(os.path.join(name.path, "..", "MacOS", "Celeste"))
-            )
-        else:
-            path = fs.File(os.path.splitext(path)[0])  # drop the .exe
+    if is_platform("Darwin") and assert_platform("Darwin"):
+        path = fs.File(
+            os.path.normpath(os.path.join(name.path, "..", "MacOS", "Celeste"))
+        )
+    elif is_platform("Linux") and assert_platform("Linux"):
+        path = fs.File(os.path.splitext(path)[0])  # drop the .exe
 
     launch_args = ctx.ensure_object(UserInfo).config.launch_args
     launch_args += ctx.args

@@ -7,3 +7,12 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
+
+[tool.pyright]
+include = ["mons"]
+exclude = ["mons/overlayfs.py"]
+
+executionEnvironments = [
+     { root = "mons/overlayfs.py", pythonPlatform = "Linux" },
+     { root = "." }
+]

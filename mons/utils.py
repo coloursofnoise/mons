@@ -21,6 +21,8 @@ from mons import fs
 from mons.baseUtils import GeneratorWithLen
 from mons.modmeta import ModMeta
 from mons.modmeta import read_mod_info
+from mons.platforms import assert_platform
+from mons.platforms import is_platform
 from mons.version import NOVERSION
 from mons.version import Version
 
@@ -48,7 +50,10 @@ def find_celeste_asm(path: fs.Path):
         if os.path.basename(path) == "Celeste.exe":
             return path
 
-        if os.uname().sysname != "nt" and os.path.basename(path) == "Celeste.dll":
+        if (
+            not (is_platform("Windows") and assert_platform("Windows"))
+            and os.path.basename(path) == "Celeste.dll"
+        ):
             return path
 
     elif fs.isdir(path):
@@ -58,13 +63,15 @@ def find_celeste_asm(path: fs.Path):
         if fs.isfile(os.path.join(path, "Celeste.exe")):
             return fs.joinfile(path, "Celeste.exe")
 
-        if os.uname().sysname != "nt" and fs.isfile(os.path.join(path, "Celeste.dll")):
+        if not (is_platform("Windows") and assert_platform("Windows")) and fs.isfile(
+            os.path.join(path, "Celeste.dll")
+        ):
             return fs.joinfile(path, "Celeste.dll")
 
+    if is_platform("Windows") and assert_platform("Windows"):
+        raise FileNotFoundError(errno.ENOENT, "'Celeste.exe' could not be found", path)
     raise FileNotFoundError(
-        errno.ENOENT,
-        f"'{'Celeste.exe' if os.uname().sysname == 'nt' else 'Celeste.exe or Celeste.dll'}' could not be found",
-        path,
+        errno.ENOENT, "'Celeste.exe' or 'Celeste.dll' could not be found", path
     )
 
 
