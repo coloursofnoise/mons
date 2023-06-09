@@ -468,6 +468,21 @@ def run_installer(install: Install):
     stdout = None if logger.isEnabledFor(logging.DEBUG) else subprocess.DEVNULL
     install_dir = install.path
     if is_platform("Windows") and assert_platform("Windows"):
+        core_miniinstaller = os.path.join(
+            install_dir,
+            "MiniInstaller-win64.exe" if is_os_64bit() else "MiniInstaller-win.exe",
+        )
+        if fs.isfile(core_miniinstaller):
+            logger.debug(
+                "System is Windows with Everest Core, using native MiniInstaller executable:\n%s",
+                core_miniinstaller,
+            )
+            return (
+                subprocess.run(
+                    core_miniinstaller, stdout=stdout, stderr=None, cwd=install_dir
+                ).returncode
+                == 0
+            )
         logger.debug(
             "System is Windows, running MiniInstaller natively:\n%s",
             os.path.join(install_dir, "MiniInstaller.exe"),
