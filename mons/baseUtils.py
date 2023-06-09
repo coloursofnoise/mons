@@ -1,8 +1,12 @@
 import io
+import logging
 import typing as t
 
 from click import Abort
-from tqdm import tqdm
+
+from mons.logging import ProgressBar
+
+logger = logging.getLogger(__name__)
 
 
 if t.TYPE_CHECKING:
@@ -107,17 +111,17 @@ def read_with_progress(
     label: t.Optional[str] = "",
     clear_progress=False,
 ):
-    with tqdm(
+    with ProgressBar(
         total=size,
         desc=label,
         leave=(not clear_progress),
         unit_scale=True,
         unit="b",
         delay=0.4,
-        disable=False,
     ) as bar:
         while True:
             if _download_interrupt:
+                logger.debug("Download interrupted, aborting...")
                 raise Abort
 
             buf = input.read(blocksize)

@@ -11,7 +11,6 @@ from operator import attrgetter
 
 import click
 from click import echo
-from tqdm import tqdm
 
 import mons.clickExt as clickExt
 import mons.fs as fs
@@ -30,6 +29,7 @@ from mons.formatting import format_bytes
 from mons.formatting import format_columns
 from mons.formatting import TERM_COLORS
 from mons.install import Install
+from mons.logging import ProgressBar
 from mons.modmeta import ModDownload
 from mons.modmeta import ModMeta
 from mons.modmeta import ModMeta_Base
@@ -807,7 +807,7 @@ def remove(name: Install, mods: t.List[str], recurse: bool):
     installed_list = installed_mods(name.mod_folder, valid=True, folder_size=True)
     installed_list = {
         meta.Name: meta
-        for meta in tqdm(
+        for meta in ProgressBar(
             installed_list, desc="Reading Installed Mods", leave=False, unit=""
         )
     }
@@ -975,7 +975,7 @@ def resolve(
         install.mod_folder, valid=True, blacklisted=invert(enabled)
     )
     installed = list(
-        tqdm(installed, desc="Reading Installed Mods", leave=False, unit="")
+        ProgressBar(installed, desc="Reading Installed Mods", leave=False, unit="")
     )
     installed_dict = {meta.Name: meta for meta in installed}
 

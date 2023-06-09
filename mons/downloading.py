@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 import typing as t
@@ -13,7 +14,6 @@ from urllib.error import URLError
 import typing_extensions as te
 import urllib3.util
 from click import Abort
-from tqdm import tqdm
 from urllib3.exceptions import HTTPError
 
 from mons import baseUtils  # required to set module variable
@@ -21,6 +21,9 @@ from mons import fs
 from mons.baseUtils import read_with_progress
 from mons.modmeta import ModDownload
 from mons.modmeta import UpdateInfo
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_download_size(
@@ -143,7 +146,7 @@ def downloader(
     mirror = mirror or src
 
     if os.path.isdir(dest):
-        tqdm.write(f"\nCould not overwrite unzipped mod: {os.path.basename(dest)}")
+        logger.warning(f"\nCould not overwrite unzipped mod: {os.path.basename(dest)}")
     try:
         download_with_progress(
             src, dest, f"{name} {src}", atomic=True, clear=True, pool_manager=http_pool
@@ -151,7 +154,7 @@ def downloader(
     except Abort:
         return
     except Exception as e:
-        tqdm.write(f"\nError downloading file {os.path.basename(dest)} {src}: {e}")
+        logger.warning(f"\nError downloading file {os.path.basename(dest)} {src}: {e}")
         if isinstance(e, (HTTPError)) and src != mirror:
             downloader(mirror, dest, name)
 

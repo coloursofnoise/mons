@@ -1,5 +1,6 @@
 import errno
 import hashlib
+import logging
 import os
 import re
 import time
@@ -11,20 +12,22 @@ from contextlib import contextmanager
 
 import dnfile  # https://github.com/malwarefrank/dnfile
 import typing_extensions as te
-from click import echo
 from pefile import (  # pyright:ignore[reportMissingTypeStubs]
     DIRECTORY_ENTRY,
 )  # https://github.com/erocarrera/pefile
-from tqdm import tqdm
 
 from mons import fs
 from mons.baseUtils import GeneratorWithLen
+from mons.logging import ProgressBar
 from mons.modmeta import ModMeta
 from mons.modmeta import read_mod_info
 from mons.platforms import assert_platform
 from mons.platforms import is_platform
 from mons.version import NOVERSION
 from mons.version import Version
+
+
+logger = logging.getLogger(__name__)
 
 
 VANILLA_HASH: t.Dict[str, t.Tuple[Version, te.Literal["FNA", "XNA"]]] = {
@@ -42,7 +45,7 @@ def timed_progress(msg: str):
     yield
     end = time.perf_counter()
     # Carriage return ensures msg is printed properly even after multiple progress bars
-    tqdm.write("\r" + msg.format(time=end - start))
+    logger.info("\r" + msg.format(time=end - start))
 
 
 def find_celeste_asm(path: fs.Path):
@@ -91,7 +94,7 @@ def unpack(zip: zipfile.ZipFile, root: fs.Directory, prefix="", label="Extractin
         if not prefix or zipinfo.filename.startswith(prefix):
             totalSize += zipinfo.file_size
 
-    with tqdm(total=totalSize, desc=label, leave=False) as bar:
+    with ProgressBar(total=totalSize, desc=label, leave=False) as bar:
         for zipinfo in zip.infolist():
             if not zipinfo.filename or zipinfo.filename.endswith("/"):
                 continue
@@ -125,7 +128,7 @@ urllib.request.install_opener(opener)
 
 
 def parseExeInfo(path: fs.File):
-    echo("Reading exe...\r", nl=False)
+    logger.info(f"Retrieving version information from {path}.")
     pe = dnfile.dnPE(path, fast_load=True)
     pe.parse_data_directories(
         directories=DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR"]
@@ -140,16 +143,20 @@ def parseExeInfo(path: fs.File):
 
     heapSize = stringHeap.sizeof()
     i = 0
-    with tqdm(total=heapSize, desc="Scanning exe", leave=False) as bar:
+    with ProgressBar(total=heapSize, desc="Scanning exe", leave=False) as bar:
         while i < len(stringHeap.__data__):
             string = stringHeap.get(i)
             if string is None:
                 break
             string = str(string)
             if string == "EverestModule":
+                logging.debug("Found EverestModule in string heap")
                 hasEverest = True
             if string.startswith("EverestBuild"):
                 everestBuild = string[len("EverestBuild") :]
+                logging.debug(
+                    "Found EverestBuild in string heap with suffix: " + everestBuild
+                )
                 hasEverest = True
                 break
             inc = max(len(string), 1)
