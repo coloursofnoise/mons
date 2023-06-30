@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 import typing as t
@@ -16,8 +17,10 @@ from platformdirs import PlatformDirs
 from mons import fs
 from mons.baseUtils import T
 from mons.errors import EmptyFileError
-from mons.errors import MultiException
+from mons.errors import ExceptionCount
 from mons.install import Install
+
+logger = logging.getLogger(__name__)
 
 dirs = PlatformDirs("mons", False, ensure_exists=True)
 CONFIG_DIR = dirs.user_config_dir
@@ -89,10 +92,11 @@ def load_yaml(document: t.Any, type: t.Type[T]) -> t.Optional[T]:
 
 def dataclass_fromdict(data: t.Dict[str, t.Any], type: t.Type[T]) -> T:
     type_fields = {f.name: f.type for f in fields(type) if f.init}
-    errors: t.List[Exception] = list()
+    errors = 0
     for k, v in data.items():
         if k not in type_fields:
-            errors.append(Exception(f"Unknown key: {k}"))
+            logger.error(f"Unknown key: {k}")
+            errors += 1
             continue
 
         # Retrieve type checkable version of generic and special types
@@ -102,16 +106,13 @@ def dataclass_fromdict(data: t.Dict[str, t.Any], type: t.Type[T]) -> T:
             if issubclass(type_fields[k], object):  # recursively deserialize objects
                 try:
                     load_yaml(str(v), type_fields[k])
-                except MultiException as e:
-                    errors.extend(e.list)
-                except Exception as e:
-                    errors.append(e)
+                except ExceptionCount as e:
+                    errors += e.count
             else:
-                errors.append(Exception(f"Invalid value for key {k}: {v}"))
-    if len(errors) > 1:
-        raise MultiException("", errors)
-    if len(errors) == 1:
-        raise errors[0]
+                logger.error(f"Invalid value for key {k}: {v}")
+                errors += 1
+    if errors:
+        raise ExceptionCount(errors)
 
     return type(**data)
 
@@ -186,11 +187,12 @@ class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgu
                 self._config = read_yaml(CONFIG_FILE, Config)
             except (FileNotFoundError, EmptyFileError):
                 self._config = Config()
-            except MultiException as e:
-                e.message = "Multiple errors loading config"
+            except ExceptionCount as e:
+                raise ClickException(
+                    f"{e.count} error(s) were encountered while loading config."
+                )
+            except yaml.error.YAMLError as e:
                 raise ClickException(str(e))
-            except Exception as e:
-                raise ClickException("Error loading config:\n  " + str(e))
 
         return self._config
 

@@ -79,24 +79,3 @@ def _format_columns_dict(dict, prefix):
         "{}{:<{c1_width}}\t{}".format(prefix, k, v, c1_width=c1_width)
         for k, v in dict.items()
     ).strip("\n")
-
-
-Color = t.NewType("Color", str)
-
-
-class TERM_COLORS:
-    NONE = Color("\033[0m")
-    RESET = Color(NONE)
-
-    RED = Color("\033[0;31m")
-    ERROR = Color(RED)
-
-    GREY = Color("\033[0;90m")
-    DISABLED = Color(GREY)
-
-    YELLOW = Color("\033[0;33m")
-    WARNING = Color(YELLOW)
-
-
-def colorize(string: str, color: Color):
-    return color + string + TERM_COLORS.RESET

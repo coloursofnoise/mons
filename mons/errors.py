@@ -1,5 +1,3 @@
-import typing as t
-
 import click
 
 
@@ -12,10 +10,7 @@ class TTYError(click.ClickException):
         super().__init__("Could not read from stdin: " + message)
 
 
-class MultiException(Exception):
-    def __init__(self, message: str, list: t.List[Exception]):
-        self.message = message
-        self.list = list
-
-    def __str__(self) -> str:
-        return self.message + ":\n  " + "\n  ".join([str(e) for e in self.list])
+class ExceptionCount(Exception):
+    def __init__(self, count: int):
+        self.count = count
+        super().__init__()

@@ -4,8 +4,6 @@ import sys
 import typing as t
 from gettext import gettext as _
 from io import UnsupportedOperation
-from traceback import format_exception_only
-from traceback import format_tb
 from urllib import parse
 
 import click
@@ -17,10 +15,11 @@ from mons.config import Env
 from mons.config import get_default_install
 from mons.config import UserInfo
 from mons.errors import TTYError
-from mons.formatting import colorize
-from mons.formatting import TERM_COLORS
 from mons.install import Install as T_Install
 from mons.utils import find_celeste_asm
+
+
+logger = logging.getLogger(__name__)
 
 
 def confirm_ext(*params, default, dangerous: bool = False, **attrs):
@@ -180,21 +179,14 @@ class CatchErrorsGroup(click.Group):
             raise e
         except Exception as e:
             if debug:
-                click.echo(
-                    colorize("An unhandled exception has occurred.", TERM_COLORS.ERROR)
-                )
-                click.echo("".join(format_tb(e.__traceback__)), nl=False)
-                click.echo(
-                    colorize(
-                        "".join(format_exception_only(type(e), e)), TERM_COLORS.ERROR
-                    ),
-                    nl=False,
-                )
+                logger.exception("An unhandled exception has occurred:")
             else:
-                click.echo(colorize(repr(e), TERM_COLORS.ERROR))
-                click.echo(
-                    """An unhandled exception has occurred.
-Use the --debug flag to disable clean exception handling."""
+                logger.error(
+                    "An unhandled exception has occurred:\n  "
+                    + click.style(repr(e), "red")
+                )
+                logger.error(
+                    "Use the --debug flag to disable clean exception handling."
                 )
 
 
@@ -300,7 +292,7 @@ class Install(ParamTypeG[t.Union[str, T_Install]]):
             except FileNotFoundError as err:
                 raise FileNotFoundError(
                     f"""Install {install} does not have a valid path:
-                        {TERM_COLORS.ERROR}{path} {err}{TERM_COLORS.RESET}
+                        {click.style(path + " " + repr(err), "red")}
                         Use `set-path` to assign a new path."""
                 )
 
@@ -497,7 +489,7 @@ class CommandExt(click.Command):
     def invoke(self, ctx):
         """Emit additional warnings as needed"""
         for w in self.warnings:
-            click.echo(colorize(w, TERM_COLORS.WARNING))
+            logger.warning(w)
         return super().invoke(ctx)
 
     def format_help(self, ctx: click.Context, formatter):

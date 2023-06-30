@@ -1,4 +1,5 @@
 import logging
+import traceback
 import typing as t
 from logging import LogRecord
 
@@ -39,7 +40,7 @@ LOGLEVEL_STYLE = {
 
 
 class ClickFormatter(logging.Formatter):
-    def format(self, record: LogRecord) -> str:
+    def formatMessage(self, record: LogRecord) -> str:
         style = LOGLEVEL_STYLE.get(record.levelno, {})
         # log all level names regardless in debug mode
         if not style and logger.isEnabledFor(logging.DEBUG):
@@ -51,11 +52,20 @@ class ClickFormatter(logging.Formatter):
             msg = "\n".join(prefix + line for line in msg.splitlines())
         return msg
 
+    def formatException(self, ei) -> str:
+        e_type, e, ei_tb = ei
+        tb = "".join(traceback.format_tb(ei_tb))
+        msg = "".join(traceback.format_exception_only(e_type, e))
+        if msg[-1:] == "\n":
+            msg = msg[:-1]
+        return tb + click.style(msg, fg="red")
+
 
 class EchoHandler(logging.Handler):
     def emit(self, record: LogRecord) -> None:
         try:
             with tqdm.external_write_mode():
-                click.echo(self.format(record), err=True)
+                msg = self.format(record)
+                click.echo(msg, err=True)
         except Exception:
             self.handleError(record)

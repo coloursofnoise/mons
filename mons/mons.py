@@ -18,6 +18,8 @@ logger = logging.getLogger("mons")
 handler = EchoHandler()
 handler.setFormatter(ClickFormatter())
 logger.handlers = [handler]
+# Required to avoid duplicate logging from subprocesses, among other things
+logger.propagate = False
 
 
 @click.group(cls=clickExt.CatchErrorsGroup)

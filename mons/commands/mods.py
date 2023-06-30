@@ -24,10 +24,8 @@ from mons.downloading import download_threaded
 from mons.downloading import download_with_progress
 from mons.downloading import get_download_size
 from mons.errors import TTYError
-from mons.formatting import colorize
 from mons.formatting import format_bytes
 from mons.formatting import format_columns
-from mons.formatting import TERM_COLORS
 from mons.install import Install
 from mons.logging import ProgressBar
 from mons.modmeta import ModDownload
@@ -63,7 +61,7 @@ mons_cli.add_command(cli)
 
 def format_mod_info(meta: ModMeta):
     out = (
-        colorize(f"{meta.Name}\t(disabled)", TERM_COLORS.DISABLED)
+        click.style(f"{meta.Name}\t(disabled)", fg="black")
         if meta.Blacklisted
         else meta.Name
     ) + "\n"
