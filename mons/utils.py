@@ -36,18 +36,6 @@ VANILLA_HASH: t.Dict[str, t.Tuple[Version, te.Literal["FNA", "XNA"]]] = {
 }
 
 
-@contextmanager
-def timed_progress(msg: str):
-    """Times execution of the current context, then prints :param:`msg` with :func:`tqdm.write`.
-
-    :param msg: Message to be printed. Formatted with a `time` kwarg."""
-    start = time.perf_counter()
-    yield
-    end = time.perf_counter()
-    # Carriage return ensures msg is printed properly even after multiple progress bars
-    logger.info("\r" + msg.format(time=end - start))
-
-
 def find_celeste_asm(path: fs.Path):
     if fs.isfile(path):
         if os.path.basename(path) == "Celeste.exe":

@@ -28,6 +28,7 @@ from mons.formatting import format_bytes
 from mons.formatting import format_columns
 from mons.install import Install
 from mons.logging import ProgressBar
+from mons.logging import timed_progress
 from mons.modmeta import ModDownload
 from mons.modmeta import ModMeta
 from mons.modmeta import ModMeta_Base
@@ -42,7 +43,6 @@ from mons.sources import fetch_random_map
 from mons.utils import enable_mods
 from mons.utils import installed_mods
 from mons.utils import read_blacklist
-from mons.utils import timed_progress
 from mons.version import Version
 
 

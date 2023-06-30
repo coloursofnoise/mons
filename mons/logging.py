@@ -1,6 +1,9 @@
 import logging
+import sys
+import time
 import traceback
 import typing as t
+from contextlib import contextmanager
 from logging import LogRecord
 
 import click
@@ -21,13 +24,27 @@ if t.TYPE_CHECKING:
 else:
     # ...but call a wrapper function at runtime
     def ProgressBar(*args, disable=None, **kwargs):
+        # disable if logging isn't at least INFO
         kwargs["disable"] = kwargs.get(
             "disable", not logger.isEnabledFor(logging.INFO) or None
         )
-        kwargs["leave"] = kwargs.get("leave", None) and (
-            not logger.isEnabledFor(logging.DEBUG)
+        # always leave if DEBUG logging
+        kwargs["leave"] = logger.isEnabledFor(logging.DEBUG) or kwargs.get(
+            "leave", None
         )
         return tqdm(*args, **kwargs)
+
+
+@contextmanager
+def timed_progress(msg: str, loglevel: int = logging.INFO):
+    """Times execution of the current context, then prints :param:`msg` with :func:`tqdm.write`.
+
+    :param msg: Message to be printed. Formatted with a `time` kwarg."""
+    start = time.perf_counter()
+    yield
+    end = time.perf_counter()
+    # Carriage return ensures msg is printed properly even after multiple progress bars
+    logger.log(loglevel, "\r" + msg.format(time=end - start))
 
 
 LOGLEVEL_STYLE = {
@@ -64,7 +81,7 @@ class ClickFormatter(logging.Formatter):
 class EchoHandler(logging.Handler):
     def emit(self, record: LogRecord) -> None:
         try:
-            with tqdm.external_write_mode():
+            with tqdm.external_write_mode(sys.stderr):
                 msg = self.format(record)
                 click.echo(msg, err=True)
         except Exception:
