@@ -90,20 +90,23 @@ def load_yaml(document: t.Any, type: t.Type[T]) -> t.Optional[T]:
     return dataclass_fromdict(data, type)
 
 
-def dataclass_fromdict(data: t.Dict[str, t.Any], type: t.Type[T]) -> T:
-    type_fields = {f.name: f.type for f in fields(type) if f.init}
+def dataclass_fromdict(data: t.Dict[str, t.Any], field_type: t.Type[T]) -> T:
+    type_fields = {f.name: f.type for f in fields(field_type) if f.init}
     errors = 0
     for k, v in data.items():
         if k not in type_fields:
             logger.error(f"Unknown key: {k}")
             errors += 1
             continue
-
         # Retrieve type checkable version of generic and special types
         # Only checks base type, so 'List[str]' is only checked as 'list'
         checkable_type = te.get_origin(type_fields[k]) or type_fields[k]
+        if checkable_type is t.Union:  # Optional type
+            checkable_type = te.get_args(type_fields[k])
         if not isinstance(v, checkable_type):
-            if issubclass(type_fields[k], object):  # recursively deserialize objects
+            if isinstance(type_fields[k], type) and issubclass(
+                type_fields[k], object
+            ):  # recursively deserialize objects
                 try:
                     load_yaml(str(v), type_fields[k])
                 except ExceptionCount as e:
@@ -114,7 +117,7 @@ def dataclass_fromdict(data: t.Dict[str, t.Any], type: t.Type[T]) -> T:
     if errors:
         raise ExceptionCount(errors)
 
-    return type(**data)
+    return field_type(**data)
 
 
 _cache: t.Dict[str, t.Any] = dict()
