@@ -391,7 +391,26 @@ def copy_source_artifacts(
     return changed_files
 
 
-def fetch_artifact_source(ctx: click.Context, source: t.Optional[str]):
+def fetch_artifact_source(ctx: click.Context, source: t.Union[str, Version, None]):
+    if isinstance(source, Version):
+        logger.debug("Reference version provided, determining current branch.")
+        current = source
+        source = None
+        build_list = fetch_build_list(ctx)
+        for build in build_list:
+            if build["version"] == current.Minor:
+                source = build["branch"]
+                break
+        if source is None:
+            raise click.ClickException(
+                f"Could not determine current branch for version '{current}'."
+            )
+        logger.info(
+            f"Attempting to install latest build for current branch '{source}'."
+        )
+
+    assert not isinstance(source, Version)
+
     try:
         url = clickExt.type_cast_value(ctx, clickExt.URL(require_path=True), source)
         if url:
@@ -668,12 +687,19 @@ def install(
         artifact = clickExt.type_cast_value(ctx, click.File(mode="rb"), source)
 
     else:
-        requested_version, source_download = fetch_artifact_source(ctx, source)
+        ref_version = None
+        if not source and not latest:
+            install.update_cache(read_exe=True)
+            ref_version = install.everest_version
+            if not ref_version:
+                raise click.UsageError("Could not determine current branch.", ctx)
+        requested_version, source_download = fetch_artifact_source(
+            ctx, source or ref_version
+        )
         if not source_download:
-            raise click.BadParameter(
+            raise click.BadArgumentUsage(
                 f"Provided build or branch '{source}' does not exist.",
                 ctx,
-                param_hint="source",
             )
         artifact = download_artifact(source_download)
 
