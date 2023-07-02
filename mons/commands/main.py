@@ -15,6 +15,7 @@ import mons.clickExt as clickExt
 import mons.fs as fs
 from mons.config import pass_userinfo
 from mons.config import UserInfo
+from mons.downloading import Download
 from mons.downloading import download_with_progress
 from mons.downloading import URLResponse
 from mons.errors import TTYError
@@ -414,7 +415,7 @@ def fetch_artifact_source(ctx: click.Context, source: t.Union[str, Version, None
     try:
         url = clickExt.type_cast_value(ctx, clickExt.URL(require_path=True), source)
         if url:
-            return None, str(urllib.parse.urlunparse(url))
+            return None, Download(urllib.parse.urlunparse(url))
     except click.BadParameter:
         pass
 
@@ -423,7 +424,7 @@ def fetch_artifact_source(ctx: click.Context, source: t.Union[str, Version, None
         build_list = fetch_build_list(ctx)
         return (
             Version(1, int(build_list[0]["version"]), 0),
-            build_list[0]["mainDownload"],
+            Download(build_list[0]["mainDownload"], build_list[0]["mainFileSize"]),
         )
 
     if source.startswith("refs/"):
@@ -436,14 +437,18 @@ def fetch_artifact_source(ctx: click.Context, source: t.Union[str, Version, None
     for build in build_list:
         if source == build["branch"]:
             logger.debug("Found matching branch in Everest update list.")
-            return Version(1, int(build["version"]), 0), build["mainDownload"]
+            return Version(1, int(build["version"]), 0), Download(
+                build["mainDownload"], build["mainFileSize"]
+            )
 
     if source.isdigit():
         build_num = int(source)
         for build in build_list:
             if build["version"] == build_num:
                 logger.debug("Found matching build number in Everest update list.")
-                return Version(1, build_num, 0), build["mainDownload"]
+                return Version(1, build_num, 0), Download(
+                    build["mainDownload"], build["mainFileSize"]
+                )
 
     if Version.is_valid(source):
         parsed_ver = Version.parse(source)
@@ -451,15 +456,17 @@ def fetch_artifact_source(ctx: click.Context, source: t.Union[str, Version, None
         for build in build_list:
             if build["version"] == parsed_ver.Minor:
                 logger.debug("Found matching build number in Everest update list.")
-                return parsed_ver, build["mainDownload"]
+                return parsed_ver, Download(
+                    build["mainDownload"], build["mainFileSize"]
+                )
 
     logger.debug("Source did not satisfy any checks")
-    return None, None
+    raise NotImplementedError()
 
 
-def download_artifact(url: t.Union[URLResponse, str]) -> t.IO[bytes]:
-    url_str = url if isinstance(url, str) else url.url
-    logger.info("Downloading artifact from " + url_str)
+def download_artifact(url: t.Union[URLResponse, Download]) -> t.IO[bytes]:
+    logger.info("Downloading artifact from " + url.url)
+
     with fs.temporary_file(persist=True) as file:
         download_with_progress(url, file, clear=True)
         return click.open_file(file, mode="rb")
@@ -693,10 +700,11 @@ def install(
             ref_version = install.everest_version
             if not ref_version:
                 raise click.UsageError("Could not determine current branch.", ctx)
-        requested_version, source_download = fetch_artifact_source(
-            ctx, source or ref_version
-        )
-        if not source_download:
+        try:
+            requested_version, source_download = fetch_artifact_source(
+                ctx, source or ref_version
+            )
+        except NotImplementedError:
             raise click.BadArgumentUsage(
                 f"Provided build or branch '{source}' does not exist.",
                 ctx,

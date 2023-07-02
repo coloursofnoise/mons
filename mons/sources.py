@@ -4,7 +4,8 @@ import time
 import typing as t
 import urllib.parse
 from functools import update_wrapper
-from urllib.error import HTTPError
+from io import BytesIO
+from zipfile import ZipFile
 
 import typing_extensions as te
 import yaml
@@ -152,45 +153,8 @@ def fetch_latest_build_azure(branch: str):
     return None
 
 
-def fetch_build_exists(ctx, build: int):
-    build_list = fetch_build_list(ctx)
-    if build in (int(b["version"]) for b in build_list):
-        return True
-
-    return fetch_build_exists_azure(build)
-
-
-def fetch_build_exists_azure(build: int):
-    try:
-        open_url(
-            "https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/"
-            + str(build - 700)
-        )
-        return True
-    except HTTPError as err:
-        if err.code == 404:
-            return False
-        raise
-
-
-updateURLLookup = {
-    "main": "mainDownload",
-    "olympus-meta": "olympusMetaDownload",
-    "olympus-build": "olympusBuildDownload",
-}
-
-
-def fetch_build_artifact(ctx, build: int, artifactName: str):
-    build_list = fetch_build_list(ctx)
-    for b in build_list:
-        if build == int(b["version"]):
-            return open_url(b[updateURLLookup[artifactName]], method="GET")
-
-    return fetch_build_artifact_azure(build, artifactName)
-
-
 def fetch_build_artifact_azure(build: int, artifactName="olympus-build"):
-    return open_url(
+    response = open_url(
         f"https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts",
         method="GET",
         fields={
@@ -199,6 +163,24 @@ def fetch_build_artifact_azure(build: int, artifactName="olympus-build"):
             "$format": "zip",
         },
     )
+
+    try:
+        size_data = open_url(
+            f"https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts",
+            method="GET",
+            fields={
+                "artifactName": "olympus-meta",
+                "api-version": "6.0",
+                "$format": "zip",
+            },
+        )
+        with ZipFile(BytesIO(size_data.read())) as file:
+            response.headers["Content-Length"] = (
+                file.read("olympus-meta/size.txt").decode().strip()
+            )
+
+    finally:
+        return response
 
 
 @with_cache("mod_database.json")

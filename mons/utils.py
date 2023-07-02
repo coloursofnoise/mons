@@ -141,17 +141,6 @@ def parseExeInfo(path: fs.File):
     return None, framework
 
 
-def parse_build_number(string: str):
-    if string.startswith("1.") and string.endswith(".0"):
-        string = string[2:-2]
-    if string.isdigit():
-        buildnumber = int(string)
-    else:
-        buildnumber = None
-
-    return buildnumber
-
-
 def read_blacklist(path: fs.File):
     with open(path) as file:
         return [m.strip() for m in file.readlines() if not m.startswith("#")]

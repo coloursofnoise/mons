@@ -69,6 +69,12 @@ _global_headers = {
 }
 
 
+class Download:
+    def __init__(self, url: str, size: t.Optional[int] = None):
+        self.url = url
+        self.size = size and size
+
+
 class URLResponse(te.Protocol):
     url: str
     headers: t.MutableMapping[str, str]
@@ -155,12 +161,13 @@ def get_download_size(
     return int(response.headers.get("Content-Length", initial_size)) - initial_size
 
 
+DownloadSource = t.Union[str, URLResponse, Download]
 URLTransform = t.Callable[[URLResponse], URLResponse]
 
 
 @t.overload
 def download_with_progress(
-    src: t.Union[str, URLResponse],
+    src: DownloadSource,
     dest: str,
     label: t.Optional[str] = ...,
     atomic: te.Literal[True] = ...,
@@ -174,7 +181,7 @@ def download_with_progress(
 
 @t.overload
 def download_with_progress(
-    src: t.Union[str, URLResponse],
+    src: DownloadSource,
     dest: None,
     label: t.Optional[str] = ...,
     atomic: te.Literal[False] = ...,
@@ -188,7 +195,7 @@ def download_with_progress(
 
 @t.overload
 def download_with_progress(
-    src: t.Union[str, URLResponse],
+    src: DownloadSource,
     dest: str,
     label: t.Optional[str] = ...,
     atomic: te.Literal[False] = ...,
@@ -201,7 +208,7 @@ def download_with_progress(
 
 
 def download_with_progress(
-    src: t.Union[str, URLResponse],
+    src: DownloadSource,
     dest: t.Optional[str],
     label: t.Optional[str] = None,
     atomic=False,
@@ -213,13 +220,18 @@ def download_with_progress(
     if not dest and atomic:
         raise ValueError("atomic download cannot be used without destination file")
 
+    size = None
+    if isinstance(src, Download):
+        size = src.size
+        src = src.url
+
     if isinstance(src, (str, urllib.request.Request)):
         response = open_url(src, pool_manager=pool_manager)
     else:
         response = src
 
     content = response_handler(response) if response_handler else response
-    size = int(response.headers.get("Content-Length", None) or 100)
+    size = int(size or response.headers.get("Content-Length", None) or 100)
     blocksize = 8192
 
     if dest is None:
