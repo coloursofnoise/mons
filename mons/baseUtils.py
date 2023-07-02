@@ -1,4 +1,3 @@
-import io
 import logging
 import typing as t
 
@@ -11,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 if t.TYPE_CHECKING:
     import typing_extensions as te
+    import _typeshed as _ts
 
 
 T = t.TypeVar("T")
@@ -104,8 +104,8 @@ _download_interrupt = False
 
 
 def read_with_progress(
-    input: t.Union[io.IOBase, t.IO[t.AnyStr]],
-    output: t.Union[io.IOBase, t.IO[t.AnyStr]],
+    input: "_ts.SupportsRead[t.AnyStr]",
+    output: "_ts.SupportsWrite[t.AnyStr]",
     size=0,
     blocksize=4096,
     label: t.Optional[str] = "",

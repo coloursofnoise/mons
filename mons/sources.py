@@ -4,12 +4,9 @@ import time
 import typing as t
 import urllib.parse
 from functools import update_wrapper
-from http.client import HTTPResponse
 from urllib.error import HTTPError
-from urllib.request import urlopen
 
 import typing_extensions as te
-import urllib3
 import yaml
 from click import Context
 
@@ -18,6 +15,7 @@ from mons.config import CACHE_DIR
 from mons.config import Config
 from mons.config import UserInfo
 from mons.downloading import download_with_progress
+from mons.downloading import open_url
 
 P = te.ParamSpec("P")
 R = te.TypeVar("R")
@@ -103,7 +101,7 @@ def with_cache(
 def fetch_build_list(config: Config) -> t.List[t.Dict[str, t.Any]]:
     download_url = (
         config.downloading.everest_builds
-        or urlopen(Defaults.EVEREST_UPDATER).read().decode().strip()
+        or open_url(Defaults.EVEREST_UPDATER).read().decode().strip()
     )
 
     return yaml.safe_load(
@@ -124,9 +122,9 @@ def fetch_latest_build(ctx, branch: str):
 
 
 def fetch_latest_build_azure(branch: str):
-    response = urllib3.PoolManager().request(
-        "GET",
+    response = open_url(
         "https://dev.azure.com/EverestAPI/Everest/_apis/build/builds",
+        method="GET",
         fields={
             "definitions": "3",
             "statusFilter": "completed",
@@ -139,7 +137,7 @@ def fetch_latest_build_azure(branch: str):
         },
     )
 
-    data: t.Dict[str, t.Any] = yaml.safe_load(response.data.decode())
+    data: t.Dict[str, t.Any] = yaml.safe_load(response.read())
     if data["count"] < 1:
         return None
     elif data["count"] > 1:
@@ -149,7 +147,7 @@ def fetch_latest_build_azure(branch: str):
     id = build["id"]
     try:
         return int(id) + 700
-    except Exception:
+    except ValueError:
         pass
     return None
 
@@ -164,7 +162,7 @@ def fetch_build_exists(ctx, build: int):
 
 def fetch_build_exists_azure(build: int):
     try:
-        urlopen(
+        open_url(
             "https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/"
             + str(build - 700)
         )
@@ -186,29 +184,20 @@ def fetch_build_artifact(ctx, build: int, artifactName: str):
     build_list = fetch_build_list(ctx)
     for b in build_list:
         if build == int(b["version"]):
-            return t.cast(
-                HTTPResponse,
-                urllib3.PoolManager().request(
-                    "GET", b[updateURLLookup[artifactName]], preload_content=False
-                ),
-            )
+            return open_url(b[updateURLLookup[artifactName]], method="GET")
 
     return fetch_build_artifact_azure(build, artifactName)
 
 
 def fetch_build_artifact_azure(build: int, artifactName="olympus-build"):
-    return t.cast(
-        HTTPResponse,
-        urllib3.PoolManager().request(
-            "GET",
-            f"https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts",
-            fields={
-                "artifactName": artifactName,
-                "api-version": "6.0",
-                "$format": "zip",
-            },
-            preload_content=False,
-        ),
+    return open_url(
+        f"https://dev.azure.com/EverestAPI/Everest/_apis/build/builds/{build - 700}/artifacts",
+        method="GET",
+        fields={
+            "artifactName": artifactName,
+            "api-version": "6.0",
+            "$format": "zip",
+        },
     )
 
 
@@ -217,7 +206,7 @@ def fetch_build_artifact_azure(build: int, artifactName="olympus-build"):
 def fetch_mod_db(config: Config) -> t.Dict[str, t.Any]:
     download_url = (
         config.downloading.mod_db
-        or urlopen(Defaults.MOD_UPDATER).read().decode().strip()
+        or open_url(Defaults.MOD_UPDATER).read().decode().strip()
     )
 
     return yaml.safe_load(
@@ -245,10 +234,10 @@ def fetch_dependency_graph() -> t.Dict[str, t.Any]:
 def fetch_mod_search(search: str):
     search = urllib.parse.quote_plus(search)
     url = f"{Defaults.MOD_SEARCH}?q={search}"
-    response = urlopen(url)
+    response = open_url(url)
     return yaml.safe_load(response.read())
 
 
 def fetch_random_map():
-    url = urlopen(Defaults.RANDOM_MAP).url
+    url = open_url(Defaults.RANDOM_MAP).url
     return url

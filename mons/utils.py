@@ -2,11 +2,8 @@ import errno
 import hashlib
 import logging
 import os
-import re
 import time
 import typing as t
-import urllib.parse
-import urllib.request
 import zipfile
 from contextlib import contextmanager
 
@@ -94,25 +91,6 @@ def unpack(zip: zipfile.ZipFile, root: fs.Directory, prefix="", label="Extractin
 
             zip.extract(zipinfo, root)
             bar.update(zipinfo.file_size)
-
-
-class EverestHandler(urllib.request.BaseHandler):
-    def everest_open(self, req: urllib.request.Request):
-        parsed_url = urllib.parse.urlparse(req.full_url)
-        gb_url = re.match("^(https://gamebanana.com/mmdl/.*),.*,.*$", parsed_url.path)
-        download_url = gb_url[1] if gb_url else parsed_url.path
-        req.full_url = download_url
-        return self.parent.open(req)
-
-
-opener = urllib.request.build_opener(EverestHandler)
-opener.addheaders = [
-    (
-        "User-Agent",
-        "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1941.0 Safari/537.36",
-    )
-]
-urllib.request.install_opener(opener)
 
 
 def parseExeInfo(path: fs.File):

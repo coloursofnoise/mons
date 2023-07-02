@@ -23,6 +23,7 @@ from mons.config import UserInfo
 from mons.downloading import download_threaded
 from mons.downloading import download_with_progress
 from mons.downloading import get_download_size
+from mons.downloading import parse_gb_url
 from mons.errors import TTYError
 from mons.formatting import format_bytes
 from mons.formatting import format_columns
@@ -406,11 +407,8 @@ def resolve_mods(ctx, mods: t.Sequence[str]):
 
         # Special case to try to resolve 1-Click install links through mod database
         if parsed_url.scheme == "everest":
-            match = re.match(
-                r"^(https://gamebanana.com/mmdl/.*),.*,.*$", parsed_url.path
-            )
-            if match:
-                gb_url = match[1]
+            gb_url = parse_gb_url(parsed_url.path)
+            if gb_url:
                 matches = {
                     key: val for key, val in mod_list.items() if gb_url == val["URL"]
                 }

@@ -6,7 +6,6 @@ import stat
 import subprocess
 import typing as t
 import urllib.parse
-from http.client import HTTPResponse
 from zipfile import ZipFile
 
 import click
@@ -17,6 +16,7 @@ import mons.fs as fs
 from mons.config import pass_userinfo
 from mons.config import UserInfo
 from mons.downloading import download_with_progress
+from mons.downloading import URLResponse
 from mons.errors import TTYError
 from mons.formatting import format_columns
 from mons.install import Install
@@ -457,8 +457,8 @@ def fetch_artifact_source(ctx: click.Context, source: t.Union[str, Version, None
     return None, None
 
 
-def download_artifact(url: t.Union[HTTPResponse, str]) -> t.IO[bytes]:
-    url_str = str(url.geturl() if isinstance(url, HTTPResponse) else url)
+def download_artifact(url: t.Union[URLResponse, str]) -> t.IO[bytes]:
+    url_str = url if isinstance(url, str) else url.url
     logger.info("Downloading artifact from " + url_str)
     with fs.temporary_file(persist=True) as file:
         download_with_progress(url, file, clear=True)
