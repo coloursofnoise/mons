@@ -20,7 +20,7 @@ if t.TYPE_CHECKING:
         OTHER_PLATFORMS = t.Union[te.Literal["Windows"], te.Literal["Darwin"]]
 
     @t.overload
-    def assert_platform(target: CURRENT_PLATFORM) -> None:
+    def assert_platform(target: CURRENT_PLATFORM) -> bool:
         ...
 
     @t.overload
@@ -65,7 +65,7 @@ def assert_platform(
     https://docs.python.org/3/library/platform.html
     https://peps.python.org/pep-0484/#version-and-platform-checking
     """
-    pass  # no-op, for type-checker only
+    return is_platform(target)  # no-op, for type-checker only
 
 
 def is_platform(
