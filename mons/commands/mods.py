@@ -10,6 +10,7 @@ from gettext import ngettext
 from operator import attrgetter
 
 import click
+import yaml
 from click import echo
 
 import mons.clickExt as clickExt
@@ -26,7 +27,6 @@ from mons.downloading import get_download_size
 from mons.downloading import parse_gb_url
 from mons.errors import TTYError
 from mons.formatting import format_bytes
-from mons.formatting import format_columns
 from mons.install import Install
 from mons.logging import ProgressBar
 from mons.logging import timed_progress
@@ -60,36 +60,35 @@ def cli(ctx: click.Context):
 mons_cli.add_command(cli)
 
 
-def format_mod_info(meta: ModMeta):
-    out = (
-        click.style(f"{meta.Name}\t(disabled)", fg="black")
-        if meta.Blacklisted
-        else meta.Name
-    ) + "\n"
-    out += format_columns(
-        {
-            "Version": meta.Version,
-            "File": os.path.basename(meta.Path)
-            + ("/" if os.path.isdir(meta.Path) else ""),
-        },
-        prefix="\t",
+def format_mod(meta: ModMeta):
+    data: t.Dict[str, t.Any] = {
+        "Version": str(meta.Version),
+    }
+    if meta.Size:
+        data["Size"] = format_bytes(meta.Size)
+    if meta.Path:
+        data["Filename"] = os.path.basename(meta.Path)
+    if meta.Dependencies:
+        data["Dependencies"] = [dep.Name for dep in meta.Dependencies]
+    if meta.OptionalDependencies:
+        data["OptionalDependencies"] = [dep.Name for dep in meta.OptionalDependencies]
+    return yaml.dump(
+        {meta.Name: data},
+        sort_keys=False,
     )
-    out += "\n"
-    return out
 
 
 @cli.command(
     name="list",
-    help="List installed mods.",
     no_args_is_help=True,
     cls=clickExt.CommandExt,
 )
 @clickExt.install("name", require_everest=True)
 @click.option(
-    "--enabled/--disabled", help="Filter by enabled/disabled mods.", default=None
+    "--enabled/--disabled", help="Filter enabled/disabled mods.", default=None
 )
 @click.option(
-    "--valid/--invalid", help="Filter mods with valid everest.yaml.", default=None
+    "--valid/--invalid", help="Filter mods with a valid everest.yaml.", default=None
 )
 @click.option("--dll/--no-dll", help="Filter mods that register DLLs.", default=None)
 @click.option(
@@ -104,12 +103,12 @@ def format_mod_info(meta: ModMeta):
 @click.option(
     "-s", "--search", help="Filter mods with a regex pattern.", metavar="QUERY"
 )
-@click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
+@click.option("-v", "--verbose", is_flag=True, help="Print mod details.")
 @clickExt.color_option()
 def list_mods(
+    name: Install,
     enabled: t.Optional[bool],
     valid: t.Optional[bool],
-    name: Install,
     dll: t.Optional[bool],
     dir: t.Optional[bool],
     dependency: str,
@@ -128,48 +127,41 @@ def list_mods(
                 "--dependency", "--dependency cannot be used with the --invalid flag."
             )
 
-    basePath = name.mod_folder
-
-    installed = installed_mods(
-        basePath, dirs=dir, valid=valid, blacklisted=invert(enabled)
+    gen = installed_mods(
+        name.mod_folder, dirs=dir, valid=valid, blacklisted=invert(enabled)
     )
 
-    gen = installed
     if dll is not None:
-        gen = filter(lambda meta: not dll ^ bool(meta.DLL), gen)
+        gen = (meta for meta in gen if not dll ^ bool(meta.DLL))
 
     if dependency:
-        gen = filter(
-            lambda meta: next(
-                filter(lambda d: dependency == d.Name, meta.Dependencies),
-                t.cast(t.Any, None),
-            ),  # type: ignore
-            gen,
-        )
+        gen = (meta for meta in gen for d in meta.Dependencies if d.Name == dependency)
 
     if search:
         pattern = re.compile(search, flags=re.I)
-        gen = filter(
-            lambda meta: bool(
-                pattern.search(meta.Name) or pattern.search(os.path.basename(meta.Path))
-            ),
-            gen,
-        )
-
-    if verbose:
-        gen = (format_mod_info(meta) for meta in gen)
-    else:
         gen = (
-            (
-                f"{meta.Name}\t{meta.Version}"
-                if not meta.Blacklisted
-                else colorize(f"{meta.Name}\t(disabled)", TERM_COLORS.DISABLED)
-            )
-            + "\n"
+            meta
             for meta in gen
+            if pattern.search(meta.Name) or pattern.search(os.path.basename(meta.Path))
         )
 
-    click.echo_via_pager(gen, color=color)
+    def format_line(meta: ModMeta):
+        output = f"{meta.Name} {click.style(meta.Version, fg='green')}"
+        if meta.Blacklisted:
+            output = click.style(output, dim=True) + click.style(
+                " (disabled)", dim=True
+            )
+        return click.style(output + "\n", bold=True)
+
+    def format_verbose(meta: ModMeta):
+        formatted = format_mod(meta).splitlines()
+        formatted[0] = click.style(formatted[0], bold=True)
+        return "\n".join(formatted) + "\n" * 2
+
+    formatter = format_verbose if verbose else format_line
+    gen = map(formatter, gen)
+
+    clickExt.echo_via_pager(ProgressBar(gen, "Reading mods..."), color=color)
 
 
 @cli.command(hidden=True)

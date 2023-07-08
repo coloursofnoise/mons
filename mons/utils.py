@@ -146,6 +146,9 @@ def read_blacklist(path: fs.File):
         return [m.strip() for m in file.readlines() if not m.startswith("#")]
 
 
+_MODS_FOLDER_IGNORE = ("Cache",)
+
+
 def installed_mods(
     path: fs.Directory,
     *,
@@ -175,6 +178,10 @@ def installed_mods(
             if valid is not None:
                 if valid ^ bool(mod):
                     continue
+
+            if not mod and file in _MODS_FOLDER_IGNORE:
+                continue
+
             mod = mod or ModMeta.placeholder(modpath)
             if not mod:
                 continue

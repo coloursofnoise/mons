@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 import sys
 import typing as t
 from gettext import gettext as _
@@ -9,6 +10,7 @@ from urllib import parse
 import click
 
 from mons import overlayfs
+from mons.baseUtils import flatten_lines
 from mons.baseUtils import partition
 from mons.baseUtils import T
 from mons.config import Env
@@ -55,6 +57,46 @@ def confirm_ext(*params, default, dangerous: bool = False, **attrs):
         raise TTYError("not a tty.\n" + msg)
 
     return click.confirm(default=default, *params, **attrs)
+
+
+def echo_via_pager(generator: t.Iterable[t.Any], color: t.Optional[bool] = None):
+    """ "`click.echo_via_pager`, but using `less -F`."
+
+    If it seems like the output will fit on a single screen,
+    it is sent straight to stdout.
+    """
+
+    import codecs, itertools, math
+
+    cols, rows = shutil.get_terminal_size()
+    lines = []
+
+    encoding = getattr(sys.stdout, "encoding", None) or sys.getdefaultencoding()
+    try:
+        if codecs.lookup(encoding).name == "ascii":
+            encoding = "utf-8"
+    except LookupError:
+        pass
+
+    iterator = flatten_lines(iter(generator))
+    try:
+        nlines = 0
+        while True:
+            text = next(iterator)
+            lines.append(text)
+            text = click.termui.strip_ansi(  # pyright:ignore[reportPrivateImportUsage]
+                text
+            ).encode(encoding, "replace")
+
+            nlines += math.ceil(len(text) / cols)
+            if nlines > rows:
+                break
+    except StopIteration:
+        for line in lines:
+            click.echo(line, nl=False, color=color)
+        return
+
+    return click.echo_via_pager(itertools.chain(lines, iterator), color)
 
 
 class ParamTypeG(click.ParamType, t.Generic[T]):

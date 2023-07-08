@@ -16,6 +16,22 @@ if t.TYPE_CHECKING:
 T = t.TypeVar("T")
 
 
+NestedIter = t.Union[t.Iterator["NestedIter"], T]
+
+
+def flatten(iter: t.Iterator[NestedIter[T]]) -> t.Generator[T, None, None]:
+    for item in iter:
+        if isinstance(item, t.Iterator):
+            yield from flatten(t.cast(t.Iterator[NestedIter[T]], item))
+        else:
+            yield item
+
+
+def flatten_lines(iter: t.Iterator[NestedIter[T]]) -> t.Generator[str, None, None]:
+    for item in flatten(iter):
+        yield from str(item).splitlines(keepends=True)
+
+
 @t.overload
 def invert(b: None) -> None:
     ...
