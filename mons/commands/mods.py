@@ -911,6 +911,18 @@ def update(
         echo("All mods up to date")
         return
 
+    updates.sort(key=str)
+
+    exclude = clickExt.prompt_selections(
+        updates,
+        message="Mods to exclude",
+        find_index=lambda n: next(
+            (i for i, m in enumerate(updates) if m.Meta.Name == n), None
+        ),
+    )
+    if exclude:
+        updates = [update for i, update in enumerate(updates) if i not in exclude]
+
     echo(
         ngettext(
             f"{len(updates)} update found:",

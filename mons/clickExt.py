@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import shutil
 import sys
 import typing as t
@@ -97,6 +98,80 @@ def echo_via_pager(generator: t.Iterable[t.Any], color: t.Optional[bool] = None)
         return
 
     return click.echo_via_pager(itertools.chain(lines, iterator), color)
+
+
+def prompt_selections(
+    items: t.Sequence[t.Any],
+    message="Selections",
+    reverse=False,
+    find_index: t.Optional[t.Callable[[str], t.Optional[int]]] = None,
+):
+    """Prompt the user to select items from a list.
+
+    Heavily inspired by the `yay` (https://github.com/Jguer/yay) selection menu.
+
+    :param items: List of items to display.
+    :param message: Prompt message, defaults to "Selections"
+    :param reverse: Display the list items in reverse.
+    :param find_index: If provided, is called for each selection input by the user.
+    Should return the `int` position of the matching item, or `None`.
+    :return: A set of indexes corresponding to the selected items in the input list.
+    """
+
+    count = i = len(items)
+    iterator = reversed if reverse else iter
+    for item in iterator(items):
+        click.echo(
+            f"{click.style(i, fg='blue')} {click.style(str(item), bold=True)}", err=True
+        )
+        i -= 1
+
+    prompt = click.style(">", fg="green")
+    ans = str(
+        click.prompt(
+            prompt + " " + message,
+            prompt_suffix=": (eg: 1 2 3, 1-3 or ^4)\n" + prompt,
+            default="",
+            show_default=False,
+            err=True,
+        )
+    )
+
+    # Split input, but allow quoting for multi-word literal selections
+    args: t.List[str] = re.findall(r'\^?"[^"]+"|[^\s,]+', ans)
+
+    selections: t.Set[int] = set()
+    if args and args[0].startswith("^"):
+        selections = set(range(1, count + 1))
+
+    for arg in args:
+        add, update = selections.add, selections.update
+        if arg.startswith("^"):
+            arg = arg[1:]
+            add, update = selections.discard, selections.difference_update
+
+        arg = arg.strip('"')
+
+        if find_index:
+            idx = find_index(arg)
+            if idx is not None:
+                add(idx + 1 if reverse else count - idx)
+                continue
+
+        if arg.isdigit() and 0 < int(arg) < count + 1:
+            add(int(arg))
+        elif len(arg.split("-")) == 2 and all(
+            bound.isdigit() and 0 < int(bound) < count + 1 for bound in arg.split("-")
+        ):
+            start, stop = map(int, arg.split("-"))
+            update(range(start, stop + 1))
+
+    if not reverse:
+        # Selection numbers are always displayed in descending order.
+        # `count - sel` also takes care of subtracting 1 from each index.
+        return {count - sel for sel in selections}
+
+    return {sel - 1 for sel in selections}
 
 
 class ParamTypeG(click.ParamType, t.Generic[T]):
