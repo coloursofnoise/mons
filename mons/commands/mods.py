@@ -6,7 +6,6 @@ import shutil
 import typing as t
 import urllib.parse
 import urllib.request
-from gettext import ngettext
 from gettext import ngettext as _n
 from operator import attrgetter
 
@@ -663,6 +662,9 @@ def add(
                         shutil.move(file, os.path.join(install.mod_folder, filename))
             unresolved.clear()
 
+    # Remove duplicates
+    resolved = list({m.Meta.Name: m for m in resolved}.values())
+
     # no need to calculate folder size since any mods that are unzipped will be skipped
     installed = {
         meta.Name: meta
@@ -731,26 +733,47 @@ def add(
         lambda m: fs.isdir(m.Meta.Path), resolved_update, deps_update
     )
     if skip_updates:
-        echo("Unzipped mods will not be updated:")
+        logger.warning("Unzipped mods will not be updated:")
         for update in skip_updates:
-            echo("  " + str(update))
+            logger.warning("  " + str(update))
     del skip_updates
 
-    install_count = len(resolved) + len(deps_install)
+    reinstall, resolved_update = partition(
+        lambda u: u.New == u.Meta.Version, resolved_update
+    )
+    reinstall = [ModDownload(u.Meta, u.Url, u.Mirror) for u in reinstall]
+    reinstall_str = (str(m.Meta) + " (reinstall)" for m in reinstall)
+
+    install_count = len(resolved) + len(deps_install) + len(reinstall)
     if install_count > 0:
-        echo(f"{install_count} mods to install:")
-        for download in itertools.chain(resolved, deps_install):
-            echo("  " + str(download.Meta))
+        echo(
+            _n(
+                "{install_count} mod to install:",
+                "{install_count} mods to install:",
+                install_count,
+            ).format(install_count=install_count)
+        )
+        for download in sorted(
+            itertools.chain(resolved, deps_install, reinstall_str), key=str
+        ):
+            echo("  " + str(download))
     update_count = len(resolved_update) + len(deps_update)
     if update_count > 0:
-        echo(f"{update_count} mods to update:")
-        for update in itertools.chain(resolved_update, deps_update):
+        echo(
+            _n(
+                "{update_count} mod to update:",
+                "{update_count} mods to update:",
+                update_count,
+            ).format(update_count=update_count)
+        )
+        for update in sorted(itertools.chain(resolved_update, deps_update), key=str):
             echo("  " + str(update))
 
     if install_count + update_count < 1:
         echo("No mods to install.")
-        exit()
+        return
 
+    resolved += reinstall
     sorted_main_downloads = sorted(
         itertools.chain(resolved, resolved_update), key=attrgetter("Size")
     )
@@ -761,6 +784,7 @@ def add(
     download_size = sum(
         mod.Size
         for mod in itertools.chain(resolved, resolved_update, deps_install, deps_update)
+        if mod not in reinstall
     )
     if download_size >= 0:
         echo(
@@ -860,7 +884,13 @@ def remove(name: Install, mods: t.List[str], recurse: bool):
         echo("No mods to remove.")
         exit()
 
-    echo(str(len(metas)) + " mods will be removed:")
+    echo(
+        _n(
+            "{len_remove} mod will be removed:",
+            "{len_remove} mods will be removed:",
+            len(metas),
+        ).format(len_remove=len(metas))
+    )
     for mod in metas:
         echo(f"\t{mod}")
 
@@ -868,7 +898,13 @@ def remove(name: Install, mods: t.List[str], recurse: bool):
         resolve_exclusive_dependencies(metas, installed_list) if recurse else []
     )
     if removable_deps:
-        echo(str(len(removable_deps)) + " dependencies will also be removed:")
+        echo(
+            _n(
+                "{len_deps} dependency will also be removed:",
+                "{len_deps} dependencies will also be removed:",
+                len(removable_deps),
+            ).format(len_deps=len(removable_deps))
+        )
         for dep in removable_deps:
             echo(f"\t{dep}")
 
@@ -969,11 +1005,11 @@ def update(
         updates = [update for i, update in enumerate(updates) if i not in exclude]
 
     echo(
-        ngettext(
-            f"{len(updates)} update found:",
-            f"{len(updates)} updates found:",
+        _n(
+            "{len_mods} mod will be updated:",
+            "{len_mods} mods will be updated:",
             len(updates),
-        )
+        ).format(len_mods=len(updates))
     )
     for update in updates:
         echo("  " + str(update))
