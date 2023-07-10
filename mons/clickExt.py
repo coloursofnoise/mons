@@ -253,7 +253,6 @@ def force_option(*param_decls: str, **kwargs: t.Any):
 
 loglevel_flags = {
     "--debug": logging.DEBUG,
-    "--verbose": logging.DEBUG,
     "--quiet": logging.ERROR,
 }
 

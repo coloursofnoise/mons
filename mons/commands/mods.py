@@ -168,49 +168,57 @@ def list_mods(
     clickExt.echo_via_pager(ProgressBar(gen, "Reading mods..."), color=color)
 
 
-@cli.command(hidden=True)
-@click.argument("search")
-@click.pass_context
-def search(ctx, search: str):
-    mod_list = fetch_mod_db(ctx)
-    if search in mod_list:
-        echo(mod_list[search]["GameBananaId"])
-        return
-
-    search_result = fetch_mod_search(search)
-    for item in search_result:
-        match = [
-            mod
-            for mod, data in mod_list.items()
-            if data["GameBananaId"] == item["GameBananaId"]
-        ]
-        for m in match:
-            echo(m)
-        if len(match) < 1:
-            raise click.UsageError("Entry not found: " + str(item["GameBananaId"]))
-
-
 def search_mods(ctx, search):
-    mod_list = fetch_mod_db(ctx)
-    search_result = fetch_mod_search(search)
-    matches = {}
-    for item in search_result:
-        matches.update(
-            {
-                mod: data
-                for mod, data in mod_list.items()
-                if data["GameBananaId"] == item["GameBananaId"]
-            }
-        )
+    search_regex = re.compile(".*".join(list(search)), re.IGNORECASE)
+    api_matches = {
+        result["GameBananaId"]: result for result in fetch_mod_search(search)
+    }
+    mod_db = fetch_mod_db(ctx)
 
-    if len(matches) < 1:
-        echo("No results found.")
-        exit()
+    # Find matches, ordered by relevance
+    partitions = multi_partition(
+        lambda mod: mod == search,
+        lambda mod: mod.lower() == search.lower(),
+        lambda mod: mod.lower().startswith(search.lower()),
+        lambda mod: search.lower() in mod.lower(),
+        lambda mod: search_regex.search(mod) is not None,
+        lambda mod: mod_db[mod]["GameBananaId"] in api_matches,
+        iterable=mod_db.keys(),
+    )[
+        :-1
+    ]  # discard remainder
 
-    match = prompt_mod_selection(matches, max=9)
-    if not match:
-        raise click.Abort()
-    return match
+    # Sort each tier of relevance
+    for p in partitions:
+        p.sort()
+
+    return [ModMeta({"Name": mod, **mod_db[mod]}) for p in partitions for mod in p]
+
+
+@cli.command(no_args_is_help=True)
+@click.argument("search", nargs=-1, required=True)
+# @click.option("-r", "--results", metavar="COUNT", default=None, type=click.INT, help="Number of results to show (default all).")
+@click.option("-v", "--verbose", is_flag=True, help="Print mod details.")
+@click.pass_context
+def search(ctx, search: t.Tuple[str], verbose: bool):
+    """Search the mod database."""
+    search_str = " ".join(search)
+    matches = search_mods(ctx, search_str)
+
+    def format_line(meta: ModMeta):
+        return click.style(
+            f"{meta.Name} {click.style(meta.Version, fg='green')}\n", bold=True
+        )  # + meta.Description
+
+    def format_verbose(meta: ModMeta):
+        formatted = format_mod(meta).splitlines()
+        formatted[0] = click.style(formatted[0], bold=True)
+        return "\n".join(formatted) + "\n" * 2
+
+    formatter = format_verbose if verbose else format_line
+
+    if matches:
+        clickExt.echo_via_pager(map(formatter, matches))
 
 
 def prompt_mod_selection(options: t.Dict[str, t.Any], max=-1):
@@ -601,7 +609,25 @@ def add(
     unresolved: t.List[str] = []
 
     if search:
-        resolved = [search_mods(ctx, " ".join(mods))]
+        matches = search_mods(ctx, " ".join(mods))
+        selections = clickExt.prompt_selections(
+            matches,
+            "Mods to install",
+            reverse=True,
+            find_index=lambda n: next(
+                (i for i, m in enumerate(matches) if m.Name == n), None
+            ),
+        )
+        mod_db = fetch_mod_db(ctx)
+        selections = [matches[i] for i in selections]
+        resolved = [
+            ModDownload(
+                mod,
+                mod_db[mod.Name]["URL"],
+                mod_db[mod.Name]["MirrorURL"],
+            )
+            for mod in selections
+        ]
     elif mods == ("-",):
         # Special case for handling stdin.
         # More code should be shared with unresolved mods handler,
