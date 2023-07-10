@@ -393,6 +393,7 @@ def resolve_mods(ctx, mods: t.Sequence[str]):
     unresolved: t.List[str] = list()
     errors = 0
     mod_list = fetch_mod_db(ctx)
+    dep_db = fetch_dependency_graph()
 
     def prompt_selection(matches, notice):
         if len(matches) == 1:
@@ -418,7 +419,11 @@ def resolve_mods(ctx, mods: t.Sequence[str]):
 
         # Direct URL match in mod database
         matches: t.List[ModDownload] = [
-            ModDownload(ModMeta({"Name": key, **val}), val["URL"], val["MirrorURL"])
+            ModDownload(
+                ModMeta({"Name": key, **val, **dep_db[key]}),
+                val["URL"],
+                val["MirrorURL"],
+            )
             for key, val in mod_list.items()
             if mod == val["URL"]
         ]
@@ -459,7 +464,7 @@ def resolve_mods(ctx, mods: t.Sequence[str]):
             mod_info = mod_list[mod]
             resolved.append(
                 ModDownload(
-                    ModMeta({"Name": mod, **mod_info}),
+                    ModMeta({"Name": mod, **mod_info, **dep_db[mod]}),
                     mod_info["URL"],
                     mod_info["MirrorURL"],
                 )
@@ -475,7 +480,11 @@ def resolve_mods(ctx, mods: t.Sequence[str]):
         ):
             mod_id = int(parsed_url.path.split("/")[-1])
             matches: t.List[ModDownload] = [
-                ModDownload(ModMeta({"Name": key, **val}), val["URL"], val["MirrorURL"])
+                ModDownload(
+                    ModMeta({"Name": key, **val, **dep_db[key]}),
+                    val["URL"],
+                    val["MirrorURL"],
+                )
                 for key, val in mod_list.items()
                 if mod_id == val["GameBananaId"]
             ]
@@ -528,7 +537,11 @@ def resolve_mods(ctx, mods: t.Sequence[str]):
         if mod.isdigit():
             mod_id = int(mod)
             matches = [
-                ModDownload(ModMeta({"Name": key, **val}), val["URL"], val["MirrorURL"])
+                ModDownload(
+                    ModMeta({"Name": key, **val, **dep_db[key]}),
+                    val["URL"],
+                    val["MirrorURL"],
+                )
                 for key, val in mod_list.items()
                 if mod_id == val["GameBananaId"]
             ]
@@ -619,10 +632,12 @@ def add(
             ),
         )
         mod_db = fetch_mod_db(ctx)
+        dep_db = fetch_dependency_graph()
+        # TODO: streamline initializing ModDownload with dependencies
         selections = [matches[i] for i in selections]
         resolved = [
             ModDownload(
-                mod,
+                ModMeta({"Name": mod.Name, **mod_db[mod.Name], **dep_db[mod.Name]}),
                 mod_db[mod.Name]["URL"],
                 mod_db[mod.Name]["MirrorURL"],
             )
@@ -691,6 +706,12 @@ def add(
     # Remove duplicates
     resolved = list({m.Meta.Name: m for m in resolved}.values())
 
+    deps, _opt_deps = (
+        resolve_dependencies([mod.Meta for mod in resolved])
+        if not no_deps
+        else ([], [])
+    )
+
     # no need to calculate folder size since any mods that are unzipped will be skipped
     installed = {
         meta.Name: meta
@@ -707,12 +728,6 @@ def add(
         )
         for mod in resolved_update
     ]
-
-    deps, _opt_deps = (
-        resolve_dependencies([mod.Meta for mod in resolved])
-        if not no_deps
-        else ([], [])
-    )
 
     deps_special, deps_missing, deps_outdated, _deps_installed = multi_partition(
         lambda m: m.Name in ("Celeste", "Everest"),
