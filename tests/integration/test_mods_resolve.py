@@ -2,6 +2,7 @@ import click
 import pytest
 import yaml
 
+import mons.clickExt
 import mons.commands.mods
 from mons.commands.mods import resolve_dependencies
 from mons.commands.mods import resolve_exclusive_dependencies
@@ -18,6 +19,14 @@ def fake_mod_db(monkeypatch):
     monkeypatch.setattr(
         mons.commands.mods, "fetch_dependency_graph", lambda *args: dep_graph
     )
+
+
+@pytest.fixture(autouse=True)
+def stub_confirm_ext(monkeypatch):
+    def abort(*args, **kwargs):
+        raise click.Abort()
+
+    monkeypatch.setattr(mons.clickExt, "confirm_ext", abort)
 
 
 # better display names for parametrized tests
@@ -137,12 +146,11 @@ def test_resolve_mods_unresolved(input, expect):
     assert unresolved[0] == expect
 
 
-def test_resolve_mods_fail():
+def test_resolve_mods_fail(caplog):
     fake_mod = "FakeMod"
-    with pytest.raises(
-        click.ClickException, match=f"^Mod '{fake_mod}' could not be resolved.$"
-    ):
+    with pytest.raises(click.Abort):
         resolve_mods(None, (*mod_db.keys(), fake_mod))
+    assert f"Mod '{fake_mod}' could not be resolved" in caplog.text
 
 
 dep_graph.update(

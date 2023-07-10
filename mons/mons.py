@@ -15,19 +15,20 @@ from mons.logging import EchoHandler
 
 # This should be the root module logger, even though __name__ is 'mons.mons'
 logger = logging.getLogger("mons")
-handler = EchoHandler()
-handler.setFormatter(ClickFormatter())
-logger.handlers = [handler]
-# Required to avoid duplicate logging from subprocesses, among other things
-logger.propagate = False
 
 
 @click.group(cls=clickExt.CatchErrorsGroup)
 @click.pass_context
 @click.version_option()
 def cli(ctx: click.Context):
-    ctx.obj = ctx.with_resource(UserInfo())
+    # Logging should not be setup in the global scope or it breaks pytest log capturing
+    handler = EchoHandler()
+    handler.setFormatter(ClickFormatter())
+    logger.addHandler(handler)
+    # Required to avoid duplicate logging from subprocesses, among other things
+    logger.propagate = False
 
+    ctx.obj = ctx.with_resource(UserInfo())
     # Inject another context as the parent
     env_ctx = click.Context(ctx.command, ctx.parent, obj=Env())
     ctx.parent = env_ctx
