@@ -292,7 +292,7 @@ class CatchErrorsGroup(click.Group):
         except SystemExit as e:
             if wait:
                 click.pause()
-            raise e
+            sys.exit(e.code)
         except Exception as e:
             if debug:
                 logger.exception("An unhandled exception has occurred:")
@@ -304,6 +304,7 @@ class CatchErrorsGroup(click.Group):
                 logger.error(
                     "Use the --debug flag to disable clean exception handling."
                 )
+            sys.exit(1)
 
 
 def color_option(*param_decls: str, **kwargs: t.Any):

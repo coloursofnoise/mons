@@ -130,25 +130,27 @@ def setup(install: Install):
         return
 
     echo(
-        """
-!!PLEASE READ!!
-An Overlay Filesystem allows the contents of one directory to be overlaid on top of another.
-This means that Everest can be installed without modifying the base Celeste install, and
-without needing a second copy of Celeste.
+        f"""
+{click.style("!!PLEASE READ!!", fg="yellow", bold=True)}
+\tAn Overlay Filesystem allows the contents of one directory to be overlaid on top of another.
+\tThis means that Everest can be installed without modifying the base Celeste install, and
+\twithout needing a second copy of Celeste.
 
-Mounting a filesystem on linux usually requires superuser permissions, which would require
-entering the root password after every reboot. This is rather cumbersome, so a good
-alternative is to add an entry to the '/etc/fstab' file for the mount point. With the
-'x-systemd.automount' option provided by systemd, the filesystem will only be mounted when
-it is accessed.
+\tMounting a filesystem on linux usually requires superuser permissions, which would require
+\tentering the root password after every reboot. This is rather cumbersome, so a good
+\talternative is to add an entry to `/etc/fstab' for the mount point. With the
+\t`x-systemd.automount' option provided by systemd, the filesystem will only be mounted when
+\tit is accessed.
 
-SEE ALSO mount(8), systemd-automount(5)
+{click.style("SEE ALSO", fg="yellow")}
+\t{click.style("mount(8)", fg="green")}, {click.style("fstab(5)", fg="green")}, {click.style("systemd-automount(5)", fg="green")}
 
-If 'mons' is unable to mount the overlay, it will attempt to use an Unprivileged User Namespace.
-This can be used to create a container that has superuser privileges that are still isolated from
-the rest of the system.
+\tIf an overlay cannot be mounted, an attempt will be made to use an Unprivileged User Namespace.
+\tThis can be used to create a container that has superuser privileges that are still isolated from
+\tthe rest of the system.
 
-SEE ALSO user_namespaces(7)
+{click.style("SEE ALSO", fg="yellow")}
+\t{click.style("user_namespaces(7)", fg="green")}
 """
     )
 
@@ -244,7 +246,7 @@ def activate(ctx, install: Install):
                 == 0
             ):
                 logger.debug(
-                    "Unprivileged user namespaces available, running program in new namespace.."
+                    "Unprivileged user namespaces available, running program in new namespace..."
                 )
 
                 # Make sure any files opened within a ctx (such as UserInfo.cache) are saved

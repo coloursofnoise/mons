@@ -51,7 +51,7 @@ must_pass_failed = None
 # https://stackoverflow.com/a/59392344
 def pytest_runtest_makereport(item, call):
     global must_pass_failed
-    if not must_pass_failed and item.iter_markers(name="must_pass"):
+    if not must_pass_failed and item.get_closest_marker(name="must_pass"):
         if call.excinfo is not None:
             must_pass_failed = item
 

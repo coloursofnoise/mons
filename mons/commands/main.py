@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
     type=click.Path(exists=True, resolve_path=True),
     metavar="BASEINSTALL",
     help="Overlay this install on top of BASEINSTALL.",
-    hidden=is_platform("Linux"),
+    hidden=not is_platform("Linux"),
 )
 @pass_userinfo
 @click.pass_context
@@ -836,7 +836,7 @@ def downgrade_core(name: Install, verbose: bool):
     meta_options={
         "Game Arguments": [
             ("--console", "Attach output of game process (implies --wait)."),
-            ("--vanilla", "Launche Celeste without Everest."),
+            ("--vanilla", "Launch Celeste without Everest."),
         ]
     },
     cls=clickExt.CommandExt,

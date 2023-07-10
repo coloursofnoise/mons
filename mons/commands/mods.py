@@ -1024,7 +1024,7 @@ def update(
                         meta,
                         latest_version,
                         server["URL"],
-                        server["Mirror"],
+                        server["MirrorURL"],
                         server["Size"],
                     )
                 )

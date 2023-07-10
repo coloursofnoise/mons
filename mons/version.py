@@ -13,10 +13,13 @@ class Version:
         if not version or version.lower() in ["noversion", "none", "null"]:
             return NOVERSION()
 
+        if version.isdigit():
+            return cls(int(version), 0)
+
         # discard semver prerelease version
         strArr = version.split("-", maxsplit=1)[0].split(".")
         if 4 > len(strArr) < 2 or not all(n.isdigit() for n in strArr):
-            raise ValueError("%s is not a valid Version string" % version)
+            raise ValueError("%s is not a valid Version string." % version)
         arr = list(map(int, strArr))
         arr += [-1] * (4 - len(arr))
         return cls(*arr)
@@ -58,7 +61,11 @@ class Version:
         Raises :type:`ValueError` if major versions differ.
         """
         if self.Major != compare.Major:
-            raise ValueError("Incompatible versions.")
+            raise ValueError(
+                "Incompatible Major versions: {} != {}".format(
+                    self.Major, compare.Major
+                )
+            )
         return self > compare
 
     def __str__(self):

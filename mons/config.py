@@ -244,7 +244,10 @@ class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgu
                 if install.hash
             }
             if not _cache_loaded and cache_updates:
-                load_cache()
+                try:
+                    load_cache()
+                except (OSError, EmptyFileError):
+                    pass
             _cache.update(cache_updates)
             if not _cache:
                 return

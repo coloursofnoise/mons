@@ -18,7 +18,7 @@ def mock_installer(monkeypatch):
 
 
 def test_install_default(runner_result, test_install):
-    # install preferred branch (defaults to stable)
+    # install preferred branch, set to a stable version by `test_install` fixture
     with runner_result(mons_cli, ["install", test_install]) as result:
         assert result.exit_code == 0
         assert outputs.INSTALL_SUCCESS in result.output

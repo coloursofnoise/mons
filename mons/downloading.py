@@ -272,6 +272,7 @@ def downloader(
     except Exception as e:
         logger.warning(f"\nError downloading file {os.path.basename(dest)} {src}: {e}")
         if isinstance(e, (HTTPError)) and src != mirror:
+            logger.info("Attempting to download from mirror...")
             downloader(mirror, dest, name)
 
 

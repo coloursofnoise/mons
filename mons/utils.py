@@ -2,10 +2,8 @@ import errno
 import hashlib
 import logging
 import os
-import time
 import typing as t
 import zipfile
-from contextlib import contextmanager
 
 import dnfile  # https://github.com/malwarefrank/dnfile
 import typing_extensions as te
@@ -16,6 +14,7 @@ from pefile import (  # pyright:ignore[reportMissingTypeStubs]
 from mons import fs
 from mons.baseUtils import GeneratorWithLen
 from mons.logging import ProgressBar
+from mons.logging import timed_progress
 from mons.modmeta import ModMeta
 from mons.modmeta import read_mod_info
 from mons.platforms import assert_platform
@@ -96,9 +95,10 @@ def unpack(zip: zipfile.ZipFile, root: fs.Directory, prefix="", label="Extractin
 def parseExeInfo(path: fs.File):
     logger.info(f"Retrieving version information from {path}.")
     pe = dnfile.dnPE(path, fast_load=True)
-    pe.parse_data_directories(
-        directories=DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR"]
-    )
+    with timed_progress("Parsed data directories in {time} seconds", logging.DEBUG):
+        pe.parse_data_directories(
+            directories=DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR"]
+        )
 
     assert pe.net
 
@@ -109,20 +109,16 @@ def parseExeInfo(path: fs.File):
 
     heapSize = stringHeap.sizeof()
     i = 0
-    with ProgressBar(total=heapSize, desc="Scanning exe", leave=False) as bar:
+    with ProgressBar(total=heapSize, desc="Scanning assembly", leave=False) as bar:
         while i < len(stringHeap.__data__):
             string = stringHeap.get(i)
             if string is None:
                 break
             string = str(string)
             if string == "EverestModule":
-                logging.debug("Found EverestModule in string heap")
                 hasEverest = True
             if string.startswith("EverestBuild"):
                 everestBuild = string[len("EverestBuild") :]
-                logging.debug(
-                    "Found EverestBuild in string heap with suffix: " + everestBuild
-                )
                 hasEverest = True
                 break
             inc = max(len(string), 1)
@@ -134,8 +130,10 @@ def parseExeInfo(path: fs.File):
     framework = "FNA" if any(row.Name == "FNA" for row in assemRef.rows) else "XNA"
 
     if everestBuild:
+        logger.debug("Found EverestBuild in string heap with suffix: " + everestBuild)
         return Version(1, int(everestBuild), 0), framework
     if hasEverest:
+        logger.debug("Found EverestModule in string heap")
         return NOVERSION(), framework
 
     return None, framework

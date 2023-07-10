@@ -71,7 +71,7 @@ class ModMeta(ModMeta_Base, ModMeta_Deps):
     """Combination of :type:`ModMeta_Base` and :type:`ModMeta_Deps`"""
 
     Hash: t.Optional[str]
-    Path: str
+    Path: str = ""
     Blacklisted: t.Optional[bool] = False
 
     def __init__(self, data: t.Dict[str, t.Any]):
