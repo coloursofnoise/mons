@@ -1,5 +1,5 @@
 import itertools
-import json
+import logging
 import os
 import re
 import shutil
@@ -7,6 +7,7 @@ import typing as t
 import urllib.parse
 import urllib.request
 from gettext import ngettext
+from gettext import ngettext as _n
 from operator import attrgetter
 
 import click
@@ -24,7 +25,7 @@ from mons.config import UserInfo
 from mons.downloading import download_threaded
 from mons.downloading import download_with_progress
 from mons.downloading import get_download_size
-from mons.downloading import parse_gb_url
+from mons.downloading import parse_gb_dl
 from mons.errors import TTYError
 from mons.formatting import format_bytes
 from mons.install import Install
@@ -38,6 +39,7 @@ from mons.modmeta import read_mod_info
 from mons.modmeta import UpdateInfo
 from mons.mons import cli as mons_cli
 from mons.sources import fetch_dependency_graph
+from mons.sources import fetch_gb_downloads
 from mons.sources import fetch_mod_db
 from mons.sources import fetch_mod_search
 from mons.sources import fetch_random_map
@@ -45,6 +47,9 @@ from mons.utils import enable_mods
 from mons.utils import installed_mods
 from mons.utils import read_blacklist
 from mons.version import Version
+
+
+logger = logging.getLogger(__name__)
 
 
 @click.group(name="mods")
@@ -379,132 +384,172 @@ def path_as_url(path: fs.Path):
 def resolve_mods(ctx, mods: t.Sequence[str]):
     resolved: t.List[ModDownload] = list()
     unresolved: t.List[str] = list()
+    errors = 0
     mod_list = fetch_mod_db(ctx)
-    dep_db = fetch_dependency_graph()
+
+    def prompt_selection(matches, notice):
+        if len(matches) == 1:
+            return matches[0]
+
+        echo(notice)
+        for i, m in enumerate(matches):
+            echo(f"  {i+1} {m}")
+        return matches[
+            click.prompt("Select one", type=click.IntRange(1, len(matches))) - 1
+        ]
 
     for mod in mods:
-        # backwards compat shim
-        if mod.startswith("https://gamebanana.com/dl"):
-            mod = mod.replace(
-                "https://gamebanana.com/dl", "https://gamebanana.com/mmdl"
-            )
-
+        logger.debug(f"Resolving mod: {mod}")
         parsed_url = urllib.parse.urlparse(mod)
-        download = None
-        url = None
 
-        db_matches = {key: val for key, val in mod_list.items() if mod == val["URL"]}
-        if db_matches:
-            download = prompt_mod_selection(db_matches)
-
-        # Special case to try to resolve 1-Click install links through mod database
+        # Everest 1-Click install links should just contain another URL as the path
         if parsed_url.scheme == "everest":
-            gb_url = parse_gb_url(parsed_url.path)
-            if gb_url:
-                matches = {
-                    key: val for key, val in mod_list.items() if gb_url == val["URL"]
-                }
-                if len(matches) > 0:
-                    download = prompt_mod_selection(matches)
-                else:
-                    parsed_url = urllib.parse.urlparse(gb_url)
+            gb_url = parse_gb_dl(parsed_url.path) or parsed_url.path
+            parsed_url = urllib.parse.urlparse(gb_url)
+            mod = gb_url
+            logger.debug(f"Everest 1-Click URL, now resolving as {mod}.")
 
-        # Install from local filesystem
-        if mod.endswith(".zip") and os.path.exists(mod):
-            parsed_url = urllib.parse.ParseResult(
-                "file", "", os.path.abspath(mod), "", "", ""
-            )
-            meta = read_mod_info(parsed_url.path)
-            if meta:
-                download = ModDownload(
-                    meta,
-                    urllib.parse.urlunparse(parsed_url),  # type:ignore
+        # Direct URL match in mod database
+        matches: t.List[ModDownload] = [
+            ModDownload(ModMeta({"Name": key, **val}), val["URL"], val["MirrorURL"])
+            for key, val in mod_list.items()
+            if mod == val["URL"]
+        ]
+        if matches:
+            logger.debug(f"{len(matches)} URL match(es) found in mod db.")
+            resolved.append(
+                prompt_selection(
+                    matches, f"Multiple database matches found for URL '{mod}':"
                 )
-                echo(f"Mod found: {meta}")
+            )
+            continue
+
+        # Local filesystem
+        if os.path.exists(mod):
+            if os.path.splitext(mod)[1] == ".zip":
+                logger.debug("Zip archive exists in filesystem.")
+                parsed_url = urllib.parse.ParseResult(
+                    "file", "", os.path.abspath(mod), "", "", ""
+                )
+                meta = read_mod_info(parsed_url.path)
+                if meta:
+                    resolved.append(
+                        ModDownload(
+                            meta,
+                            urllib.parse.urlunparse(parsed_url),
+                        )
+                    )
+                else:
+                    unresolved.append(parsed_url.path)
+                continue
+            else:
+                logger.error(f"Path '{mod}' is not a .zip archive.")
+                errors += 1
 
         # Mod ID match
-        elif mod in mod_list:
+        if mod in mod_list:
+            logger.debug("Mod name match found in mod db")
             mod_info = mod_list[mod]
-            mod_info["Name"] = mod
-            download = ModDownload(
-                ModMeta({**mod_info, **dep_db[mod]}),
-                mod_info["URL"],
-                mod_info["MirrorURL"],
+            resolved.append(
+                ModDownload(
+                    ModMeta({"Name": mod, **mod_info}),
+                    mod_info["URL"],
+                    mod_info["MirrorURL"],
+                )
             )
-            echo(f'Mod found: {mod} {mod_info["Version"]}')
+            continue
 
         # GameBanana submission URL
-        elif (
+        if (
             parsed_url.scheme in ("http", "https")
             and parsed_url.netloc == "gamebanana.com"
             and parsed_url.path.startswith("/mods")
             and parsed_url.path.split("/")[-1].isdigit()
         ):
-            modID = int(parsed_url.path.split("/")[-1])
-            matches = {
-                key: val
+            mod_id = int(parsed_url.path.split("/")[-1])
+            matches: t.List[ModDownload] = [
+                ModDownload(ModMeta({"Name": key, **val}), val["URL"], val["MirrorURL"])
                 for key, val in mod_list.items()
-                if modID == val["GameBananaId"]
-            }
+                if mod_id == val["GameBananaId"]
+            ]
             if len(matches) > 0:
-                download = prompt_mod_selection(matches)
-            else:
-                downloads = json.load(
-                    download_with_progress(
-                        f"https://gamebanana.com/apiv5/Mod/{modID}?_csvProperties=_aFiles",
-                        None,
-                        "Retrieving download list",
+                logger.debug(f"{len(matches)} GameBananaId match(es) found in mod db.")
+                resolved.append(
+                    prompt_selection(
+                        matches,
+                        f"Multiple database matches found for GameBanana ID '{mod_id}':",
                     )
-                )["_aFiles"]
-                echo("Available downloads:")
-                idx = 1
-                for d in downloads:
-                    echo(f'  [{idx}] {d["_sFile"]} {d["_sDescription"]}')
-                    idx += 1
-
-                selection = click.prompt(
-                    "Select file to download",
-                    type=click.IntRange(0, idx),
-                    default=0,
-                    show_default=False,
                 )
-                if selection:
-                    d = downloads[selection - 1]
-                    echo(f'Selected file: {d["_sFile"]}')
-                    url = str(d["_sDownloadUrl"])
-                else:
-                    echo("Aborted!")
+                continue
+
+            submission = fetch_gb_downloads(mod_id)
+            downloads = {
+                d["_sFile"] + (d["_sDescription"] and f' ({d["_sDescription"]})'): d
+                for d in submission["_aFiles"]
+            }
+            if len(downloads) > 0:
+                logger.debug(
+                    f"{len(downloads)} File downloads found on GameBanana page."
+                )
+                selection = prompt_selection(
+                    list(downloads.keys()),
+                    f"Multiple downloads available for mod '{submission['_sName']}':",
+                )
+                unresolved.append(downloads[selection]["_sDownloadUrl"])
+                continue
 
         # Google Drive share URL
-        elif (
+        if (
             parsed_url.scheme in ("http", "https")
             and parsed_url.netloc == "drive.google.com"
             and parsed_url.path.startswith("/file/d/")
         ):
             file_id = parsed_url.path[len("/file/d/") :].split("/")[0]
             url = "https://drive.google.com/uc?export=download&id=" + file_id
+            unresolved.append(url)
+            logger.debug(
+                f"Mod is a valid google drive URl, direct download URL is {url}."
+            )
+            continue
 
-        elif parsed_url.scheme and parsed_url.path:
-            url = mod
+        if parsed_url.scheme and parsed_url.path:
+            logger.debug("Mod is a valid URL.")
+            unresolved.append(mod)
+            continue
 
         # Possible GameBanana Submission ID
-        elif mod.isdigit():
-            modID = int(mod)
-            matches = {
-                key: val
+        if mod.isdigit():
+            mod_id = int(mod)
+            matches = [
+                ModDownload(ModMeta({"Name": key, **val}), val["URL"], val["MirrorURL"])
                 for key, val in mod_list.items()
-                if modID == val["GameBananaId"]
-            }
-            if len(matches) > 0:
-                download = prompt_mod_selection(matches)
+                if mod_id == val["GameBananaId"]
+            ]
+            if matches:
+                logger.debug(f"{len(matches)} GameBananaId match(es) found in mod db.")
+                resolved.append(
+                    prompt_selection(
+                        matches,
+                        f"Multiple database matches found for GameBanana ID '{mod_id}':",
+                    )
+                )
+                continue
 
-        if download:
-            resolved.append(download)
-        elif url:
-            unresolved.append(url)
-        else:
-            raise click.ClickException(f"Mod '{mod}' could not be resolved.")
+        logger.error(f"Mod '{mod}' could not be resolved and is not a valid URL.")
+        errors += 1
 
+    if errors > 0:
+        click.echo(
+            _n(
+                "Encountered an error while resolving mods.",
+                "Encountered {error_count} errors while resolving mods.",
+                errors,
+            ).format(error_count=errors)
+        )
+        if errors == len(mods) or not clickExt.confirm_ext(
+            "Continue anyways?", default=False, dangerous=True
+        ):
+            raise click.Abort()
     return resolved, unresolved
 
 

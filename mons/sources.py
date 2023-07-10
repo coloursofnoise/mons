@@ -183,9 +183,20 @@ def fetch_build_artifact_azure(build: int, artifactName="olympus-build"):
         return response
 
 
+class ModDBEntry(te.TypedDict):
+    Version: str
+    LastUpdate: int
+    Size: int
+    GameBananaId: int
+    GameBananaFileId: int
+    xxHash: t.List[str]
+    URL: str
+    MirrorURL: str
+
+
 @with_cache("mod_database.json")
 @wrap_config_param
-def fetch_mod_db(config: Config) -> t.Dict[str, t.Any]:
+def fetch_mod_db(config: Config) -> t.Dict[str, ModDBEntry]:
     download_url = (
         config.downloading.mod_db
         or open_url(Defaults.MOD_UPDATER).read().decode().strip()
@@ -199,6 +210,16 @@ def fetch_mod_db(config: Config) -> t.Dict[str, t.Any]:
             clear=True,
         )
     )
+
+
+class DependencyInfo(te.TypedDict):
+    Name: str
+    Version: str
+
+
+class DependencyGraphEntry(te.TypedDict):
+    Dependencies: t.List[DependencyInfo]
+    OptionalDepenencies: t.List[DependencyInfo]
 
 
 @with_cache("dependency_graph.json")
@@ -223,3 +244,23 @@ def fetch_mod_search(search: str):
 def fetch_random_map():
     url = open_url(Defaults.RANDOM_MAP).url
     return url
+
+
+class GBDownload(te.TypedDict):
+    _sFile: str
+    _sDescription: str
+    _sDownloadUrl: str
+    _tsDateAdded: int
+
+
+class GBSubmission(te.TypedDict):
+    _sName: str
+    _aFiles: t.List[GBDownload]
+
+
+def fetch_gb_downloads(mod_id: t.Union[str, int]) -> GBSubmission:
+    response = open_url(
+        "https://gamebanana.com/apiv5/Mod/" + str(mod_id),
+        fields={"_csvProperties": "_aFiles,_sName"},
+    )
+    return json.load(response)

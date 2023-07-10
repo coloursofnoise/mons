@@ -31,10 +31,10 @@ logger = logging.getLogger(__name__)
 _GB_URL_PATTERN = re.compile(r"^(https://gamebanana.com/(mm)?dl/.*),.*,.*$")
 
 
-def parse_gb_url(url) -> str | None:
-    """If `url` is a GameBanana URL, strip the extraneous data if present.
+def parse_gb_dl(url) -> t.Optional[str]:
+    """If `url` is a GameBanana download URL, strip the extraneous data if present.
 
-    :returns: The GameBanana URL, if found, otherwise `None`."""
+    :returns: The GameBanana download URL, if found, otherwise `None`."""
     match = _GB_URL_PATTERN.match(url)
     return match[1] if match else None
 
@@ -44,7 +44,7 @@ class EverestHandler(urllib.request.BaseHandler):
 
     def everest_open(self, req: urllib.request.Request):
         parsed_url = urllib.parse.urlparse(req.full_url)
-        gb_url = parse_gb_url(parsed_url.path)
+        gb_url = parse_gb_dl(parsed_url.path)
         download_url = gb_url or parsed_url.path
         req.full_url = download_url
         return self.parent.open(req)
