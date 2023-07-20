@@ -55,23 +55,84 @@ RANDOM_MAP = f"{EXTRA_URL}/random-map"
 
 @dataclass(frozen=True)
 class Config:
+    """The mons configuration file uses the YAML format."""
+
     @dataclass(frozen=True)
     class Downloading:
-        # Marked optional because the default URL is just a text file with the actual URL in it.
-        # Default: https://everestapi.github.io/everestupdater.txt
         everest_builds: t.Optional[str] = None
-        # Default: https://everestapi.github.io/modupdater.txt
+        """The URL used to fetch the list of Everest builds.
+
+        By default, the URL is read from the contents of
+        `https://everestapi.github.io/everestupdater.txt`.
+        """
+
         mod_db: t.Optional[str] = None
-        autobuild_repo: str = "EverestAPI/Everest"
-        source_repo: str = "https://github.com/EverestAPI/Everest.git"
+        """The URL used to fetch the database of Everest-compatible mods.
+
+        By default, the URL is read from the contents of
+        `https://everestapi.github.io/modupdater.txt`.
+        """
+
+        autobuild_repo: str = "EverestAPI/Everest"  # TODO: unimplemented
+        source_repo: str = (
+            "https://github.com/EverestAPI/Everest.git"  # TODO: unimplemented
+        )
+
         thread_count: int = 8
+        """The maximum number of parallel downloads to use."""
+
+    @dataclass(frozen=True)
+    class OverlayFS:
+        data_directory: t.Optional[str] = None
+        """Used for the `upperdir` overlay mount option.
+
+        Each install will have its own subdirectory within this folder, which
+        will contain all files added or modified by this install.
+        This directory should be writable.
+        """
+
+        work_directory: t.Optional[str] = None
+        """Used for the `workdir` overlay mount option.
+
+        Each install will have its own subdirectory within this folder, which
+        will be wiped before each use.
+        This directory should be writable, on the same filesystem as
+        `data_directory`.
+        """
 
     source_directory: t.Optional[str] = None
+    """The default path to use when building Everest from source.
+
+    Once set, this can still be overridden by providing a path from the
+    commandline.
+    """
+
     build_args: t.List[str] = field(default_factory=list)
-    default_install: t.Optional[str] = None
+    """Build options that are passed to `dotnet build` or `msbuild`.
+
+    If the `dotnet` cli is not reliably available, both tools can accept
+    `msbuild` options.
+
+    See :manpage:`msbuild(1)` for available options.
+    """
+
+    default_install: t.Optional[str] = None  # TODO: unimplemented
+
     launch_args: t.List[str] = field(default_factory=list)
+    """The default command-line arguments used when launching Celeste.
+
+    Everest will also read arguments from the `everest-launch.txt` file. See
+    Everest documentation for details.
+    """
 
     downloading: Downloading = Downloading()
+    """Options related to downloading files."""
+
+    overlayfs: OverlayFS = OverlayFS()
+    """Options pertaining to installs using an Overlay Filesystem (Linux only).
+
+    See :doc:`mons-overlayfs(7) <overlayfs>` for information on overlayfs installs.
+    """
 
 
 def read_yaml(path: str, type: t.Type[T]) -> T:

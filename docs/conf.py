@@ -29,7 +29,7 @@ copyright = '2022-2023, coloursofnoise'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx_click', 'myst_parser', 'sphinx.ext.autodoc', 'glossarygen']
+extensions = ['sphinx_click', 'myst_parser', 'sphinx.ext.autodoc', 'autodoc_ext', 'glossarygen']
 
 suppress_warnings = ['myst.header']
 
@@ -57,6 +57,7 @@ autodoc_member_order = "bysource"
 man_pages = [
     ("everest", "mons", "", "", "1"),
     ("mods", "mons-mods", "", "", "1"),
+    ("config", "mons", "", "", "5"),
     ("glossary", "mons-glossary", "", "", "7"),
     ("overlayfs", "mons-overlayfs", "", "", "7"),
 ]

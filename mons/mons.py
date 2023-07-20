@@ -56,6 +56,7 @@ _MAN_PAGES = {
     "": ("1", "mons"),
     "mons": ("1", "mons"),
     "mods": ("1", "mons-mods"),
+    **dict.fromkeys(["config", "configuration"], ("5", "mons")),
     "glossary": ("7", "mons-glossary"),
     **dict.fromkeys(_SPEC_NAMES, ("7", "mons-glossary")),
     **dict.fromkeys(["overlay", "overlayfs"], ("7", "mons-overlayfs")),
