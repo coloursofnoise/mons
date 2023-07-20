@@ -28,6 +28,7 @@ from mons.platforms import is_platform
 from mons.sources import fetch_build_artifact_azure
 from mons.sources import fetch_build_list
 from mons.sources import fetch_latest_build_azure
+from mons.spec import VERSIONSPEC
 from mons.utils import find_celeste_asm
 from mons.utils import getMD5Hash
 from mons.utils import unpack
@@ -584,7 +585,7 @@ def validate_configuration(ctx, param, value: t.Optional[str]):
     ),
     cls=clickExt.CommandExt,
     usages=[
-        ["NAME", "[VERSIONSPEC | PATH | URL]"],
+        ["NAME", f"[{VERSIONSPEC} | PATH | URL]"],
         [
             "NAME",
             "--src",
@@ -641,7 +642,7 @@ def install(
 ):
     """Install Everest.
 
-    VERSIONSPEC can be a branch name, build number, or version number.
+    :term:`VERSIONSPEC` can be a branch name, build number, or version number.
 
     mons can install 'main' and 'olympus-build' artifacts.
 

@@ -13,7 +13,9 @@
 # import os
 # import sys
 # sys.path.insert(0, os.path.abspath('..'))
-
+import os
+import sys
+sys.path.append(os.path.abspath('./_extensions'))
 
 # -- Project information -----------------------------------------------------
 
@@ -27,7 +29,7 @@ copyright = '2022-2023, coloursofnoise'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx_click', 'myst_parser']
+extensions = ['sphinx_click', 'myst_parser', 'sphinx.ext.autodoc', 'glossarygen']
 
 suppress_warnings = ['myst.header']
 
@@ -39,11 +41,23 @@ templates_path = ['_templates']
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
+# Don't prepend module names to object names.
+add_module_names = False
+
+# Don't include values for autodoc members.
+autodoc_default_options = {
+    'no-value': True
+}
+
+autodoc_member_order = "bysource"
+
+
 # -- Options for manual page output ------------------------------------------
 
 man_pages = [
     ("everest", "mons", "", "", "1"),
     ("mods", "mons-mods", "", "", "1"),
+    ("glossary", "mons-glossary", "", "", "7"),
     ("overlayfs", "mons-overlayfs", "", "", "7"),
 ]
 

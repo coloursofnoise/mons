@@ -42,6 +42,7 @@ from mons.sources import fetch_gb_downloads
 from mons.sources import fetch_mod_db
 from mons.sources import fetch_mod_search
 from mons.sources import fetch_random_map
+from mons.spec import MODSPEC
 from mons.utils import enable_mods
 from mons.utils import installed_mods
 from mons.utils import read_blacklist
@@ -589,7 +590,7 @@ def update_everest(install: Install, required: Version):
     no_args_is_help=True,
     cls=clickExt.CommandExt,
     usages=[
-        ["NAME", "MODSPEC..."],
+        ["NAME", f"{MODSPEC}..."],
         ["NAME", "-"],
         ["NAME", "--search SEARCH..."],
         ["NAME", "--random"],
@@ -620,7 +621,7 @@ def add(
 ):
     """Add mods.
 
-    MODSPEC can be one or more of: mod ID, local zip, zip URL, 1-Click install link, Google Drive share link, GameBanana page, or GameBanana submission ID.
+    :term:`MODSPEC` can be one or more of: mod ID, local zip, zip URL, 1-Click install link, Google Drive share link, GameBanana page, or GameBanana submission ID.
 
     If '-' is the only argument provided, data for a mod zip will be read from stdin.
     """

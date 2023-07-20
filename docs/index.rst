@@ -22,4 +22,5 @@ Table of Contents
 .. toctree::
    :caption: Reference
 
+   Glossary<glossary>
    OverlayFS<overlayfs>

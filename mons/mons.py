@@ -16,6 +16,7 @@ else:
 import click
 
 import mons.clickExt as clickExt
+import mons.spec
 from mons.config import Env
 from mons.config import UserInfo
 from mons.logging import ClickFormatter
@@ -47,10 +48,16 @@ def cli(ctx: click.Context):
     ctx.parent = env_ctx
 
 
+_SPEC_NAMES = [
+    attr.lower() for attr in dir(mons.spec) if attr.isupper() and attr.endswith("SPEC")
+]
+
 _MAN_PAGES = {
     "": ("1", "mons"),
     "mons": ("1", "mons"),
     "mods": ("1", "mons-mods"),
+    "glossary": ("7", "mons-glossary"),
+    **dict.fromkeys(_SPEC_NAMES, ("7", "mons-glossary")),
     **dict.fromkeys(["overlay", "overlayfs"], ("7", "mons-overlayfs")),
 }
 
@@ -68,6 +75,12 @@ def help(ctx: click.Context, command: t.List[str]):
     man_path = shutil.which("man")
     if man_pages and man_path and " ".join(command).lower() in _MAN_PAGES:
         cmd_str = " ".join(command).lower()
+        env = os.environ
+        if cmd_str in _SPEC_NAMES:
+            # If using less, attempt to jump to the appropriate section.
+            env["LESS"] = " ".join(
+                filter(None, (env.get("LESS", None), r"+/^\s+" + cmd_str))
+            )
         section, page = _MAN_PAGES[cmd_str]
         subprocess.run(
             [
