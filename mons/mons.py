@@ -76,7 +76,10 @@ def help(ctx: click.Context, command: t.List[str]):
                 "-",
             ],
             env=env,
-            input=man_pages.joinpath(f"man{section}", f"{page}.{section}").read_bytes(),
+            # importlib.resources' joinpath only accepts one argument before 3.12
+            input=man_pages.joinpath(f"man{section}")
+            .joinpath(f"{page}.{section}")
+            .read_bytes(),
         )
         return
 
