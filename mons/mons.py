@@ -1,8 +1,17 @@
 #!/usr/bin/env python
 import logging
 import os
+import shutil
+import subprocess
+import sys
 import typing as t
 from importlib import import_module
+
+# namespace package support added in 3.10
+if sys.version_info >= (3, 10):  # novermin
+    from importlib.resources import files
+else:
+    from importlib_resources import files
 
 import click
 
@@ -38,16 +47,37 @@ def cli(ctx: click.Context):
     ctx.parent = env_ctx
 
 
+_MAN_PAGES = {
+    "": ("1", "mons"),
+    "mons": ("1", "mons"),
+    "mods": ("1", "mons-mods"),
+}
+
+
 @cli.command(context_settings={"ignore_unknown_options": True})
 @click.argument("command", nargs=-1)
 @click.pass_context
 def help(ctx: click.Context, command: t.List[str]):
     """Display help text for a command."""
+    try:
+        man_pages = files("mons.man")
+    except FileNotFoundError:
+        man_pages = None
 
-    # No args means print program help
-    if len(command) < 1 and ctx.parent:
-        click.echo(cli.get_help(ctx.parent))
-        exit(0)
+    man_path = shutil.which("man")
+    if man_pages and man_path and " ".join(command).lower() in _MAN_PAGES:
+        cmd_str = " ".join(command).lower()
+        section, page = _MAN_PAGES[cmd_str]
+        subprocess.run(
+            [
+                man_path,
+                "--local-file",
+                "-",
+            ],
+            env=env,
+            input=man_pages.joinpath(f"man{section}", f"{page}.{section}").read_bytes(),
+        )
+        return
 
     group = cli
     cmd_path = []
@@ -55,7 +85,7 @@ def help(ctx: click.Context, command: t.List[str]):
         cmd_path.append(cmd_name)
         cmd = group.get_command(ctx, cmd_name)
         if not cmd:
-            err_msg = "No such command '{}.'".format(" ".join(cmd_path))
+            err_msg = "No help entry for '{}'.".format(" ".join(cmd_path))
             click.echo(str(click.BadArgumentUsage(err_msg, ctx)))
             exit(click.BadArgumentUsage.exit_code)
 

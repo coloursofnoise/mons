@@ -39,6 +39,16 @@ templates_path = ['_templates']
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
+# -- Options for manual page output ------------------------------------------
+
+man_pages = [
+    ("everest", "mons", "", "", "1"),
+    ("mods", "mons-mods", "", "", "1"),
+]
+
+man_make_section_directory = True
+manpages_url = "https://www.man7.org/linux/man-pages/man{section}/{page}.{section}.html"
+
 
 # -- Options for HTML output -------------------------------------------------
 
