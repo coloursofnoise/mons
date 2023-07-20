@@ -51,6 +51,7 @@ _MAN_PAGES = {
     "": ("1", "mons"),
     "mons": ("1", "mons"),
     "mods": ("1", "mons-mods"),
+    **dict.fromkeys(["overlay", "overlayfs"], ("7", "mons-overlayfs")),
 }
 
 

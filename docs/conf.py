@@ -44,6 +44,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 man_pages = [
     ("everest", "mons", "", "", "1"),
     ("mods", "mons-mods", "", "", "1"),
+    ("overlayfs", "mons-overlayfs", "", "", "7"),
 ]
 
 man_make_section_directory = True

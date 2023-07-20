@@ -1,4 +1,6 @@
+import re
 import typing as t
+from textwrap import TextWrapper as _TextWrapper
 
 # https://stackoverflow.com/a/63839503
 METRIC_LABELS: t.List[str] = ["B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
@@ -79,3 +81,21 @@ def _format_columns_dict(dict, prefix):
         "{}{:<{c1_width}}\t{}".format(prefix, k, v, c1_width=c1_width)
         for k, v in dict.items()
     ).strip("\n")
+
+
+_ansi_re = re.compile(r"\033\[[;?0-9]*[a-zA-Z]")
+
+
+class ANSIString(str):
+    def __len__(self) -> int:
+        return len(re.sub(_ansi_re, "", self))
+
+
+class ANSITextWrapper(_TextWrapper):
+    """Extension of TextWrapper that properly handles ANSI escape sequences.
+
+    ANSI escape sequences are ignored when calculating string length."""
+
+    def _split(self, text: str) -> list[str]:
+        chunks = super()._split(text)
+        return [ANSIString(s) for s in chunks]

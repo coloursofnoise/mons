@@ -21,6 +21,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import textwrap
 from datetime import datetime
 
 import click
@@ -30,6 +31,7 @@ from mons import clickExt
 from mons import fs
 from mons.config import CACHE_DIR
 from mons.config import DATA_DIR
+from mons.formatting import ANSITextWrapper
 from mons.install import Install
 
 
@@ -115,6 +117,37 @@ def in_namespace():
         return uid_map.strip("\n") != "         0          0 4294967295"
 
 
+ABOUT = """\
+{sphinx_description}\
+An Overlay Filesystem allows the contents of one directory to be overlaid on \
+top of another. This means that Everest can be installed without modifying the \
+base Celeste install, and without needing a second copy of Celeste.
+
+Mounting a filesystem on linux usually requires superuser permissions, which \
+would require entering the root password after every reboot. This is rather \
+cumbersome, so a good alternative is to add an entry to '/etc/fstab' for the \
+mount point. With the 'x-systemd.automount' option provided by systemd, the \
+filesystem will only be mounted when it is accessed.
+
+If an overlay cannot be mounted without superuser permissions, an attempt will \
+first be made to use an Unprivileged User Namespace. This can be used to \
+create a container that has superuser privileges that are still isolated from \
+the rest of the system.
+{sphinx_end}\
+""".format(
+    sphinx_description="", sphinx_end=""
+)
+
+SEE_ALSO = """\
+{sphinx_seealso}\
+:manpage:`user_namespaces(7)`, :manpage:`mount(8)`, :manpage:`fstab(5)`,
+:manpage:`systemd.automount(5)`, :doc:`mons(1) <everest>`
+{sphinx_end}\
+""".format(
+    sphinx_seealso="", sphinx_end=""
+)
+
+
 def setup(install: Install):
     assert install.overlay_base
 
@@ -129,29 +162,36 @@ def setup(install: Install):
     if check_fstab(lowerdir, upperdir, workdir, mergeddir):
         return
 
-    echo(
-        f"""
-{click.style("!!PLEASE READ!!", fg="yellow", bold=True)}
-\tAn Overlay Filesystem allows the contents of one directory to be overlaid on top of another.
-\tThis means that Everest can be installed without modifying the base Celeste install, and
-\twithout needing a second copy of Celeste.
+    cols, _ = shutil.get_terminal_size()
+    width = cols - 2
+    if logger.isEnabledFor(logging.DEBUG):
+        width -= len("info: ")
 
-\tMounting a filesystem on linux usually requires superuser permissions, which would require
-\tentering the root password after every reboot. This is rather cumbersome, so a good
-\talternative is to add an entry to `/etc/fstab' for the mount point. With the
-\t`x-systemd.automount' option provided by systemd, the filesystem will only be mounted when
-\tit is accessed.
+    def style_manref(ref: str):
+        ref = ref.split("`")[1].split()[0]
+        return (
+            click.style(ref[:-3], fg="green")
+            + click.style(ref[-3], fg="red")
+            + click.style(ref[-2], fg="blue")
+            + click.style(ref[-1], fg="red")
+        )
 
-{click.style("SEE ALSO", fg="yellow")}
-\t{click.style("mount(8)", fg="green")}, {click.style("fstab(5)", fg="green")}, {click.style("systemd-automount(5)", fg="green")}
-
-\tIf an overlay cannot be mounted, an attempt will be made to use an Unprivileged User Namespace.
-\tThis can be used to create a container that has superuser privileges that are still isolated from
-\tthe rest of the system.
-
-{click.style("SEE ALSO", fg="yellow")}
-\t{click.style("user_namespaces(7)", fg="green")}
-"""
+    logger.info(click.style("!!PLEASE READ!!", fg="yellow", bold=True))
+    logger.info(
+        "\n\n\n".join(
+            textwrap.fill(para, width=width) for para in ABOUT.split("\n\n\n")
+        )
+        + "\n\n"
+    )
+    logger.info(click.style("SEE ALSO", fg="yellow"))
+    logger.info(
+        ANSITextWrapper(
+            width=width,
+            initial_indent="\t",
+            subsequent_indent="\t",
+            break_long_words=False,
+            break_on_hyphens=False,
+        ).fill(", ".join([style_manref(ref) for ref in SEE_ALSO.split(",")]))
     )
 
     if clickExt.confirm_ext("Add an entry to /etc/fstab?", default=True):
