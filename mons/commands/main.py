@@ -46,8 +46,7 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--overlay",
     type=click.Path(exists=True, resolve_path=True),
-    metavar="BASEINSTALL",
-    help="Overlay this install on top of BASEINSTALL.",
+    help="Overlay this install on top of PATH.",
     hidden=not is_platform("Linux"),
 )
 @pass_userinfo
@@ -59,7 +58,7 @@ def add(
     path: str,
     overlay: t.Optional[fs.Path] = None,
 ):
-    """Add a Celeste install"""
+    """Register an existing Celeste (or Everest) install."""
     if overlay and is_platform("Linux") and assert_platform("Linux"):
         return add_overlay(user_info, name, path, overlay)
 
@@ -115,7 +114,7 @@ if is_platform("Linux") and assert_platform("Linux"):
     help="Print `export MONS_DEFAULT_INSTALL={NAME}` to stdout.",
 )
 def use(name: str, eval: bool):
-    """Set the default install for mons commands
+    """Set the default install for mons commands.
 
     To un-set, run `export MONS_DEFAULT_INSTALL=`"""
     if eval:
@@ -135,7 +134,7 @@ eval "$(mons use {name} --eval)" """,
 @click.argument("new", type=clickExt.Install(exist=False))
 @pass_userinfo
 def rename(userInfo: UserInfo, old: str, new: str):
-    """Rename a Celeste install"""
+    """Rename a Celeste install."""
     userInfo.installs[new] = userInfo.installs.pop(old)
     userInfo.installs[new].name = new
     echo(f"Renamed install `{old}` to `{new}`")
@@ -145,7 +144,7 @@ def rename(userInfo: UserInfo, old: str, new: str):
 @click.argument("name", type=clickExt.Install(check_path=False, resolve_install=True))
 @click.argument("path", type=click.Path(exists=True, resolve_path=True))
 def set_path(name: Install, path: fs.Path):
-    """Change the path of an existing install"""
+    """Change the path of an existing install."""
     try:
         install_path = fs.dirname(find_celeste_asm(path))
     except FileNotFoundError as err:
@@ -167,7 +166,7 @@ def set_path(name: Install, path: fs.Path):
 )
 @pass_userinfo
 def remove(userInfo: UserInfo, name: str):
-    """Remove an existing install"""
+    """Remove an existing install."""
     del userInfo.installs[name]
     echo(f"Removed install {name}.")
 
@@ -177,7 +176,7 @@ def remove(userInfo: UserInfo, name: str):
 @pass_userinfo
 @click.pass_context
 def list_cmd(ctx: click.Context, userInfo: UserInfo):
-    """List existing installs"""
+    """List existing installs."""
     output = {}
     if not userInfo.installs:
         raise click.ClickException("No installs found, use `add` to add one.")
@@ -586,7 +585,13 @@ def validate_configuration(ctx, param, value: t.Optional[str]):
     cls=clickExt.CommandExt,
     usages=[
         ["NAME", "[VERSIONSPEC | PATH | URL]"],
-        ["NAME", "--src", "[--no-build]", "[PATH] [BUILD ARGS...]"],
+        [
+            "NAME",
+            "--src",
+            "[--no-build]",
+            "[--configuration OPTION]",
+            "[PATH] [BUILD ARGS...]",
+        ],
     ],
 )
 @clickExt.install("install", metavar="NAME")
@@ -604,6 +609,7 @@ def validate_configuration(ctx, param, value: t.Optional[str]):
 )
 @click.option(
     "--configuration",
+    metavar="OPTION",
     help="Configuration/Framework to build for.",
     callback=validate_configuration,
 )
@@ -633,9 +639,15 @@ def install(
     publish: bool,
     launch_game: bool,
 ):
-    """Install Everest
+    """Install Everest.
 
-    VERSIONSPEC can be a branch name, build number, or version number."""
+    VERSIONSPEC can be a branch name, build number, or version number.
+
+    mons can install 'main' and 'olympus-build' artifacts.
+
+    If VERSIONSPEC is not supplied, mons will attempt to determine the branch
+    that is currently installed, and install the latest build from that branch.
+    """
     # Additional option validation
     if not src:
         for opt, val in [
@@ -846,7 +858,7 @@ def downgrade_core(name: Install, verbose: bool):
 @click.option("--dry-run", is_flag=True, hidden=True)
 @click.pass_context
 def launch(ctx: click.Context, name: Install, wait: bool, dry_run: bool):
-    """Launch the game associated with an install
+    """Launch the game associated with an install.
 
     Any additional arguments are passed to the launched process."""
     path = name.asm

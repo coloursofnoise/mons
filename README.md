@@ -55,6 +55,17 @@ $ mons install main stable
 $ mons install main --latest
 ```
 
+### Everest in an overlay filesystem (Linux only)
+On Linux, an [Overlay Filesystem](https://www.kernel.org/doc/html/latest/filesystems/overlayfs.html) can be used to isolate any modifications made by an Everest. This allows multiple Everest installs to use the same base Celeste files, and also makes uninstalling Everest much more reliable.
+
+Use the `--overlay` option when adding an Everest install to assign it to an overlay filesystem:
+
+```console
+$ mons add main path/to/Everest/install --overlay path/to/Celeste/install
+```
+
+Since mounting a filesystem requires elevated privileges, it is recommended to add it to `/etc/fstab` or use [User Namespaces](https://en.wikipedia.org/wiki/Linux_namespaces#User_ID_(user)) to avoid the need to enter the root password every time.
+
 ### Everest from source
 `mons` was created with Everest development in mind, and tries to make the process as streamlined as possible. Passing the `--src` option with the path to a copy of the Everest repo to `mons install` will, by default:
 
@@ -65,7 +76,7 @@ $ mons install main --latest
 On GNU/Linux and macOS, `mons` will use the [MonoKickstart](https://github.com/flibitijibibo/MonoKickstart) executable bundled with Celeste to run `miniinstaller`, so a system install of [mono](https://www.mono-project.com/) is not required.
 
 ```console
-$ mons install main --src=/path/to/Everest/repo --launch
+$ mons install main --src /path/to/Everest/repo --launch
 ```
 
 ### Mods
@@ -79,7 +90,8 @@ The `--search` option when adding mods uses the [GameBanana Search API](https://
 $ mons mods add main SpringCollab2022
 $ mons mods add main https://gamebanana.com/mods/53697 # Communal Helper
 $ mons mods add main --search Helper
-$ mons mods update main --all
+$ mons mods update main
+$ mons mods remove --recurse SpringCollab2022
 ```
 
 <!-- sphinx end -->

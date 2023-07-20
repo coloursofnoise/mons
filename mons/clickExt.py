@@ -332,7 +332,7 @@ def color_option(*param_decls: str, **kwargs: t.Any):
         param_decls = ("--color",)
 
     kwargs.setdefault("is_eager", True)
-    kwargs.setdefault("help", "Specify when to use colored output: auto, always, none")
+    kwargs.setdefault("help", "Specify when to use colored output: auto, always, none.")
     kwargs.setdefault("metavar", "WHEN")
     kwargs["callback"] = callback
     return click.option(*param_decls, **kwargs)
@@ -612,7 +612,19 @@ class CommandExt(click.Command):
     def format_help(self, ctx: click.Context, formatter):
         self.format_usage(ctx, formatter)
         self.format_help_text(ctx, formatter)
+
+        attr_values: t.Dict[click.Option, t.Tuple[bool, bool]] = dict()
+        for opt in self.params:
+            # if metavar is set, make sure it is used even if the option isn't
+            # supposed to accept an argument.
+            if isinstance(opt, click.Option) and opt.metavar:
+                attr_values[opt] = (opt.is_flag, opt.count)
+                opt.is_flag = opt.count = False
         self.format_options(ctx, formatter)
+        # reset values
+        for opt, vals in attr_values.items():
+            opt.is_flag, opt.count = vals
+
         self.format_meta_options(ctx, formatter)
         self.format_epilog(ctx, formatter)
 

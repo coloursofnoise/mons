@@ -14,7 +14,7 @@ Table of Contents
    self
 
 .. toctree::
-   :caption: Reference
+   :caption: Usage
 
    mons (Everest)<everest>
    mods<mods>

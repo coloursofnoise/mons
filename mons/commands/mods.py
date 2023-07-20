@@ -585,11 +585,23 @@ def update_everest(install: Install, required: Version):
         mons_cli.main(args=["install", install.name, str(required)])
 
 
-@cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
+@cli.command(
+    no_args_is_help=True,
+    cls=clickExt.CommandExt,
+    usages=[
+        ["NAME", "MODSPEC..."],
+        ["NAME", "-"],
+        ["NAME", "--search SEARCH..."],
+        ["NAME", "--random"],
+    ],
+)
 @clickExt.install("install", metavar="NAME", require_everest=True)
 @click.argument("mods", nargs=-1)
 @click.option(
-    "--search", is_flag=True, help="Use the Celeste mod search API to find a mod."
+    "--search",
+    metavar="SEARCH...",
+    is_flag=True,
+    help="Use the Celeste mod search API to find a mod.",
 )
 @click.option("--random", is_flag=True, help="Install a random mod.")
 @click.option(
@@ -608,7 +620,9 @@ def add(
 ):
     """Add mods.
 
-    MODS can be one or more of: mod ID, local zip, zip URL, 1-Click install link, Google Drive share link, GameBanana page, or GameBanana submission ID.
+    MODSPEC can be one or more of: mod ID, local zip, zip URL, 1-Click install link, Google Drive share link, GameBanana page, or GameBanana submission ID.
+
+    If '-' is the only argument provided, data for a mod zip will be read from stdin.
     """
     if random:
         mods = (fetch_random_map(),)

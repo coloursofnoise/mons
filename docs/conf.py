@@ -19,7 +19,7 @@
 
 project = 'mons'
 author = 'coloursofnoise'
-copyright = '2022, coloursofnoise'
+copyright = '2022-2023, coloursofnoise'
 
 
 # -- General configuration ---------------------------------------------------

@@ -17,10 +17,14 @@ from mons.logging import EchoHandler
 logger = logging.getLogger("mons")
 
 
-@click.group(cls=clickExt.CatchErrorsGroup)
+@click.group(
+    cls=clickExt.CatchErrorsGroup,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
 @click.pass_context
 @click.version_option()
 def cli(ctx: click.Context):
+    """Install and manage mods for Celeste."""
     # Logging should not be setup in the global scope or it breaks pytest log capturing
     handler = EchoHandler()
     handler.setFormatter(ClickFormatter())
@@ -38,7 +42,8 @@ def cli(ctx: click.Context):
 @click.argument("command", nargs=-1)
 @click.pass_context
 def help(ctx: click.Context, command: t.List[str]):
-    """Display help text for a command"""
+    """Display help text for a command."""
+
     # No args means print program help
     if len(command) < 1 and ctx.parent:
         click.echo(cli.get_help(ctx.parent))
