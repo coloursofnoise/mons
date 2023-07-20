@@ -1,11 +1,14 @@
 import textwrap
+
 from docutils import nodes
-from sphinx.domains.std import Glossary
-from sphinx.application import Sphinx
 from docutils.statemachine import StringList
+from sphinx.application import Sphinx
+from sphinx.domains.std import Glossary
+
 
 class NodeReprVisitor(nodes.NodeVisitor):
     content_indent = "   "
+
     def __init__(self, document):
         super().__init__(document)
         self.content = ""
@@ -32,6 +35,7 @@ class NodeReprVisitor(nodes.NodeVisitor):
     def unknown_departure(self, node):
         pass
 
+
 class GlossaryGen(Glossary):
     def run(self) -> list[nodes.Node]:
         def parse_content(node: nodes.Node):
@@ -41,20 +45,24 @@ class GlossaryGen(Glossary):
             return visitor.content
 
         node = nodes.Element()
-        self.state.nested_parse(self.content, self.content_offset,
-                                    node, match_titles=True)
+        self.state.nested_parse(
+            self.content, self.content_offset, node, match_titles=True
+        )
 
         parsed_content = [""]
         for child in node.children:
             if len(child.children) == 2:
                 term, content = child.children[:2]
                 parsed_content.append(term.astext())
-                parsed_content.append(textwrap.indent(parse_content(content), "   ") + "\n")
+                parsed_content.append(
+                    textwrap.indent(parse_content(content), "   ") + "\n"
+                )
 
         content = "\n".join(parsed_content).splitlines()
         self.content = StringList(content, content)
 
         return super().run()
+
 
 def setup(app: Sphinx):
     app.add_directive("glossarygen", GlossaryGen)

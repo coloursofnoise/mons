@@ -1,18 +1,26 @@
 import copy
-from sphinx.ext import autodoc
-from sphinx.domains.python import PyAttribute
+
 from docutils.parsers.rst import directives
 from sphinx.application import Sphinx
+from sphinx.domains.python import PyAttribute
+from sphinx.ext import autodoc
+
 
 class ClassMembersDocumenter(autodoc.ClassDocumenter):
-    option_spec = {**autodoc.ClassDocumenter.option_spec, "skip_docstr": directives.unchanged}
+    option_spec = {
+        **autodoc.ClassDocumenter.option_spec,
+        "skip_docstr": directives.unchanged,
+    }
     objtype = "classmembers"
+
     def generate(self, *args, **kwargs) -> None:
         self.options["members"] = autodoc.ALL
         self.is_toplevel = not self.options.get("classmembersdocumenter", False)
         self.options["classmembersdocumenter"] = True
         self.doc_as_attr = False
+
         super().generate(*args, **kwargs)
+
         if not self.is_toplevel:
             return
 
@@ -20,7 +28,6 @@ class ClassMembersDocumenter(autodoc.ClassDocumenter):
 
         result_strlist.trim_start(4)
         result_strlist.trim_left(3)
-
 
         s_drop = list()
         current_prefix = ""
@@ -38,8 +45,10 @@ class ClassMembersDocumenter(autodoc.ClassDocumenter):
                 result_strlist[i] = s.replace("~typing.Optional[", "")[:-1]
 
             if ".. py:classmembersattribute::" in s:
-                indent = s[:len(s) - len(s.lstrip())]
-                result_strlist[i] = f"{indent}.. py:classmembersattribute:: {current_prefix}{s.split('.')[-1].strip()}"
+                directive, arguments = s.rstrip().split("::", maxsplit=1)
+                result_strlist[i] = (
+                    directive + ":: " + current_prefix + arguments.split(".")[-1]
+                )
 
         for s in s_drop:
             result_strlist.remove(s)
@@ -48,7 +57,9 @@ class ClassMembersDocumenter(autodoc.ClassDocumenter):
         objpath = self.objpath
         if not self.object.__init__.__qualname__.startswith(self.object.__qualname__):
             self.objpath = self.object.__init__.__qualname__.split(".")[:-1]
+
         super().document_members(all_members)
+
         self.objpath = objpath
 
     def add_content(self, more_content) -> None:
@@ -78,6 +89,7 @@ class ClassMembersDocumenter(autodoc.ClassDocumenter):
 
 class ClassMembersAttributeDocumenter(autodoc.AttributeDocumenter):
     objtype = "classmembersattribute"
+
     def generate(self, *args, **kwargs) -> None:
         super().generate(*args, **kwargs)
 
@@ -91,14 +103,20 @@ class PyClassMember(PyAttribute):
     def get_signatures(self):
         return [sig.split(".")[-1] for sig in super().get_signatures()]
 
+
 class ClassMembersDirective(PyClassMember):
     option_spec = {**PyAttribute.option_spec, "toplevel": directives.unchanged}
     allow_nesting = True
 
 
-class AutoDocstr(autodoc.ClassLevelDocumenter, autodoc.ModuleLevelDocumenter, autodoc.ModuleDocumenter):
+class AutoDocstr(
+    autodoc.ClassLevelDocumenter,
+    autodoc.ModuleLevelDocumenter,
+    autodoc.ModuleDocumenter,
+):
     objtype = "docstr"
     content_indent = ""
+
     @classmethod
     def can_document_member(cls, *args, **kwargs):
         return False
@@ -109,21 +127,29 @@ class AutoDocstr(autodoc.ClassLevelDocumenter, autodoc.ModuleLevelDocumenter, au
 
     def resolve_name(self, *args, **kwargs):
         module, name = autodoc.ClassLevelDocumenter.resolve_name(self, *args, **kwargs)
+
         if not module:
-            module, name = autodoc.ModuleLevelDocumenter.resolve_name(self, *args, **kwargs)
+            module, name = autodoc.ModuleLevelDocumenter.resolve_name(
+                self, *args, **kwargs
+            )
+
         if not module:
-            module, name = autodoc.ClassLevelDocumenter.resolve_name(self, *args, **kwargs)
+            module, name = autodoc.ClassLevelDocumenter.resolve_name(
+                self, *args, **kwargs
+            )
+
         return module, name
 
     def document_members(self, all_members: bool = False) -> None:
-        pass # skip
+        pass  # skip
 
     def add_directive_header(self, sig: str) -> None:
-        pass # skip
+        pass  # skip
+
 
 def setup(app: Sphinx):
     app.add_autodocumenter(AutoDocstr)
     app.add_autodocumenter(ClassMembersDocumenter)
     app.add_autodocumenter(ClassMembersAttributeDocumenter)
-    app.add_directive_to_domain('py', 'classmembers', ClassMembersDirective)
-    app.add_directive_to_domain('py', 'classmembersattribute', PyClassMember)
+    app.add_directive_to_domain("py", "classmembers", ClassMembersDirective)
+    app.add_directive_to_domain("py", "classmembersattribute", PyClassMember)

@@ -5,6 +5,7 @@
 [![GameBanana](https://img.shields.io/static/v1?label=GameBanana&message=9963&color=yellow)](https://gamebanana.com/tools/9963)
 
 <!-- sphinx start -->
+
 `mons` is a commandline [Everest](https://everestapi.github.io/) installer and mod manager for [Celeste](http://www.celestegame.com/).
 
 It was originally built for productivity when working on Everest, but can be used by players and developers alike.
@@ -12,15 +13,19 @@ It was originally built for productivity when working on Everest, but can be use
 **This program requires basic competency using the [commandline](https://en.wikipedia.org/wiki/Command-line_interface) for your operating system.** For a graphical installer, please use [Olympus](https://everestapi.github.io/#installing-everest) instead.
 
 ## Install:
+
 ### Arch Linux:
+
 Install from the AUR: [`everest-mons`](https://aur.archlinux.org/packages/everest-mons)
 
 ### Using [pipx](https://pypa.github.io/pipx/) (recommended):
+
 ```console
 $ pipx install mons
 ```
 
 ### Using pip:
+
 ```console
 $ python3 -m pip install --user mons
 ```
@@ -37,6 +42,7 @@ $ mons install --help
 ```
 
 ### Setup
+
 The first step is to add a reference for your Celeste install. **For the purposes of this documentation, it will be assumed that the install is named `main`.**
 
 ```console
@@ -46,6 +52,7 @@ $ mons add main path/to/Celeste/install
 Every command that operates on a Celeste install (pretty much everything except `list` and `config`) will require the install name as the first argument.
 
 ### Everest
+
 Installing Everest can be done with a variety of options, including branch name (`stable`/`beta`/`dev`), build number (`3366`), or zip artifact (`--zip /path/to/zip/archive`).
 
 Using the `--latest` flag will always install the most recent build available.
@@ -56,6 +63,7 @@ $ mons install main --latest
 ```
 
 ### Everest in an overlay filesystem (Linux only)
+
 On Linux, an [Overlay Filesystem](https://www.kernel.org/doc/html/latest/filesystems/overlayfs.html) can be used to isolate any modifications made by an Everest. This allows multiple Everest installs to use the same base Celeste files, and also makes uninstalling Everest much more reliable.
 
 Use the `--overlay` option when adding an Everest install to assign it to an overlay filesystem:
@@ -64,9 +72,10 @@ Use the `--overlay` option when adding an Everest install to assign it to an ove
 $ mons add main path/to/Everest/install --overlay path/to/Celeste/install
 ```
 
-Since mounting a filesystem requires elevated privileges, it is recommended to add it to `/etc/fstab` or use [User Namespaces](https://en.wikipedia.org/wiki/Linux_namespaces#User_ID_(user)) to avoid the need to enter the root password every time.
+Since mounting a filesystem requires elevated privileges, it is recommended to add it to `/etc/fstab` or use [User Namespaces](<https://en.wikipedia.org/wiki/Linux_namespaces#User_ID_(user)>) to avoid the need to enter the root password every time.
 
 ### Everest from source
+
 `mons` was created with Everest development in mind, and tries to make the process as streamlined as possible. Passing the `--src` option with the path to a copy of the Everest repo to `mons install` will, by default:
 
 1. Run `dotnet build` or `msbuild` in the project folder.
@@ -80,6 +89,7 @@ $ mons install main --src /path/to/Everest/repo --launch
 ```
 
 ### Mods
+
 `mons` supports Celeste mods that have been posted on [GameBanana](https://gamebanana.com/games/6460), but can also attempt to install from local or remote zip files, including Google Drive share links.
 
 Dependencies will be automatically resolved where possible, and missing dependencies can be resolved at any point using `mons mods resolve`.
@@ -95,7 +105,8 @@ $ mons mods remove --recurse SpringCollab2022
 ```
 
 <!-- sphinx end -->
------
+
+---
 
 **[Everest Website](https://everestapi.github.io/)**
 
