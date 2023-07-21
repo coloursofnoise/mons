@@ -59,6 +59,24 @@ autodoc_default_options = {"no-value": True}
 autodoc_member_order = "bysource"
 
 
+def process_options(app, ctx, lines):
+    meta_options = getattr(ctx.command, "meta_options", {})
+    if not meta_options:
+        return
+
+    for section, opts in meta_options.items():
+        lines.append(".. rubric:: {}".format(section))
+        lines.append("")
+        for opt, desc in opts:
+            lines.append(".. option:: {}".format(opt))
+            lines.append("")
+            lines.append("    " + desc)
+
+
+def setup(app):
+    app.connect("sphinx-click-process-options", process_options)
+
+
 # -- Options for manual page output ------------------------------------------
 
 man_pages = [

@@ -18,6 +18,7 @@ from mons.config import Env
 from mons.config import get_default_install
 from mons.config import UserInfo
 from mons.errors import TTYError
+from mons.formatting import format_rst_inline
 from mons.install import Install as T_Install
 from mons.utils import find_celeste_asm
 
@@ -627,6 +628,8 @@ class CommandExt(click.Command):
 
         self.format_meta_options(ctx, formatter)
         self.format_epilog(ctx, formatter)
+
+        formatter.buffer = [format_rst_inline(line) for line in formatter.buffer]
 
     def format_usage(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
         if not self.usages:

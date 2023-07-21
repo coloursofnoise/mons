@@ -609,7 +609,9 @@ def validate_configuration(ctx, param, value: t.Optional[str]):
     help="Build and install from source folder.",
 )
 @click.option(
-    "--no-build", is_flag=True, help="Use with --src to install without building."
+    "--no-build",
+    is_flag=True,
+    help="Use with :option:`--src` to install without building.",
 )
 @click.option(
     "--configuration",
@@ -851,7 +853,7 @@ def downgrade_core(name: Install, verbose: bool):
     ),
     meta_options={
         "Game Arguments": [
-            ("--console", "Attach output of game process (implies --wait)."),
+            ("--console", "Attach output of game process (implies :option:`--wait`)."),
             ("--vanilla", "Launch Celeste without Everest."),
         ]
     },
@@ -864,7 +866,8 @@ def downgrade_core(name: Install, verbose: bool):
 def launch(ctx: click.Context, name: Install, wait: bool, dry_run: bool):
     """Launch the game associated with an install.
 
-    Any additional arguments are passed to the launched process."""
+    Any additional arguments are passed to the launched process.
+    """
     path = name.asm
     if is_platform("Darwin") and assert_platform("Darwin"):
         path = fs.File(

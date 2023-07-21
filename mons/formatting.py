@@ -2,6 +2,8 @@ import re
 import typing as t
 from textwrap import TextWrapper as _TextWrapper
 
+from click import style
+
 # https://stackoverflow.com/a/63839503
 METRIC_LABELS: t.List[str] = ["B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
 BINARY_LABELS: t.List[str] = [
@@ -81,6 +83,14 @@ def _format_columns_dict(dict, prefix):
         "{}{:<{c1_width}}\t{}".format(prefix, k, v, c1_width=c1_width)
         for k, v in dict.items()
     ).strip("\n")
+
+
+_rst_inline = re.compile(r":.+:`(.+)`")
+
+
+def format_rst_inline(text: str):
+    """Strips inline roles and underlines their contents."""
+    return re.sub(_rst_inline, style(r"\1", underline=True), text)
 
 
 _ansi_re = re.compile(r"\033\[[;?0-9]*[a-zA-Z]")
