@@ -22,15 +22,16 @@ import stat
 import subprocess
 import sys
 import textwrap
+import typing as t
 from datetime import datetime
 
 import click
-from click import echo
 
 from mons import clickExt
 from mons import fs
 from mons.config import CACHE_DIR
 from mons.config import DATA_DIR
+from mons.config import wrap_config_param
 from mons.formatting import ANSITextWrapper
 from mons.install import Install
 
@@ -38,7 +39,31 @@ from mons.install import Install
 logger = logging.getLogger(__name__)
 
 
-def build_mount_options(lowerdir, upperdir, workdir, fstab=True):
+class OverlayDirs(t.NamedTuple):
+    lowerdir: str
+    upperdir: str
+    workdir: str
+    mergeddir: str
+
+
+@wrap_config_param
+def get_overlaydirs(config, install: Install):
+    assert install.overlay_base
+    return OverlayDirs(
+        lowerdir=install.overlay_base,
+        upperdir=os.path.join(
+            config.overlayfs.data_directory or os.path.join(DATA_DIR, "overlayfs"),
+            install.name,
+        ),
+        workdir=os.path.join(
+            config.overlayfs.work_directory or os.path.join(CACHE_DIR, "overlayfs"),
+            install.name,
+        ),
+        mergeddir=install.path,
+    )
+
+
+def build_mount_options(lowerdir: str, upperdir: str, workdir: str, fstab=True):
     opts = [
         # Allow any user to mount and to unmount the filesystem
         "users",
@@ -61,13 +86,13 @@ def build_mount_options(lowerdir, upperdir, workdir, fstab=True):
     return ",".join(opts)
 
 
-def build_fstab_entry(lowerdir, upperdir, workdir, mergeddir):
+def build_fstab_entry(overlay_dirs: OverlayDirs):
     return " ".join(
         [
             "overlay",
-            mergeddir,
+            overlay_dirs.mergeddir,
             "overlay",
-            build_mount_options(lowerdir, upperdir, workdir),
+            build_mount_options(*overlay_dirs[:3]),
             "0",
             "0",
         ]
@@ -78,7 +103,8 @@ def build_fstab_comment():
     return "# Added by mons " + datetime.now().date().isoformat()
 
 
-def check_fstab(lowerdir, upperdir, workdir, mergeddir, *, fstab="/etc/fstab"):
+def check_fstab(overlay_dirs: OverlayDirs, *, fstab="/etc/fstab"):
+    lowerdir, upperdir, workdir, mergeddir = overlay_dirs
     with open(fstab) as file:
         for line in file.readlines():
             if line.startswith("#") or not line.strip():
@@ -98,15 +124,15 @@ def check_fstab(lowerdir, upperdir, workdir, mergeddir, *, fstab="/etc/fstab"):
     return False
 
 
-def is_mounted(lowerdir, upperdir, workdir, mergeddir):
-    if os.path.ismount(mergeddir):
+def is_mounted(overlay_dirs: OverlayDirs):
+    if os.path.ismount(overlay_dirs.mergeddir):
         mount_file = "/proc/mounts"
         if not fs.isfile(mount_file):
             # Usually contain the same information (and are often symlinked)
             # but /proc/mounts is more likely to be up to date.
             mount_file = "/etc/mtab"
             assert fs.isfile(mount_file)
-        return check_fstab(lowerdir, upperdir, workdir, mergeddir, fstab=mount_file)
+        return check_fstab(overlay_dirs, fstab=mount_file)
     return False
 
 
@@ -148,18 +174,14 @@ SEE_ALSO = """\
 )
 
 
-def setup(install: Install):
-    assert install.overlay_base
+@wrap_config_param
+def setup(config, install: Install):
+    overlay_dirs = get_overlaydirs(config, install)
 
-    lowerdir = install.overlay_base
-    upperdir = os.path.join(DATA_DIR, "overlayfs", install.name)
-    workdir = os.path.join(CACHE_DIR, "overlayfs", install.name)
-    mergeddir = install.path
-
-    if is_mounted(lowerdir, upperdir, workdir, mergeddir):
+    if is_mounted(overlay_dirs):
         return
 
-    if check_fstab(lowerdir, upperdir, workdir, mergeddir):
+    if check_fstab(overlay_dirs):
         return
 
     cols, _ = shutil.get_terminal_size()
@@ -196,7 +218,7 @@ def setup(install: Install):
 
     if clickExt.confirm_ext("Add an entry to /etc/fstab?", default=True):
         fstab_comment = build_fstab_comment()
-        fstab_entry = build_fstab_entry(lowerdir, upperdir, workdir, mergeddir)
+        fstab_entry = build_fstab_entry(overlay_dirs)
 
         if os.geteuid() == 0:
             with open("/etc/fstab", "a") as fstab:
@@ -225,6 +247,7 @@ def setup(install: Install):
                 )
             )
 
+    lowerdir = overlay_dirs.lowerdir
     if os.access(lowerdir, os.W_OK):
         echo(
             f"""
@@ -241,14 +264,10 @@ read-only when using an overlay install.
 
 
 def activate(ctx, install: Install):
-    assert install.overlay_base
+    overlay_dirs = get_overlaydirs(ctx, install)
+    _, upperdir, workdir, mergeddir = overlay_dirs
 
-    lowerdir = install.overlay_base
-    upperdir = os.path.join(DATA_DIR, "overlayfs", install.name)
-    workdir = os.path.join(CACHE_DIR, "overlayfs", install.name)
-    mergeddir = install.path
-
-    if is_mounted(lowerdir, upperdir, workdir, mergeddir):
+    if is_mounted(overlay_dirs):
         return
 
     os.makedirs(upperdir, exist_ok=True)
@@ -266,7 +285,7 @@ def activate(ctx, install: Install):
         "overlay",
         mergeddir,
         "-o",
-        build_mount_options(lowerdir, upperdir, workdir, fstab=False),
+        build_mount_options(*overlay_dirs[:3], fstab=False),
     ]
     if os.geteuid() != 0:
         logger.debug("Attempting to mount without sudo...")

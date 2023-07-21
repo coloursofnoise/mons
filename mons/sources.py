@@ -3,38 +3,21 @@ import os
 import time
 import typing as t
 import urllib.parse
-from functools import update_wrapper
 from io import BytesIO
 from zipfile import ZipFile
 
 import typing_extensions as te
 import yaml
-from click import Context
 
 import mons.config as Defaults
 from mons.config import CACHE_DIR
 from mons.config import Config
-from mons.config import UserInfo
+from mons.config import wrap_config_param
 from mons.downloading import download_with_progress
 from mons.downloading import open_url
 
 P = te.ParamSpec("P")
 R = te.TypeVar("R")
-
-
-def wrap_config_param(
-    f: t.Callable[te.Concatenate[Config, P], R]
-) -> t.Callable[te.Concatenate[t.Union[Context, UserInfo, Config], P], R]:
-    """Convenience wrapper to transform a passed Context or UserInfo into a Config"""
-
-    def wrapper(config, *args: P.args, **kwargs: P.kwargs) -> R:
-        if isinstance(config, Context):
-            config = config.ensure_object(UserInfo)
-        if isinstance(config, UserInfo):
-            config = config.config
-        return f(config, *args, **kwargs)
-
-    return update_wrapper(wrapper, f)
 
 
 def read_cache(filename: str, reader: t.Callable[[t.IO[t.Any]], t.Any]):

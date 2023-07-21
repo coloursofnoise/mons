@@ -7,10 +7,12 @@ from dataclasses import asdict
 from dataclasses import dataclass
 from dataclasses import field
 from dataclasses import fields
+from functools import update_wrapper
 
 import typing_extensions as te
 import yaml
 from click import ClickException
+from click import Context
 from click import make_pass_decorator
 from platformdirs import PlatformDirs
 
@@ -322,3 +324,21 @@ class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgu
 
 pass_userinfo = make_pass_decorator(UserInfo)
 pass_env = make_pass_decorator(Env, ensure=True)
+
+P = te.ParamSpec("P")
+R = t.TypeVar("R")
+
+
+def wrap_config_param(
+    f: t.Callable[te.Concatenate[Config, P], R]
+) -> t.Callable[te.Concatenate[t.Union[Context, UserInfo, Config], P], R]:
+    """Convenience wrapper to transform a passed Context or UserInfo into a Config"""
+
+    def wrapper(config, *args: P.args, **kwargs: P.kwargs) -> R:
+        if isinstance(config, Context):
+            config = config.ensure_object(UserInfo)
+        if isinstance(config, UserInfo):
+            config = config.config
+        return f(config, *args, **kwargs)
+
+    return update_wrapper(wrapper, f)
