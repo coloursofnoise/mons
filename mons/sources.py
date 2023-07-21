@@ -83,9 +83,9 @@ def with_cache(
 @with_cache("build_list.json")
 @wrap_config_param
 def fetch_build_list(config: Config) -> t.List[t.Dict[str, t.Any]]:
-    download_url = (
-        config.downloading.everest_builds
-        or open_url(Defaults.EVEREST_UPDATER).read().decode().strip()
+    download_url = config.downloading.everest_builds or (
+        open_url(Defaults.EVEREST_UPDATER).read().decode().strip()
+        + "?supportsNativeBuilds=true"  # include .NET Core builds in list
     )
 
     return yaml.safe_load(
