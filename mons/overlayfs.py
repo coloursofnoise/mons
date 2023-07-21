@@ -32,6 +32,7 @@ from mons import fs
 from mons.config import CACHE_DIR
 from mons.config import DATA_DIR
 from mons.config import wrap_config_param
+from mons.errors import try_exec
 from mons.formatting import ANSITextWrapper
 from mons.install import Install
 
@@ -124,6 +125,9 @@ def check_fstab(overlay_dirs: OverlayDirs, *, fstab="/etc/fstab"):
     return False
 
 
+@try_exec(
+    exception_type=IOError, on_failure=Exception("Unable to determine mount state")
+)
 def is_mounted(overlay_dirs: OverlayDirs):
     if os.path.ismount(overlay_dirs.mergeddir):
         mount_file = "/proc/mounts"
@@ -136,6 +140,7 @@ def is_mounted(overlay_dirs: OverlayDirs):
     return False
 
 
+@try_exec(exception_type=IOError, on_failure=False)
 def in_namespace():
     with open("/proc/self/uid_map") as file:
         uid_map = file.read()

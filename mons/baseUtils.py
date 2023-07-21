@@ -105,13 +105,6 @@ def chain_partition(predicate: t.Callable[[T], bool], *iterables: t.Iterable[T])
     return tuple((matches, *non_matches))
 
 
-def tryExec(func: t.Callable[..., T], *params: t.Any, **kwargs: t.Any) -> t.Optional[T]:
-    try:
-        func(*params, **kwargs)
-    except Exception:
-        pass
-
-
 def find(iter: t.Iterable[T], matches: t.Iterable[T]):
     return next((match for match in iter if match in matches), None)
 

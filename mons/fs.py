@@ -7,7 +7,7 @@ from contextlib import contextmanager
 
 import typing_extensions as te
 
-from mons.baseUtils import tryExec
+from mons.errors import silent_exec
 
 
 class Path(str):
@@ -175,7 +175,7 @@ def copied_file(src: File, dest: str):
 def temporary_file(persist=False):
     fd, path = tempfile.mkstemp(suffix="_mons")
     if persist:
-        atexit.register(tryExec, os.remove, path)
+        atexit.register(silent_exec, os.remove, path)  # type: ignore
     os.close(fd)
     try:
         yield File(path)
