@@ -34,10 +34,6 @@ from mons.utils import getMD5Hash
 from mons.utils import unpack
 from mons.version import Version
 
-if is_platform("Linux") and assert_platform("Linux"):
-    from mons import overlayfs
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -60,10 +56,15 @@ def add(
     overlay: t.Optional[fs.Path] = None,
 ):
     """Register an existing Celeste (or Everest) install."""
-    if overlay and is_platform("Linux") and assert_platform("Linux"):
-        return add_overlay(user_info, name, path, overlay)
+    if overlay:
+        if is_platform("Linux") and assert_platform("Linux"):
+            return add_overlay(user_info, name, path, overlay)
+        raise NotImplementedError(
+            "OverlayFS install is not available on this platform."
+        )
 
-    # This can't be done as during argument parsing because when `--overlay` is used the path doesn't have to exist yet.
+    # This can't be done as during argument parsing because when `--overlay` is used
+    # `path` doesn't have to exist yet.
     path = clickExt.type_cast_value(
         ctx, click.Path(exists=True, resolve_path=True), path
     )
@@ -82,7 +83,9 @@ def add(
 
 
 if is_platform("Linux") and assert_platform("Linux"):
+    from mons import overlayfs
 
+    # Very similar to `add`, but different enough that merging them makes the code much harder to follow.
     def add_overlay(
         user_info: UserInfo, name: str, install_path: str, overlay: fs.Path
     ):
