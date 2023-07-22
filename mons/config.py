@@ -171,7 +171,7 @@ def dataclass_fromdict(data: t.Dict[str, t.Any], field_type: t.Type[T]) -> T:
                 type_fields[k], object
             ):  # recursively deserialize objects
                 try:
-                    load_yaml(str(v), type_fields[k])
+                    data[k] = load_yaml(str(v), type_fields[k])
                 except ExceptionCount as e:
                     errors += e.count
             else:
