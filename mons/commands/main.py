@@ -9,6 +9,7 @@ import urllib.parse
 from zipfile import ZipFile
 
 import click
+import yaml
 from click import echo
 
 import mons.clickExt as clickExt
@@ -20,6 +21,7 @@ from mons.downloading import download_with_progress
 from mons.downloading import URLResponse
 from mons.errors import TTYError
 from mons.formatting import format_columns
+from mons.formatting import format_name_ver
 from mons.install import Install
 from mons.mons import cli
 from mons.platforms import assert_platform
@@ -30,7 +32,6 @@ from mons.sources import fetch_build_list
 from mons.sources import fetch_latest_build_azure
 from mons.spec import VERSIONSPEC
 from mons.utils import find_celeste_asm
-from mons.utils import getMD5Hash
 from mons.utils import unpack
 from mons.version import Version
 
@@ -75,11 +76,11 @@ def add(
     except FileNotFoundError as err:
         raise click.UsageError(str(err))
 
+    logger.info(f"Found Celeste install: '{install_path}'.")
+
     new_install = Install(name, install_path)
     user_info.installs[name] = new_install
-
-    echo(f"Found Celeste install: {install_path}")
-    echo(new_install.version_string())
+    echo(format_name_ver(new_install))
 
 
 if is_platform("Linux") and assert_platform("Linux"):
@@ -94,18 +95,21 @@ if is_platform("Linux") and assert_platform("Linux"):
         except FileNotFoundError as err:
             raise click.UsageError(str(err))
 
+        logger.info(f"Found existing Celeste install: '{overlay_path}'.")
+
         os.makedirs(install_path, exist_ok=True)
         assert fs.isdir(install_path)
         new_install = Install(name, install_path, overlay_base=overlay_path)
-        overlayfs.setup(new_install)
+        overlayfs.setup(user_info, new_install)
+
+        logger.debug(f"Setup new overlay install: '{install_path}'.")
 
         user_info.installs[name] = new_install
-        echo(f"Found Celeste install: {install_path}")
         # The overlay won't be mounted yet, and we don't want to try to activate it
         # right now. Luckily since it's brand-new there will be no changes from the
         # overlay base.
         new_install.path = overlay_path
-        echo(new_install.version_string())
+        echo(format_name_ver(new_install))
         new_install.path = install_path
 
 
@@ -124,12 +128,11 @@ def use(name: str, eval: bool):
     if eval:
         echo(f"export MONS_DEFAULT_INSTALL={name}")
     else:
-        echo(
+        logger.warning(
             f"""Mons can't set environment variables in the parent shell.
 To circumvent this, run the following:
 
 eval "$(mons use {name} --eval)" """,
-            err=True,
         )
 
 
@@ -141,7 +144,8 @@ def rename(userInfo: UserInfo, old: str, new: str):
     """Rename a Celeste install."""
     userInfo.installs[new] = userInfo.installs.pop(old)
     userInfo.installs[new].name = new
-    echo(f"Renamed install `{old}` to `{new}`")
+    logger.info(f"Renamed install: '{old}' -> '{new}'.")
+    echo(format_name_ver(userInfo.installs[new]))
 
 
 @cli.command(no_args_is_help=True)
@@ -155,8 +159,8 @@ def set_path(name: Install, path: fs.Path):
         raise click.UsageError(str(err))
 
     name.path = install_path
-    echo(f"Found Celeste install: {install_path}")
-    echo(name.version_string())
+    logger.info(f"Found Celeste install: '{install_path}'.")
+    echo(format_name_ver(name))
 
 
 @cli.command(
@@ -172,46 +176,67 @@ def set_path(name: Install, path: fs.Path):
 def remove(userInfo: UserInfo, name: str):
     """Remove an existing install."""
     del userInfo.installs[name]
-    echo(f"Removed install {name}.")
+    logger.info(f"Removed install: '{name}'.")
+
+
+def format_install(install: Install):
+    data: t.Dict[str, t.Any] = {
+        "Path": install.path,
+    }
+    if install.overlay_base:
+        data["Overlay Base"] = str(install.overlay_base)
+
+    data["Celeste"] = str(install.celeste_version)
+    data["Framework"] = install.framework
+
+    if install.everest_version:
+        data["Everest"] = str(install.everest_version)
+    data["Hash"] = install.hash
+
+    return yaml.dump(
+        {install.name: data},
+        sort_keys=False,
+    )
 
 
 @cli.command(name="list")
 # @click.option("--json", is_flag=True, hidden=True)
+@click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
 @pass_userinfo
 @click.pass_context
-def list_cmd(ctx: click.Context, userInfo: UserInfo):
+def list_cmd(ctx: click.Context, userInfo: UserInfo, verbose: bool):
     """List existing installs."""
     output = {}
     if not userInfo.installs:
-        raise click.ClickException("No installs found, use `add` to add one.")
+        raise click.ClickException("No installs found (use 'mons add').")
+
+    # Make sure any overlay installs are activated
+    for install in userInfo.installs:
+        clickExt.Install.validate_install(ctx, install, validate_path=True)
+
+    if verbose:
+        for install in userInfo.installs.values():
+            install.update_cache(read_exe=True)
+            echo(format_install(install))
+        return
 
     for name, install in userInfo.installs.items():
-        try:
-            clickExt.Install.validate_install(ctx, name, validate_path=True)
-            output[name] = install.version_string()
-        except Exception as err:
-            raise click.UsageError(str(err))
+        output[name] = install.version_string()
 
-    click.echo(format_columns(output))
+    echo(format_columns(output))
 
 
 @cli.command(cls=clickExt.CommandExt, no_args_is_help=True)
 @clickExt.install("name")
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
 def show(name: Install, verbose: bool):
-    """Display information for a specific install"""
+    """Display information for a specific install."""
     install = name
     install.update_cache(read_exe=True)
     if verbose:
-        echo(install.name + ":")
-        output = {**install.get_cache()}
-        orig_exe = os.path.join(os.path.dirname(install.path), "orig", "Celeste.exe")
-        if fs.isfile(orig_exe):
-            output["vanilla hash"] = getMD5Hash(orig_exe)
-        output["path"] = install.path
-        echo(format_columns(output, prefix="\t"))
+        print(format_install(install))
     else:
-        echo("{}:\t{}".format(install.name, install.version_string()))
+        echo(format_name_ver(install))
         echo(install.path)
 
 
@@ -324,6 +349,7 @@ def determine_configuration(srcdir: fs.Directory):
     common_outputs = set.intersection(*[outputs for outputs in artifacts.values()])
 
     if len(common_outputs) < 1:
+        logger.error("No common output configuration found between projects.")
         return None
 
     if len(common_outputs) > 1:
@@ -336,10 +362,14 @@ def determine_configuration(srcdir: fs.Directory):
             ),
             key=lambda item: item[1],
         )
+        logger.debug(f"Most recent build artifact: '{newest_artifact}'")
         return newest_artifact
 
     # Only one output is shared
     (only_common_output,) = common_outputs
+    logger.debug(
+        f"Only one output configuration shared between all projects: '{only_common_output}'"
+    )
     return only_common_output
 
 
@@ -397,7 +427,9 @@ def copy_source_artifacts(
 
 def fetch_artifact_source(ctx: click.Context, source: t.Union[str, Version, None]):
     if isinstance(source, Version):
-        logger.debug("Reference version provided, determining current branch.")
+        logger.debug(
+            f"Reference version '{source}' provided, determining current branch."
+        )
         current = source
         source = None
         build_list = fetch_build_list(ctx)

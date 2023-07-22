@@ -1,7 +1,9 @@
 import os
 import typing as t
+from dataclasses import asdict
 from dataclasses import dataclass
 from dataclasses import field
+from string import Formatter
 
 import typing_extensions as te
 
@@ -127,3 +129,17 @@ class Install:
 
         if read_exe and has_everest:
             self.everest_version, self.framework = parseExeInfo(self.asm)
+
+    def __str__(self) -> str:
+        return f"{self.name} {self.version_string()}"
+
+    def __format__(self, format_spec: str):
+        if not format_spec:
+            return super().__format__(format_spec)
+        data = asdict(self)
+        format_fields = [f[1] for f in Formatter().parse(format_spec) if f[1]]
+        if "version_string" in format_fields:
+            data["version_string"] = self.version_string()
+        if "version" in format_fields:
+            data["version"] = self.version_string()
+        return format_spec.format_map(data)

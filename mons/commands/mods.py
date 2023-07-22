@@ -222,43 +222,6 @@ def search(ctx, search: t.Tuple[str], verbose: bool):
         clickExt.echo_via_pager(map(formatter, matches))
 
 
-def prompt_mod_selection(options: t.Dict[str, t.Any], max=-1):
-    matchKeys = sorted(
-        options.keys(), key=lambda key: options[key]["LastUpdate"], reverse=True
-    )
-    selection = None
-    if len(matchKeys) == 1:
-        key = matchKeys[0]
-        echo(f'Mod found: {key} {options[key]["Version"]}')
-        options[key]["Name"] = key
-        selection = ModDownload(options[key], options[key]["URL"])
-
-    if len(matchKeys) > 1:
-        echo("Mods found:")
-        idx = 1
-        for key in matchKeys:
-            if max > -1 and idx > max:
-                break
-            echo(f'  [{idx}] {key} {options[key]["Version"]}')
-            idx += 1
-
-        choice = click.prompt(
-            "Select mod to add",
-            type=click.IntRange(0, idx),
-            default=0,
-            show_default=False,
-        )
-        if choice:
-            key = matchKeys[choice - 1]
-            echo(f'Selected mod: {key} {options[key]["Version"]}')
-            options[key]["Name"] = key
-            selection = ModDownload(
-                options[key], options[key]["URL"], options[key]["Mirror"]
-            )
-
-    return selection
-
-
 def resolve_dependencies(
     mods: t.Sequence[ModMeta], check_versions=True
 ) -> t.Tuple[t.List[ModMeta_Base], t.List[ModMeta_Base]]:
@@ -560,7 +523,7 @@ def resolve_mods(ctx, mods: t.Sequence[str]):
         errors += 1
 
     if errors > 0:
-        click.echo(
+        logger.error(
             _n(
                 "Encountered an error while resolving mods.",
                 "Encountered {error_count} errors while resolving mods.",
@@ -579,7 +542,7 @@ def update_everest(install: Install, required: Version):
     if current and current.satisfies(required):
         return
 
-    echo(
+    logger.warning(
         f"Installed Everest ({current}) does not satisfy minimum requirement ({required})."
     )
     if clickExt.confirm_ext("Update Everest?", default=True):
@@ -637,6 +600,7 @@ def add(
     unresolved: t.List[str] = []
 
     if search:
+        # Query mod search API
         matches = search_mods(ctx, " ".join(mods))
         selections = clickExt.prompt_selections(
             matches,
@@ -687,7 +651,7 @@ def add(
     if unresolved:
         echo("The following mods could not be resolved:")
         for s in unresolved:
-            echo(f"\t{s}")
+            echo(f"  {s}")
 
         download_size = sum(get_download_size(url) for url in unresolved)
         echo(
@@ -876,8 +840,10 @@ def add(
         if installed[mod.Meta.Name].Blacklisted
     ]
     if blacklisted:
-        echo("The following mods will be automatically removed from the blacklist:")
-        echo(" ".join([str(mod) for mod in blacklisted]))
+        logger.info(
+            "The following mods will be automatically removed from the blacklist:"
+        )
+        logger.info(" ".join([str(mod) for mod in blacklisted]))
         enable_mods(
             install.mod_folder, *(os.path.basename(mod.Path) for mod in blacklisted)
         )
@@ -928,9 +894,11 @@ def remove(name: Install, mods: t.List[str], recurse: bool):
     resolved, unresolved = partition(lambda mod: mod in installed_list, mods)
 
     if len(unresolved) > 0:
-        echo("The following mods could not be found, and will not be removed:")
+        logger.warning(
+            "The following mods could not be found, and will not be removed:"
+        )
         for mod in unresolved:
-            echo(f"\t{mod}")
+            logger.warning(f"{mod}")
         if not clickExt.confirm_ext("Continue anyways?", default=False, dangerous=True):
             raise click.Abort()
 
@@ -938,7 +906,7 @@ def remove(name: Install, mods: t.List[str], recurse: bool):
 
     if len(metas) < 1:
         echo("No mods to remove.")
-        exit()
+        return
 
     echo(
         _n(
@@ -948,7 +916,7 @@ def remove(name: Install, mods: t.List[str], recurse: bool):
         ).format(len_remove=len(metas))
     )
     for mod in metas:
-        echo(f"\t{mod}")
+        echo(f"  {mod}")
 
     removable_deps = (
         resolve_exclusive_dependencies(metas, installed_list) if recurse else []
@@ -962,7 +930,7 @@ def remove(name: Install, mods: t.List[str], recurse: bool):
             ).format(len_deps=len(removable_deps))
         )
         for dep in removable_deps:
-            echo(f"\t{dep}")
+            echo(f"  {dep}")
 
     total_size = sum(mod.Size for mod in itertools.chain(metas, removable_deps))
     echo(f"After this operation, {format_bytes(total_size)} disk space will be freed.")
@@ -983,16 +951,19 @@ def remove(name: Install, mods: t.List[str], recurse: bool):
             progress.update(1)
 
     if len(folders) > 0:
-        echo("The following unzipped mods were not removed:")
+        logger.warning("The following unzipped mods were not removed:")
         for mod in folders:
-            echo(f"\t{mod} ({os.path.basename(mod.Path)}/)")
+            logger.warning(f"  {mod} ({os.path.basename(mod.Path)}/)")
 
 
 @cli.command(no_args_is_help=True, cls=clickExt.CommandExt)
 @clickExt.install("name", require_everest=True)
 # @click.argument('mod', required=False)
 @click.option(
-    "--enabled", is_flag=True, help="Update currently enabled mods.", default=None
+    "--enabled/--disabled",
+    is_flag=True,
+    help="Update currently enabled/disabled mods.",
+    default=None,
 )
 @click.option(
     "--upgrade-only", is_flag=True, help="Only update if new file has a higher version."
@@ -1096,7 +1067,10 @@ def update(
 @clickExt.install("name", require_everest=True)
 # @click.argument('mod', required=False)
 @click.option(
-    "--enabled", is_flag=True, help="Resolve currently enabled mods.", default=None
+    "--enabled/--disabled",
+    is_flag=True,
+    help="Resolve currently enabled/disabled mods.",
+    default=None,
 )
 @click.option("--no-update", is_flag=True, help="Don't update outdated dependencies.")
 @clickExt.yes_option()
@@ -1138,9 +1112,14 @@ def resolve(
         echo("No issues found.")
         return
 
-    echo(
-        f'{len(deps_missing) + len(deps_outdated)} dependencies missing{" or outdated" if len(deps_outdated) else ""}, attempting to resolve...'
-    )
+    msg = _n(
+        "{resolve_count} dependency missing",
+        "{resolve_count} dependencies missing",
+        len(deps_missing) + len(deps_outdated),
+    ).format(len(deps_missing) + len(deps_outdated))
+    if deps_outdated:
+        msg += " or outdated"
+    echo(msg)
 
     # hand off to add mods command
     mons_cli.main(

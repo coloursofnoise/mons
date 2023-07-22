@@ -58,7 +58,7 @@ LOGLEVEL_STYLE = {
 
 class ClickFormatter(logging.Formatter):
     def formatMessage(self, record: LogRecord) -> str:
-        style = LOGLEVEL_STYLE.get(record.levelno, {})
+        style: t.Dict[str, t.Any] = LOGLEVEL_STYLE.get(record.levelno, {})
         # log all level names regardless in debug mode
         if not style and logger.isEnabledFor(logging.DEBUG):
             style = {"italic": True}

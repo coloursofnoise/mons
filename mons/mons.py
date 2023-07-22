@@ -104,8 +104,7 @@ def help(ctx: click.Context, command: t.List[str]):
         cmd = group.get_command(ctx, cmd_name)
         if not cmd:
             err_msg = "No help entry for '{}'.".format(" ".join(cmd_path))
-            click.echo(str(click.BadArgumentUsage(err_msg, ctx)))
-            exit(click.BadArgumentUsage.exit_code)
+            raise click.BadArgumentUsage(err_msg, ctx)
 
         if isinstance(cmd, click.Group):
             group = cmd

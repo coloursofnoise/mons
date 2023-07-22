@@ -85,6 +85,18 @@ def _format_columns_dict(dict, prefix):
     ).strip("\n")
 
 
+_NAME_VER_FORMAT = style(
+    "{{{name_field}}} " + style("{{{version_field}}}", fg="green", reset=False),
+    bold=True,
+)
+
+
+def format_name_ver(obj, name_field="name", version_field="version"):
+    return format(
+        obj, _NAME_VER_FORMAT.format(name_field=name_field, version_field=version_field)
+    )
+
+
 _rst_inline = re.compile(r":.+:`(.+)`")
 
 
@@ -106,6 +118,6 @@ class ANSITextWrapper(_TextWrapper):
 
     ANSI escape sequences are ignored when calculating string length."""
 
-    def _split(self, text: str) -> list[str]:
+    def _split(self, text: str) -> t.List[str]:
         chunks = super()._split(text)
         return [ANSIString(s) for s in chunks]

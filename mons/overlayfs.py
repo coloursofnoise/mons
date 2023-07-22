@@ -254,11 +254,9 @@ def setup(config, install: Install):
 
     lowerdir = overlay_dirs.lowerdir
     if os.access(lowerdir, os.W_OK):
-        echo(
-            f"""
-It is also recommended to make the base install ('{lowerdir}')
-read-only when using an overlay install.
-        """
+        logger.warning(
+            "It is also recommended to make the base install \
+read-only when using an overlay install."
         )
         if clickExt.confirm_ext(f"Make {lowerdir} read-only?", default=True):
             os.chmod(
@@ -278,10 +276,9 @@ def activate(ctx, install: Install):
     os.makedirs(upperdir, exist_ok=True)
     os.makedirs(workdir, exist_ok=True)
 
-    if in_namespace():
-        logger.info("Overlay successfully mounted using unprivileged user namespace.")
-    else:
-        logger.debug(f"Overlay for {install.name} not mounted.")
+    # If in a namespace, assume this message already got logged outside of it
+    if not in_namespace():
+        logger.debug(f"Overlay for '{install.name}' not mounted.")
 
     mount_cmd = [
         "mount",
@@ -349,7 +346,12 @@ def activate(ctx, install: Install):
                 ]
             )
         )
+
     logger.debug("Overlay successfully mounted as superuser.")
+    if in_namespace():
+        logger.info(
+            f"Overlay for '{install.name}' successfully mounted using unprivileged user namespace."
+        )
 
 
 def reset(ctx, install: Install):

@@ -93,7 +93,7 @@ def unpack(zip: zipfile.ZipFile, root: fs.Directory, prefix="", label="Extractin
 
 
 def parseExeInfo(path: fs.File):
-    logger.info(f"Retrieving version information from {path}.")
+    logger.info(f"Retrieving version information from '{path}'.")
     pe = dnfile.dnPE(path, fast_load=True)
     with timed_progress("Parsed data directories in {time} seconds", logging.DEBUG):
         pe.parse_data_directories(
