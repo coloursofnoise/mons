@@ -109,26 +109,31 @@ class Install:
         if self._cache_loader and self._cache_loader(self) and self.hash == hash:
             return
 
-        self.hash = hash
-        self.celeste_version = None
-        self.everest_version = None
+        # If updating the cache gets interrupted, don't leave it partially populated.
+        new_data = self._cache.copy()
+
+        new_data.update(
+            {"hash": hash, "celeste_version": None, "everest_version": None}
+        )
         has_everest = False
 
         version = VANILLA_HASH.get(hash, None)
         if version:
-            self.celeste_version, self.framework = version
-            self.everest_version = None
+            new_data["celeste_version"], new_data["framework"] = version
+            new_data["everest_version"] = None
         else:
             orig_path = os.path.join(self.path, "orig", "Celeste.exe")
             if fs.isfile(orig_path):
                 orig_hash = getMD5Hash(orig_path)
-                self.celeste_version, self.framework = VANILLA_HASH.get(
+                new_data["celeste_version"], new_data["framework"] = VANILLA_HASH.get(
                     orig_hash, (None, None)
                 )
                 has_everest = True
 
         if read_exe and has_everest:
-            self.everest_version, self.framework = parseExeInfo(self.asm)
+            new_data["everest_version"], new_data["framework"] = parseExeInfo(self.asm)
+
+        self._cache = {attr: str(val) for attr, val in new_data.items()}
 
     def __str__(self) -> str:
         return f"{self.name} {self.version_string()}"
