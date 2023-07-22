@@ -1,4 +1,5 @@
 import builtins
+import logging
 from unittest.mock import mock_open
 
 import pytest
@@ -21,7 +22,7 @@ def test_not_in_namespace():
     assert not overlayfs.in_namespace()
 
 
-OVERLAY_DIRS = ("lowerdir", "upperdir", "workdir", "mergeddir")
+OVERLAY_DIRS = overlayfs.OverlayDirs("lowerdir", "upperdir", "workdir", "mergeddir")
 
 
 def ids_test_check_fstab(val):
@@ -104,37 +105,29 @@ LABEL=HOME /home etx4 defaults 0 2
 def test_check_fstab(data_file, result):
     if isinstance(result, type) and issubclass(result, BaseException):
         with pytest.raises(result):
-            overlayfs.check_fstab(*OVERLAY_DIRS, fstab=data_file)
+            overlayfs.check_fstab(OVERLAY_DIRS, fstab=data_file)
         return
 
-    assert overlayfs.check_fstab(*OVERLAY_DIRS, fstab=data_file) is result
+    assert overlayfs.check_fstab(OVERLAY_DIRS, fstab=data_file) is result
 
 
-def no_echo(test):
-    def mock_echo(message, *args):
-        assert test not in message
-
-    return mock_echo
-
-
-def test_setup_is_mounted(monkeypatch, tmp_path):
+def test_setup_is_mounted(monkeypatch, caplog, tmp_path, ctx):
     monkeypatch.setattr(overlayfs, "is_mounted", lambda *args: True)
 
-    monkeypatch.setattr(overlayfs, "echo", no_echo("!!PLEASE READ!!"))
+    with caplog.at_level(logging.INFO, logger=overlayfs.__name__):
+        overlayfs.setup(ctx, Install("test_setup_in_namespace", tmp_path, tmp_path))
+        logs = [rec for rec in caplog.record_tuples if rec[0] == overlayfs.__name__]
+        assert not logs
 
-    overlayfs.setup(Install("test_setup_in_namespace", tmp_path, tmp_path))
 
-
-def test_setup_in_fstab(monkeypatch, tmp_path):
+def test_setup_in_fstab(monkeypatch, caplog, tmp_path, ctx):
     monkeypatch.setattr(overlayfs, "is_mounted", lambda *args: False)
     monkeypatch.setattr(overlayfs, "check_fstab", lambda *args: True)
 
-    def echo(message, *args):
-        assert "!!PLEASE READ!!" not in message
-
-    monkeypatch.setattr(overlayfs, "echo", echo)
-
-    overlayfs.setup(Install("test_setup_in_namespace", tmp_path, tmp_path))
+    with caplog.at_level(logging.INFO, logger=overlayfs.__name__):
+        overlayfs.setup(ctx, Install("test_setup_in_namespace", tmp_path, tmp_path))
+        logs = [rec for rec in caplog.record_tuples if rec[0] == overlayfs.__name__]
+        assert not logs
 
 
 def test_activate_is_mounted(monkeypatch, tmp_path):
