@@ -147,6 +147,10 @@ class UpdateInfo:
     def Size(self):
         return self._size and self._size - self.Meta.Size
 
+    @property
+    def New_Meta(self):
+        return ModMeta_Base(self.Meta.Name, self.New)
+
     def __str__(self) -> str:
         return str(self.Meta) + " -> " + str(self.New)
 

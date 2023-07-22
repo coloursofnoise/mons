@@ -286,7 +286,8 @@ def mod_downloader(
         if isinstance(download, UpdateInfo)
         else os.path.join(mod_folder, download.Meta.Name + ".zip")
     )
-    downloader(download.Url, dest, str(download.Meta), download.Mirror, http_pool)
+    label = str(download.New_Meta if isinstance(download, UpdateInfo) else download)
+    downloader(download.Url, dest, label, download.Mirror, http_pool)
 
 
 def download_threaded(
