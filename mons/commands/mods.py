@@ -20,6 +20,7 @@ from mons.baseUtils import invert
 from mons.baseUtils import multi_partition
 from mons.baseUtils import partition
 from mons.baseUtils import read_with_progress
+from mons.config import Env
 from mons.config import UserInfo
 from mons.downloading import download_threaded
 from mons.downloading import download_with_progress
@@ -1021,15 +1022,16 @@ def update(
 
     updates.sort(key=str)
 
-    exclude = clickExt.prompt_selections(
-        updates,
-        message="Mods to exclude",
-        find_index=lambda n: next(
-            (i for i, m in enumerate(updates) if m.Meta.Name == n), None
-        ),
-    )
-    if exclude:
-        updates = [update for i, update in enumerate(updates) if i not in exclude]
+    if not ctx.ensure_object(Env).skip_confirmation:
+        exclude = clickExt.prompt_selections(
+            updates,
+            message="Mods to exclude",
+            find_index=lambda n: next(
+                (i for i, m in enumerate(updates) if m.Meta.Name == n), None
+            ),
+        )
+        if exclude:
+            updates = [update for i, update in enumerate(updates) if i not in exclude]
 
     echo(
         _n(
