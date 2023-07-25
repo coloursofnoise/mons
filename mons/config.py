@@ -193,6 +193,7 @@ def load_cache():
 
     with open(CACHE_FILE) as file:
         data: t.Dict[str, t.Any] = yaml.safe_load(file)
+        logger.debug(f"Cache loaded from '{CACHE_FILE}'.")
     if not data:
         raise EmptyFileError
     _cache.update(data)
@@ -251,6 +252,7 @@ class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgu
         if not self._config:
             try:
                 self._config = read_yaml(CONFIG_FILE, Config)
+                logger.debug(f"User config loaded from '{CONFIG_FILE}'.")
             except (FileNotFoundError, EmptyFileError):
                 self._config = Config()
             except ExceptionCount as e:
@@ -275,6 +277,7 @@ class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgu
                     k: Install(k, **v, _cache_loader=load_install_cache)
                     for (k, v) in data.items()
                 }
+                logger.debug(f"Install config loaded from '{INSTALLS_FILE}'.")
             except (FileNotFoundError, EmptyFileError):
                 self._installs = dict()
             except Exception as e:
@@ -289,37 +292,48 @@ class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgu
         return self
 
     def __exit__(self, *exec_details):
-        if self._installs:
-            # Use a temp file to avoid losing data if serialization fails
-            with fs.temporary_file() as temp:
-                with open(temp, "w") as file:
-                    yaml.safe_dump(
-                        {install.name: install for install in self._installs.values()},
-                        file,
-                    )
-                # /tmp is very likely to be a tmpfs, os.rename/replace cannot handle cross-fs move
-                os.makedirs(CONFIG_DIR, exist_ok=True)
-                shutil.move(temp, INSTALLS_FILE)
+        if not self._installs:
+            # clear install and cache files
+            if os.path.exists(INSTALLS_FILE):
+                with open(INSTALLS_FILE, "w"):
+                    logger.debug(f"Truncated install config file '{INSTALLS_FILE}'.")
+            if os.path.exists(CACHE_FILE):
+                with open(CACHE_FILE, "w"):
+                    logger.debug(f"Truncated cache file '{CACHE_FILE}'.")
+            return
 
-            cache_updates = {
-                install.name: install.get_cache()
-                for install in self._installs.values()
-                if install.hash
-            }
-            if not _cache_loaded and cache_updates:
-                try:
-                    load_cache()
-                except (OSError, EmptyFileError):
-                    pass
-            _cache.update(cache_updates)
-            if not _cache:
-                return
+        # Use a temp file to avoid losing data if serialization fails
+        with fs.temporary_file() as temp:
+            with open(temp, "w") as file:
+                yaml.safe_dump(
+                    {install.name: install for install in self._installs.values()},
+                    file,
+                )
+            # /tmp is very likely to be a tmpfs, os.rename/replace cannot handle cross-fs move
+            os.makedirs(CONFIG_DIR, exist_ok=True)
+            shutil.move(temp, INSTALLS_FILE)
+            logger.debug(f"Install config saved to '{INSTALLS_FILE}'.")
 
-            with fs.temporary_file() as temp:
-                with open(temp, "w") as file:
-                    yaml.safe_dump(_cache, file)
-                os.makedirs(CACHE_DIR, exist_ok=True)
-                shutil.move(temp, CACHE_FILE)
+        cache_updates = {
+            install.name: install.get_cache()
+            for install in self._installs.values()
+            if install.hash
+        }
+        if not _cache_loaded and cache_updates:
+            try:
+                load_cache()
+            except (OSError, EmptyFileError):
+                pass
+        _cache.update(cache_updates)
+        if not _cache:
+            return
+
+        with fs.temporary_file() as temp:
+            with open(temp, "w") as file:
+                yaml.safe_dump(_cache, file)
+            os.makedirs(CACHE_DIR, exist_ok=True)
+            shutil.move(temp, CACHE_FILE)
+            logger.debug(f"Cache saved to '{CACHE_FILE}'.")
 
 
 pass_userinfo = make_pass_decorator(UserInfo)
