@@ -16,8 +16,6 @@ from mons.logging import ProgressBar
 from mons.logging import timed_progress
 from mons.modmeta import ModMeta
 from mons.modmeta import read_mod_info
-from mons.platforms import assert_platform
-from mons.platforms import is_platform
 from mons.version import NOVERSION
 from mons.version import Version
 
@@ -33,29 +31,19 @@ VANILLA_HASH: t.Dict[str, t.Tuple[Version, t.Literal["FNA", "XNA"]]] = {
 
 def find_celeste_asm(path: fs.Path):
     if fs.isfile(path):
-        if os.path.basename(path) == "Celeste.exe":
-            return path
-
-        if (
-            not (is_platform("Windows") and assert_platform("Windows"))
-            and os.path.basename(path) == "Celeste.dll"
-        ):
+        if os.path.basename(path) in ("Celeste.exe", "Celeste.dll"):
             return path
 
     elif fs.isdir(path):
         if os.path.basename(path) == "Celeste.app":
             path = fs.joindir(path, "Resources")
 
+        if fs.isfile(os.path.join(path, "Celeste.dll")):
+            return fs.joinfile(path, "Celeste.dll")
+
         if fs.isfile(os.path.join(path, "Celeste.exe")):
             return fs.joinfile(path, "Celeste.exe")
 
-        if not (is_platform("Windows") and assert_platform("Windows")) and fs.isfile(
-            os.path.join(path, "Celeste.dll")
-        ):
-            return fs.joinfile(path, "Celeste.dll")
-
-    if is_platform("Windows") and assert_platform("Windows"):
-        raise FileNotFoundError(errno.ENOENT, "'Celeste.exe' could not be found", path)
     raise FileNotFoundError(
         errno.ENOENT, "'Celeste.exe' or 'Celeste.dll' could not be found", path
     )

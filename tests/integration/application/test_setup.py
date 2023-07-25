@@ -23,7 +23,7 @@ def test_add_fail(runner_result, test_name, tmp_path):
     os.mkdir(fake_path)
     with runner_result(mons_cli, ["add", test_name, fake_path]) as result:
         assert result.exception
-        asm = "'Celeste.exe'" if os.name == "nt" else "'Celeste.exe' or 'Celeste.dll'"
+        asm = "'Celeste.exe' or 'Celeste.dll'"
         assert f"{asm} could not be found" in result.output
 
 
