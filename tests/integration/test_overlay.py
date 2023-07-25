@@ -88,13 +88,12 @@ LABEL=HOME /home etx4 defaults 0 2
             True,
         ),
         ("overlay mergeddir overlay default 0 0", False),
+        ("overlay mergeddir overlay default", False),
         (
             "overlay mergeddir overlay lowerdir=lowerdir,upperdir=upperdir,workdir=somethingelse 0 0",
             False,
         ),
-        pytest.param(
-            "overlay mergeddir overlay default", ValueError, id="malformed-error"
-        ),
+        pytest.param("overlay mergeddir overlay", ValueError, id="malformed-error"),
         ("", False),
         ("# Comment line", False),
         ("LABEL=SWAP none swap defaults 0 0", False),

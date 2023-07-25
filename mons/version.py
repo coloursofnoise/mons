@@ -1,3 +1,4 @@
+import typing as t
 from dataclasses import dataclass
 
 
@@ -8,8 +9,21 @@ class Version:
     Build: int = -1
     Revision: int = -1
 
+    @t.overload
     @classmethod
     def parse(cls, version: str) -> "Version":
+        ...
+
+    @t.overload
+    @classmethod
+    def parse(cls, version: None) -> None:
+        ...
+
+    @classmethod
+    def parse(cls, version: t.Optional[str]) -> t.Optional["Version"]:
+        if version is None:
+            return None
+
         if not version or version.lower() in ["noversion", "none", "null"]:
             return NOVERSION()
 

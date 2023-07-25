@@ -14,7 +14,7 @@ def version_params(val):
 @pytest.mark.parametrize(
     ("version", "expect"),
     [
-        pytest.param(None, NOVERSION(), id="None = NOVERSION"),
+        pytest.param(None, None, id="None = None"),
         pytest.param("NoVersion", NOVERSION(), id='"NoVersion" = NOVERSION'),
         pytest.param("1.2.3.4", Version(1, 2, 3, 4), id='"1.2.3.4" = 1.2.3.4'),
         pytest.param("1.2.3-pre", Version(1, 2, 3), id='"1.2.3-pre" = 1.2.3'),

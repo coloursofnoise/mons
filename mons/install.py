@@ -32,6 +32,12 @@ class Install:
 
     _cache: t.Dict[str, t.Any] = field(default_factory=dict, init=False)
 
+    def _set_cache_value(self, key, value):
+        if value is not None:
+            self._cache[key] = value
+        elif key in self._cache:
+            del self._cache[key]
+
     def get_cache(self):
         return self._cache
 
@@ -41,7 +47,7 @@ class Install:
 
     @hash.setter
     def hash(self, value: t.Optional[str]):
-        self._cache["hash"] = value
+        self._set_cache_value("hash", value)
 
     @property
     def celeste_version(self):
@@ -49,16 +55,16 @@ class Install:
 
     @celeste_version.setter
     def celeste_version(self, value: t.Optional[Version]):
-        self._cache["celeste_version"] = value and str(value)
+        self._set_cache_value("celeste_version", value and str(value))
 
     @property
-    def everest_version(self):
-        version = self._cache.get("everest_version", None)
+    def everest_version(self) -> t.Optional[Version]:
+        version: t.Optional[Version] = self._cache.get("everest_version", None)
         return Version.parse(version) if version else None
 
     @everest_version.setter
     def everest_version(self, value: t.Optional[Version]):
-        self._cache["everest_version"] = value and str(value)
+        self._set_cache_value("everest_version", value and str(value))
 
     @property
     def framework(self):
@@ -69,7 +75,7 @@ class Install:
 
     @framework.setter
     def framework(self, value: t.Optional[te.Literal["FNA", "XNA"]]):
-        self._cache["framework"] = value
+        self._set_cache_value("framework", value)
 
     _cache_loader: t.Optional[t.Callable[["Install"], bool]] = field(default=None)
 
@@ -99,7 +105,8 @@ class Install:
         self, data: t.Optional[t.Dict[str, t.Any]] = None, *, read_exe: bool = False
     ):
         if data:
-            self._cache.update(data)
+            for attr, val in data.items():
+                self._set_cache_value(attr, val)
 
         hash = getMD5Hash(self.asm)
         if self.hash == hash:
@@ -133,7 +140,8 @@ class Install:
         if read_exe and has_everest:
             new_data["everest_version"], new_data["framework"] = parseExeInfo(self.asm)
 
-        self._cache = {attr: str(val) for attr, val in new_data.items()}
+        for attr, val in new_data.items():
+            self._set_cache_value(attr, val and str(val))
 
     def __str__(self) -> str:
         return f"{self.name} {self.version_string()}"
