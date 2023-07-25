@@ -5,8 +5,6 @@ from dataclasses import dataclass
 from dataclasses import field
 from string import Formatter
 
-import typing_extensions as te
-
 from mons import fs
 from mons.utils import find_celeste_asm
 from mons.utils import getMD5Hash
@@ -74,7 +72,7 @@ class Install:
         return None
 
     @framework.setter
-    def framework(self, value: t.Optional[te.Literal["FNA", "XNA"]]):
+    def framework(self, value: t.Optional[t.Literal["FNA", "XNA"]]):
         self._set_cache_value("framework", value)
 
     _cache_loader: t.Optional[t.Callable[["Install"], bool]] = field(default=None)

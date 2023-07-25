@@ -13,7 +13,6 @@ from io import BytesIO
 from tempfile import TemporaryDirectory
 from urllib.error import URLError
 
-import typing_extensions as te
 import urllib3.util
 from click import Abort
 from urllib3.exceptions import HTTPError
@@ -75,7 +74,7 @@ class Download:
         self.size = size and size
 
 
-class URLResponse(te.Protocol):
+class URLResponse(t.Protocol):
     url: str
     headers: t.MutableMapping[str, str]
 
@@ -170,7 +169,7 @@ def download_with_progress(
     src: DownloadSource,
     dest: str,
     label: t.Optional[str] = ...,
-    atomic: te.Literal[True] = ...,
+    atomic: t.Literal[True] = ...,
     clear: bool = ...,
     *,
     response_handler: t.Optional[URLTransform] = ...,
@@ -184,7 +183,7 @@ def download_with_progress(
     src: DownloadSource,
     dest: None,
     label: t.Optional[str] = ...,
-    atomic: te.Literal[False] = ...,
+    atomic: t.Literal[False] = ...,
     clear: bool = ...,
     *,
     response_handler: t.Optional[URLTransform] = ...,
@@ -198,7 +197,7 @@ def download_with_progress(
     src: DownloadSource,
     dest: str,
     label: t.Optional[str] = ...,
-    atomic: te.Literal[False] = ...,
+    atomic: t.Literal[False] = ...,
     clear: bool = ...,
     *,
     response_handler: t.Optional[URLTransform] = ...,

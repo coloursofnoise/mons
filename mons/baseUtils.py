@@ -9,7 +9,6 @@ logger = logging.getLogger(__name__)
 
 
 if t.TYPE_CHECKING:
-    import typing_extensions as te
     import _typeshed as _ts
 
 
@@ -38,12 +37,12 @@ def invert(b: None) -> None:
 
 
 @t.overload
-def invert(b: "te.Literal[True]") -> "te.Literal[False]":
+def invert(b: t.Literal[True]) -> t.Literal[False]:
     ...
 
 
 @t.overload
-def invert(b: "te.Literal[False]") -> "te.Literal[True]":
+def invert(b: t.Literal[False]) -> t.Literal[True]:
     ...
 
 

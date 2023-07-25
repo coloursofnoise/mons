@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import sys
 import typing as t
 from contextlib import AbstractContextManager
 from dataclasses import asdict
@@ -9,7 +10,10 @@ from dataclasses import field
 from dataclasses import fields
 from functools import update_wrapper
 
-import typing_extensions as te
+if sys.version_info < (3, 10):
+    import typing_extensions as te
+else:
+    te = t
 import yaml
 from click import ClickException
 from click import Context
@@ -163,9 +167,9 @@ def dataclass_fromdict(data: t.Dict[str, t.Any], field_type: t.Type[T]) -> T:
             continue
         # Retrieve type checkable version of generic and special types
         # Only checks base type, so 'List[str]' is only checked as 'list'
-        checkable_type = te.get_origin(type_fields[k]) or type_fields[k]
+        checkable_type = t.get_origin(type_fields[k]) or type_fields[k]
         if checkable_type is t.Union:  # Optional type
-            checkable_type = te.get_args(type_fields[k])
+            checkable_type = t.get_args(type_fields[k])
         if not isinstance(v, checkable_type):
             if isinstance(type_fields[k], type) and issubclass(
                 type_fields[k], object

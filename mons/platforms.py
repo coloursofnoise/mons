@@ -3,21 +3,19 @@ import platform
 import sys
 import typing as t
 
-import typing_extensions as te
-
 
 if t.TYPE_CHECKING:
     if os.name == "nt":
-        CURRENT_PLATFORM = te.Literal["Windows"]
-        OTHER_PLATFORMS = t.Union[te.Literal["Darwin"], te.Literal["Linux"]]
+        CURRENT_PLATFORM = t.Literal["Windows"]
+        OTHER_PLATFORMS = t.Union[t.Literal["Darwin"], t.Literal["Linux"]]
 
     elif sys.platform == "darwin":
-        CURRENT_PLATFORM = te.Literal["Darwin"]
-        OTHER_PLATFORMS = t.Union[te.Literal["Windows"], te.Literal["Linux"]]
+        CURRENT_PLATFORM = t.Literal["Darwin"]
+        OTHER_PLATFORMS = t.Union[t.Literal["Windows"], t.Literal["Linux"]]
 
     else:
-        CURRENT_PLATFORM = te.Literal["Linux"]
-        OTHER_PLATFORMS = t.Union[te.Literal["Windows"], te.Literal["Darwin"]]
+        CURRENT_PLATFORM = t.Literal["Linux"]
+        OTHER_PLATFORMS = t.Union[t.Literal["Windows"], t.Literal["Darwin"]]
 
     @t.overload
     def assert_platform(target: CURRENT_PLATFORM) -> bool:
@@ -28,16 +26,16 @@ if t.TYPE_CHECKING:
         ...
 
     @t.overload
-    def is_platform(target: CURRENT_PLATFORM) -> te.Literal[True]:
+    def is_platform(target: CURRENT_PLATFORM) -> t.Literal[True]:
         ...
 
     @t.overload
-    def is_platform(target: OTHER_PLATFORMS) -> te.Literal[False]:
+    def is_platform(target: OTHER_PLATFORMS) -> t.Literal[False]:
         ...
 
 
 def assert_platform(
-    target: t.Union[te.Literal["Windows"], te.Literal["Darwin"], te.Literal["Linux"]]
+    target: t.Union[t.Literal["Windows"], t.Literal["Darwin"], t.Literal["Linux"]]
 ):
     """Provides a way to indicate to the type-checker what platform
     is requested, allowing it to mark platform-specific code unreachable as
@@ -69,7 +67,7 @@ def assert_platform(
 
 
 def is_platform(
-    target: t.Union[te.Literal["Windows"], te.Literal["Darwin"], te.Literal["Linux"]]
+    target: t.Union[t.Literal["Windows"], t.Literal["Darwin"], t.Literal["Linux"]]
 ):
     return platform.system() == target
 

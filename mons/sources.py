@@ -1,12 +1,16 @@
 import json
 import os
+import sys
 import time
 import typing as t
 import urllib.parse
 from io import BytesIO
 from zipfile import ZipFile
 
-import typing_extensions as te
+if sys.version_info < (3, 10):
+    import typing_extensions as te
+else:
+    te = t
 import yaml
 
 import mons.config as Defaults
@@ -17,7 +21,7 @@ from mons.downloading import download_with_progress
 from mons.downloading import open_url
 
 P = te.ParamSpec("P")
-R = te.TypeVar("R")
+R = t.TypeVar("R")
 
 
 def read_cache(filename: str, reader: t.Callable[[t.IO[t.Any]], t.Any]):
@@ -166,7 +170,7 @@ def fetch_build_artifact_azure(build: int, artifactName="olympus-build"):
         return response
 
 
-class ModDBEntry(te.TypedDict):
+class ModDBEntry(t.TypedDict):
     Version: str
     LastUpdate: int
     Size: int
@@ -195,12 +199,12 @@ def fetch_mod_db(config: Config) -> t.Dict[str, ModDBEntry]:
     )
 
 
-class DependencyInfo(te.TypedDict):
+class DependencyInfo(t.TypedDict):
     Name: str
     Version: str
 
 
-class DependencyGraphEntry(te.TypedDict):
+class DependencyGraphEntry(t.TypedDict):
     Dependencies: t.List[DependencyInfo]
     OptionalDepenencies: t.List[DependencyInfo]
 
@@ -229,14 +233,14 @@ def fetch_random_map():
     return url
 
 
-class GBDownload(te.TypedDict):
+class GBDownload(t.TypedDict):
     _sFile: str
     _sDescription: str
     _sDownloadUrl: str
     _tsDateAdded: int
 
 
-class GBSubmission(te.TypedDict):
+class GBSubmission(t.TypedDict):
     _sName: str
     _aFiles: t.List[GBDownload]
 

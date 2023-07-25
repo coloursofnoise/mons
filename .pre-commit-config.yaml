@@ -15,7 +15,7 @@ repos:
     rev: v1.5.2
     hooks:
       - id: vermin-all
-        args: ['-t=3.7-', '--violations', 'mons']
+        args: ['-t=3.8-', '--violations', 'mons']
         exclude: '^docs/'
 
   - repo: https://github.com/pre-commit/pre-commit-hooks

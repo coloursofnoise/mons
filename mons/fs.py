@@ -1,11 +1,15 @@
 import atexit
 import os
 import shutil
+import sys
 import tempfile
 import typing as t
 from contextlib import contextmanager
 
-import typing_extensions as te
+if sys.version_info < (3, 10):
+    import typing_extensions as te
+else:
+    te = t
 
 from mons.errors import silent_exec
 

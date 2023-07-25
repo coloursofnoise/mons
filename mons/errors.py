@@ -1,7 +1,12 @@
+import sys
 import typing as t
 
 import click
-import typing_extensions as te
+
+if sys.version_info < (3, 10):
+    import typing_extensions as te
+else:
+    te = t
 
 
 class EmptyFileError(Exception):
