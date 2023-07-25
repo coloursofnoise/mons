@@ -99,7 +99,7 @@ def parseExeInfo(path: fs.File):
             directories=DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR"]
         )
 
-    assert pe.net
+    assert pe.net, "Assembly could not be loaded as a .NET PE file."
 
     stringHeap: dnfile.stream.StringsHeap = pe.net.metadata.streams_list[1]  # type: ignore
 
@@ -125,7 +125,7 @@ def parseExeInfo(path: fs.File):
             bar.update(inc)
 
     assemRef = pe.net.mdtables.AssemblyRef
-    assert assemRef
+    assert assemRef, "Assembly does not have an AssemblyRef metadata table."
     framework = "FNA" if any(row.Name == "FNA" for row in assemRef.rows) else "XNA"
 
     if everestBuild:

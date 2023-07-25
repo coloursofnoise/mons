@@ -833,7 +833,7 @@ def add(
     assert all(
         mod.Meta.Name in installed
         for mod in itertools.chain(resolved, resolved_update, deps_install, deps_update)
-    )
+    ), "Not all mods were installed."
 
     blacklisted = [
         installed[mod.Meta.Name]

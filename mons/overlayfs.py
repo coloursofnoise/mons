@@ -49,7 +49,7 @@ class OverlayDirs(t.NamedTuple):
 
 @wrap_config_param
 def get_overlaydirs(config, install: Install):
-    assert install.overlay_base
+    assert install.overlay_base, "Install does not have an overlay base."
     return OverlayDirs(
         lowerdir=install.overlay_base,
         upperdir=os.path.join(
@@ -136,7 +136,7 @@ def is_mounted(overlay_dirs: OverlayDirs):
             # Usually contain the same information (and are often symlinked)
             # but /proc/mounts is more likely to be up to date.
             mount_file = "/etc/mtab"
-            assert fs.isfile(mount_file)
+            assert fs.isfile(mount_file), "/etc/mtab does not exist."
         return check_fstab(overlay_dirs, fstab=mount_file)
     return False
 

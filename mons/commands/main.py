@@ -69,7 +69,9 @@ def add(
     path = clickExt.type_cast_value(
         ctx, click.Path(exists=True, resolve_path=True), path
     )
-    assert fs.isdir(path) or fs.isfile(path)
+    assert fs.isdir(path) or fs.isfile(
+        path
+    ), "Invalid path despite 'click.Path(exists=True)'"
 
     try:
         install_path = fs.dirname(find_celeste_asm(path))
@@ -98,7 +100,7 @@ if is_platform("Linux") and assert_platform("Linux"):
         logger.info(f"Found existing Celeste install: '{overlay_path}'.")
 
         os.makedirs(install_path, exist_ok=True)
-        assert fs.isdir(install_path)
+        assert fs.isdir(install_path), "Expected path to exist after 'os.makedirs'."
         new_install = Install(name, install_path, overlay_base=overlay_path)
         overlayfs.setup(user_info, new_install)
 
