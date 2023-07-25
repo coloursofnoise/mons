@@ -110,7 +110,8 @@ def check_fstab(overlay_dirs: OverlayDirs, *, fstab="/etc/fstab"):
         for line in file.readlines():
             if line.startswith("#") or not line.strip():
                 continue
-            [fs_spec, fs_file, fs_vfstype, fs_mntops, _, _] = line.split()
+            # fstab record fields 5-6 are optional, but should not be checked anyways.
+            [fs_spec, fs_file, fs_vfstype, fs_mntops] = line.split()[:4]
             if (fs_spec == fs_vfstype == "overlay") and fs_file == mergeddir:
                 opts = fs_mntops.split(",")
                 if all(
