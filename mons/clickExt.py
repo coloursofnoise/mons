@@ -285,13 +285,13 @@ class CatchErrorsGroup(click.Group):
         else:
             module_logger.setLevel(logging.INFO)
 
-        wait = pop_arg("--wait")
+        pause = pop_arg("--pause")
         if pop_arg("--prompt-install"):
             os.environ["MONS_PROMPT_INSTALL"] = "1"
         try:
             super().main(args=args or sys_argv[1:], *params, **extra)
         except SystemExit as e:
-            if wait:
+            if pause:
                 click.pause()
             sys.exit(e.code)
         except Exception as e:

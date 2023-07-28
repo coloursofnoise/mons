@@ -1,3 +1,4 @@
+"""Sanity checks for click commands."""
 import typing as t
 
 if t.TYPE_CHECKING:
@@ -40,3 +41,35 @@ def test_command_arguments(command: "click.Command"):
     assert depth == len(
         callback_args_unique
     ), f"Callback for '{command.name}' has too many positional arguments: '{callback_args_unique}"
+
+
+def test_command_global_flags(command: "click.Command"):
+    command_params = [
+        param
+        for param in command.params
+        if param.expose_value
+        and not isinstance(param, clickExt.PlaceHolder)
+        and any(
+            opt in clickExt.loglevel_flags
+            for opt in (*param.opts, *param.secondary_opts)
+        )
+    ]
+
+    assert (
+        not command_params
+    ), "Log level flags are swallowed by logger. Use `logger.isEnabledFor` to check logging level."
+
+    command_params = [
+        param
+        for param in command.params
+        if param.expose_value
+        and not isinstance(param, clickExt.PlaceHolder)
+        and any(
+            opt in ["--pause", "--prompt-install"]
+            for opt in (*param.opts, *param.secondary_opts)
+        )
+    ]
+
+    assert (
+        not command_params
+    ), "The '--pause' and '--prompt-install' flags are swallowed by the command group."
