@@ -296,7 +296,7 @@ class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgu
         return self
 
     def __exit__(self, *exec_details):
-        if not self._installs:
+        if self._installs is not None and len(self._installs) == 0:
             # clear install and cache files
             if os.path.exists(INSTALLS_FILE):
                 with open(INSTALLS_FILE, "w"):
