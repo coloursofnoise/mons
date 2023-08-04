@@ -7,6 +7,7 @@ from contextlib import contextmanager
 import pytest
 
 from mons.utils import find_celeste_asm
+from mons.version import Version
 
 PLATFORM_MARKS = set("darwin linux win32".split())
 
@@ -68,6 +69,11 @@ def pytest_runtest_setup(item):
     plat = sys.platform
     if supported_platforms and plat not in supported_platforms:
         pytest.skip("cannot run on platform {}".format(plat))
+
+
+def pytest_make_parametrize_id(config, val, argname):
+    if isinstance(val, Version):
+        return str(val)
 
 
 @pytest.fixture

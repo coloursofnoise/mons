@@ -6,11 +6,6 @@ from mons.version import NOVERSION
 from mons.version import Version
 
 
-def version_params(val):
-    if isinstance(val, Version):
-        return str(val)
-
-
 @pytest.mark.parametrize(
     ("version", "expect"),
     [
@@ -57,7 +52,6 @@ def test_version_satisfies_fail(version, required):
         (Version(1, 2, 3, 4), Version(1, 2, 3, 3), op.gt),
         (Version(1, 2, 3, 4), Version(1, 3, 3, 4), op.lt),
     ],
-    ids=version_params,
 )
 def test_version_compare(left, right, comparison):
     assert comparison(left, right)
