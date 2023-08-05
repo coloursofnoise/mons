@@ -242,7 +242,7 @@ def show(name: Install, verbose: bool):
 
 def build_source(
     srcdir: str,
-    dest: str,
+    dest: t.Optional[str],
     publish: bool,
     configuration_target: t.Optional[str],
     build_args: t.List[str],
@@ -266,7 +266,7 @@ def build_source(
             "--verbosity",     msbuild_verbosity,
          *(("--configuration", configuration) if configuration else ()),
          *(("--framework",     framework)     if framework     else ()),
-            "--output",        dest,
+         *(("--output",        dest,)         if dest          else ()),
             *build_args,
         ]  # fmt: skip
 
@@ -287,7 +287,7 @@ def build_source(
 
           *("-property:"  +  "Configuration=" + configuration if configuration else ()),
           *("-property:"  +  "Framework="     + framework if framework else ()),
-            "-property:"  +  "OutDir="        + dest,
+          *("-property:"  +  "OutDir="        + dest      if dest      else ()),
             *build_args,
         ]  # fmt: skip
 
@@ -354,11 +354,12 @@ def determine_configuration(srcdir: fs.Directory):
 
     if len(common_outputs) > 1:
         # Get the artifact that was modified most recently (and presumeably built most recently)
+        # Artifact still has to be shared between all projects
         newest_artifact, _ = max(
             (
-                (output, os.stat(fs.joindir(srcdir, p, "bin", output)))
-                for (p, outputs) in artifacts.items()
-                for output in outputs
+                (output, os.stat(fs.joindir(srcdir, proj, "bin", output)))
+                for proj in artifacts.keys()
+                for output in common_outputs
             ),
             key=lambda item: item[1],
         )
@@ -378,7 +379,7 @@ def copy_source_artifacts(
     explicit_configuration: t.Optional[str],
     dest: str,
     publish=False,
-):
+) -> int:
     """Copy build artifacts from an Everest source repo."""
 
     configuration = explicit_configuration or determine_configuration(srcdir)
@@ -731,7 +732,9 @@ def install(
                 build_args=userinfo.config.build_args + ctx.args,
             )
         else:
-            logger.info("Copying new and updated files...")
+            # Not needed after build_source because build output dir is set to
+            # install.path
+            logger.info("Copying build artifacts...")
             copied = copy_source_artifacts(
                 source_dir, configuration, install.path, publish
             )

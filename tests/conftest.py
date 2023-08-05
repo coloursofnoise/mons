@@ -44,6 +44,10 @@ def pytest_configure(config: pytest.Config):
         "markers",
         "data_file_download: pass arguments to the data_file_download fixture",
     )
+    config.addinivalue_line(
+        "markers",
+        "mock_filesystem: pass arguments to the mock_filesystem fixture",
+    )
 
 
 @pytest.hookimpl(tryfirst=True)  # pyright:ignore[reportUntypedFunctionDecorator]
@@ -140,3 +144,41 @@ def assertion_msg():
             raise
 
     return assertion_msg
+
+
+@pytest.fixture()
+def mock_filesystem(request, tmp_path):
+    marker = request.node.get_closest_marker("mock_filesystem")
+    if marker:
+        mockup = marker.args[0]
+        walk = marker.kwargs.get("walk", False)
+    else:
+        mockup = request.param
+        walk = False
+    root = os.path.join(tmp_path, "mock_fs")
+    os.mkdir(root)
+
+    if not mockup:
+        yield root
+        return
+
+    def create_fs(root, mockup):
+        if isinstance(mockup, dict):
+            for dir, contents in mockup.items():
+                path = os.path.join(root, dir)
+                os.mkdir(path)
+                create_fs(path, contents)
+        elif isinstance(mockup, (list, tuple)):
+            for node in mockup:
+                create_fs(root, node)
+        else:
+            assert isinstance(mockup, str)
+            path = os.path.join(root, mockup)
+            if mockup.endswith("/"):
+                os.mkdir(path)
+            else:
+                with open(path, "x"):
+                    pass
+
+    create_fs(root, mockup)
+    yield os.walk(root) if walk else root
