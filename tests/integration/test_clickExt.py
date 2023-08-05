@@ -1,8 +1,9 @@
 import itertools
 import os
+import shutil
 from urllib.parse import urlparse
 
-import click
+import click._termui_impl
 import pytest
 from click.testing import CliRunner
 
@@ -42,6 +43,145 @@ def test_confirm_ext(runner: CliRunner, test_name):
     assert not result.exception
     assert not result.output
     assert result.return_value
+
+
+_test_text_lines = """\
+mul
+ti
+ple
+
+li
+n
+es
+"""
+
+"""
+we want to verify when text will "overflow" into the pager, and how many lines will be output.
+for testing purposes, if the text overflows there will be no output.
+
+given `text`:
+```
+AAAAAAAAAA (A*10)
+
+AA
+
+AAAAAA (A*6)
+```
+and `(cols, rows)`, `lines` (lines + 1 because of \n):
+```
+(1, 1), 0
+(1, 100), len(text)
+(100, 1), 1
+``
+"""
+
+_echo_via_pager_text = """\
+AAAAAAAAAA{_ansi}
+
+AA
+{_ansi}
+AAAAAA
+{_ansi}"""
+"""
+5 lines (6 with implicit ending nl)
+44 chars (23 printable)
+
+max printable line length: 10
+"""
+
+_echo_via_pager_text_lines = _echo_via_pager_text.count("\n") + 1
+
+
+@pytest.mark.parametrize(
+    ("term_size", "expect_output"),
+    [
+        # extremes
+        ((1, 1), False),
+        ((99, 1), False),
+        ((1, 99), True),
+        ((99, 99), True),
+        # Just big enough
+        ((10, 6), True),
+        # Split twice (two lines split once)
+        ((5, 7), False),
+        ((5, 8), True),
+        # Split three times (first line split twice)
+        ((4, 8), False),
+        ((4, 9), True),
+    ],
+    ids=lambda val: str(val),
+)
+def test_echo_via_pager(monkeypatch, capfd, term_size, expect_output):
+    monkeypatch.setattr(click, "echo_via_pager", lambda *args, **kwargs: None)
+
+    # Don't mess with pytest internals
+    with monkeypatch.context() as m:
+        m.setattr(shutil, "get_terminal_size", lambda: os.terminal_size(term_size))
+
+        clickExt.echo_via_pager(
+            [
+                _echo_via_pager_text.format(
+                    _ansi=click.style("", fg="green", italic=True)
+                )
+            ]
+        )
+
+    out, err = capfd.readouterr()
+    assert not err
+    if expect_output:
+        assert len(out.splitlines(keepends=True)) == _echo_via_pager_text_lines
+    else:
+        assert out == ""
+
+
+@pytest.mark.parametrize(
+    ("input", "expect"),
+    [
+        ("5", (0,)),
+        (("1 2 3 4 5", True), (0, 1, 2, 3, 4)),
+        (("1-3,2-4", True), (0, 1, 2, 3)),
+        (("2-1, 5-4", True), (0, 1, 3, 4)),
+        (("1-3 ^2 ^3-4 5", True), (0, 4)),
+        (("one four five", True), (0, 3, 4)),
+        (("1-2 ^1-2 four", True), (3,)),
+        (("1\t2   3      4\t\t  \t5", True), (0, 1, 2, 3, 4)),
+        (("1 2,3, 4,\t5,", True), (0, 1, 2, 3, 4)),
+        ("", ()),
+        ("1-2-3,,32,...lkejgrerg", ()),
+        ("    \t   ", ()),
+        # case-insensitive matching has to be implemented through the find_index parameter
+        (("One, two, FOUR", True), (1,)),
+    ],
+    ids=lambda v: f"('{v}')" if isinstance(v, str) else str(v),
+)
+def test_prompt_selections(runner, input, expect):
+    reverse = False
+    if isinstance(input, tuple):
+        input, reverse = input
+    expect = set(expect)
+
+    @click.command()
+    def cli():
+        selections = [
+            "one",
+            "two",
+            "three",
+            "four",
+            "five",
+        ]
+
+        def find_index(v):
+            try:
+                return selections.index(v)
+            except ValueError:
+                return None
+
+        return clickExt.prompt_selections(
+            selections, reverse=reverse, find_index=find_index
+        )
+
+    result = runner.invoke(cli, input=input, standalone_mode=False)
+    assert result.return_value == expect
 
 
 @pytest.mark.prioritize

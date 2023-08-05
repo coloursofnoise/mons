@@ -86,16 +86,21 @@ def echo_via_pager(generator: t.Iterable[t.Any], color: t.Optional[bool] = None)
         while True:
             text = next(iterator)
             lines.append(text)
-            text = click.termui.strip_ansi(  # pyright:ignore[reportPrivateImportUsage]
-                text
-            ).encode(encoding, "replace")
+            text = (
+                click.termui.strip_ansi(  # pyright:ignore[reportPrivateImportUsage]
+                    text
+                )
+                .removesuffix("\n")
+                .encode(encoding, "replace")
+            )
 
-            nlines += math.ceil(len(text) / cols)
+            nlines += max(1, math.ceil(len(text) / cols))
             if nlines > rows:
                 break
     except StopIteration:
         for line in lines:
             click.echo(line, nl=False, color=color)
+        click.echo()  # end with newline
         return
 
     return click.echo_via_pager(itertools.chain(lines, iterator), color)
@@ -138,6 +143,12 @@ def prompt_selections(
         )
     )
 
+    # Check for exact match to answer first, ignoring quoting rules
+    if find_index:
+        idx = find_index(ans)
+        if idx is not None:
+            return {idx}
+
     # Split input, but allow quoting for multi-word literal selections
     args: t.List[str] = re.findall(r'\^?"[^"]+"|[^\s,]+', ans)
 
@@ -164,7 +175,7 @@ def prompt_selections(
         elif len(arg.split("-")) == 2 and all(
             bound.isdigit() and 0 < int(bound) < count + 1 for bound in arg.split("-")
         ):
-            start, stop = map(int, arg.split("-"))
+            start, stop = sorted(map(int, arg.split("-")))
             update(range(start, stop + 1))
 
     if not reverse:
