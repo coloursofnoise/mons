@@ -90,7 +90,7 @@ def echo_via_pager(generator: t.Iterable[t.Any], color: t.Optional[bool] = None)
                 click.termui.strip_ansi(  # pyright:ignore[reportPrivateImportUsage]
                     text
                 )
-                .removesuffix("\n")
+                .rstrip("\n")
                 .encode(encoding, "replace")
             )
 

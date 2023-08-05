@@ -333,7 +333,7 @@ def determine_configuration(srcdir: fs.Directory):
                     filenames
                     for _, _, filenames in os.walk(fs.joindir(bindir, conf, target))
                 ):
-                    outputs.add(os.path.join(conf, target))
+                    outputs.add(f"{conf}/{target}")
         if len(outputs) < 1:
             raise click.ClickException(
                 f"No build artifacts found for project '{proj}'."
