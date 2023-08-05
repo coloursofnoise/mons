@@ -14,6 +14,7 @@ from click import echo
 
 import mons.clickExt as clickExt
 import mons.fs as fs
+from mons import sources
 from mons.config import pass_userinfo
 from mons.config import UserInfo
 from mons.downloading import Download
@@ -27,9 +28,6 @@ from mons.mons import cli
 from mons.platforms import assert_platform
 from mons.platforms import is_os_64bit
 from mons.platforms import is_platform
-from mons.sources import fetch_build_artifact_azure
-from mons.sources import fetch_build_list
-from mons.sources import fetch_latest_build_azure
 from mons.spec import VERSIONSPEC
 from mons.utils import find_celeste_asm
 from mons.utils import unpack
@@ -434,7 +432,7 @@ def fetch_artifact_source(ctx: click.Context, source: t.Union[str, Version, None
         )
         current = source
         source = None
-        build_list = fetch_build_list(ctx)
+        build_list = sources.fetch_build_list(ctx)
         for build in build_list:
             if build["version"] == current.Minor:
                 source = build["branch"]
@@ -458,19 +456,19 @@ def fetch_artifact_source(ctx: click.Context, source: t.Union[str, Version, None
 
     if not source:
         logger.debug("No source provided, downloading latest artifact.")
-        build_list = fetch_build_list(ctx)
+        build_list = sources.fetch_build_list(ctx)
         return (
             Version(1, int(build_list[0]["version"]), 0),
             Download(build_list[0]["mainDownload"], build_list[0]["mainFileSize"]),
         )
 
     if source.startswith("refs/"):
-        build = fetch_latest_build_azure(source)
+        build = sources.fetch_latest_build_azure(source)
         if build:
             logger.debug("Found matching ref in azure builds.")
-            return Version(1, build, 0), fetch_build_artifact_azure(build)
+            return Version(1, build, 0), sources.fetch_build_artifact_azure(build)
 
-    build_list = fetch_build_list(ctx)
+    build_list = sources.fetch_build_list(ctx)
     for build in build_list:
         if source == build["branch"]:
             logger.debug("Found matching branch in Everest update list.")

@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+import urllib.request
 import zipfile
 from contextlib import contextmanager
 
@@ -38,6 +39,10 @@ def pytest_configure(config: pytest.Config):
     )
     config.addinivalue_line(
         "markers", "data_file_zip: pass arguments to the data_file_zip fixture"
+    )
+    config.addinivalue_line(
+        "markers",
+        "data_file_download: pass arguments to the data_file_download fixture",
     )
 
 
@@ -106,6 +111,17 @@ def data_file_zip(request: pytest.FixtureRequest, tmp_path):
             for filename, filedata in file.items():
                 zip.writestr(filename, filedata)
     yield tuple(filenames)
+
+
+@pytest.fixture
+def data_file_download(request: pytest.FixtureRequest, cache):
+    marker = request.node.get_closest_marker("data_file_download")
+    url, filename = marker.args if marker else request.param
+    dest = os.path.join(cache.mkdir("mons_" + request.module.__name__), filename)
+    if not os.path.exists(dest):
+        urllib.request.urlretrieve(url, dest)
+    assert os.path.isfile(dest), "File download failed"
+    yield dest
 
 
 @pytest.fixture

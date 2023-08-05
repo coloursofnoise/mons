@@ -1,0 +1,65 @@
+[
+  {
+    "date": "2023-06-17T15:53:17.7746955Z",
+    "mainFileSize": 18948331,
+    "mainDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/main.zip",
+    "olympusMetaDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/olympus-meta.zip",
+    "olympusBuildDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/olympus-build.zip",
+    "branch": "dev",
+    "version": 4052
+  },
+  {
+    "date": "2023-06-03T20:14:33.4327267Z",
+    "mainFileSize": 18948331,
+    "mainDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/main.zip",
+    "olympusMetaDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/olympus-meta.zip",
+    "olympusBuildDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/olympus-build.zip",
+    "branch": "dev",
+    "version": 4032
+  },
+  {
+    "date": "2023-06-03T20:13:56.8845869Z",
+    "mainFileSize": 18948331,
+    "mainDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/main.zip",
+    "olympusMetaDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/olympus-meta.zip",
+    "olympusBuildDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/olympus-build.zip",
+    "branch": "beta",
+    "version": 4031
+  },
+  {
+    "date": "2023-06-03T20:14:17Z",
+    "mainFileSize": 19032545,
+    "mainDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4030.0/main.zip",
+    "olympusMetaDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4030.0/olympus-meta.zip",
+    "olympusBuildDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4030.0/olympus-build.zip",
+    "branch": "stable",
+    "version": 4030
+  },
+  {
+    "date": "2023-06-01T10:04:36.9152464Z",
+    "mainFileSize": 18948331,
+    "mainDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/main.zip",
+    "olympusMetaDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/olympus-meta.zip",
+    "olympusBuildDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/olympus-build.zip",
+    "branch": "dev",
+    "version": 4027
+  },
+  {
+    "date": "2023-05-20T18:39:10.871934Z",
+    "mainFileSize": 18948331,
+    "mainDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/main.zip",
+    "olympusMetaDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/olympus-meta.zip",
+    "olympusBuildDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/olympus-build.zip",
+    "branch": "dev",
+    "version": 4003
+  },
+  {
+    "date": "2023-05-20T18:36:09.3643305Z",
+    "mainFileSize": 19032555,
+    "mainDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/main.zip",
+    "olympusMetaDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/olympus-meta.zip",
+    "olympusBuildDownload": "https://github.com/EverestAPI/Everest/releases/download/stable-1.4107.0/olympus-build.zip",
+    "branch": "beta",
+    "version": 4002
+  }
+]
