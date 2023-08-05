@@ -162,11 +162,14 @@ def mock_filesystem(request, tmp_path):
         yield root
         return
 
+    paths = list()
+
     def create_fs(root, mockup):
         if isinstance(mockup, dict):
             for dir, contents in mockup.items():
                 path = os.path.join(root, dir)
                 os.mkdir(path)
+                paths.append(path)
                 create_fs(path, contents)
         elif isinstance(mockup, (list, tuple)):
             for node in mockup:
@@ -179,6 +182,12 @@ def mock_filesystem(request, tmp_path):
             else:
                 with open(path, "x"):
                     pass
+            paths.append(path)
 
     create_fs(root, mockup)
+
+    # set consistent last modified/accessed times for created paths
+    for i, path in enumerate(paths):
+        os.utime(path, (i, i))
+
     yield os.walk(root) if walk else root

@@ -85,7 +85,6 @@ def test_determine_configuration_no_common(caplog, mock_filesystem):
 )
 def test_determine_configuration_most_recent(caplog, mock_filesystem):
     with caplog.at_level(logging.DEBUG, main.__name__):
-        # result may be inconsistent because files are created so close together.
         assert main.determine_configuration(mock_filesystem) == "RELEASE/net452"
         assert "Most recent" in caplog.text
 

@@ -357,7 +357,7 @@ def determine_configuration(srcdir: fs.Directory):
         # Artifact still has to be shared between all projects
         newest_artifact, _ = max(
             (
-                (output, os.stat(fs.joindir(srcdir, proj, "bin", output)))
+                (output, os.stat(fs.joindir(srcdir, proj, "bin", output)).st_mtime_ns)
                 for proj in artifacts.keys()
                 for output in common_outputs
             ),
