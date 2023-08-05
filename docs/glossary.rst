@@ -1,3 +1,7 @@
+.. Setup build dependency
+.. include:: ../mons/spec.py
+   :end-line: 0
+
 Glossary
 ========
 

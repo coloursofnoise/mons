@@ -21,14 +21,3 @@ Overlay Filesystems
 .. include:: ../mons/overlayfs.py
    :start-after: {sphinx_description}
    :end-before: {sphinx_end}
-
-
-See Also
---------
-.. raw:: manpage
-
-   .nh
-
-.. include:: ../mons/overlayfs.py
-   :start-after: {sphinx_seealso}
-   :end-before: {sphinx_end}

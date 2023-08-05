@@ -1,3 +1,7 @@
+.. Setup build dependency
+.. include:: ../mons/commands/main.py
+   :end-line: 0
+
 .. click:: mons.mons:cli
    :prog: mons
    :nested: full

@@ -1,3 +1,7 @@
+.. Setup build dependency
+.. include:: ../mons/config.py
+   :end-line: 0
+
 .. py:currentmodule:: mons.config
 
 Configuration

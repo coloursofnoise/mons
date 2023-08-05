@@ -797,7 +797,7 @@ if is_platform("Linux") and assert_platform("Linux"):
             raise click.UsageError(
                 "Uninstalling is currently only supported for overlay installs."
             )
-        overlayfs.reset(ctx, name)
+        overlayfs.reset(ctx, name)  # pyright: ignore[reportUnboundVariable]
 
 
 # fmt: off

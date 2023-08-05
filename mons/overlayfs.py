@@ -29,6 +29,7 @@ import click
 
 from mons import clickExt
 from mons import fs
+from mons.baseUtils import partition
 from mons.config import CACHE_DIR
 from mons.config import DATA_DIR
 from mons.config import wrap_config_param
@@ -161,22 +162,18 @@ cumbersome, so a good alternative is to add an entry to '/etc/fstab' for the \
 mount point. With the 'x-systemd.automount' option provided by systemd, the \
 filesystem will only be mounted when it is accessed.
 
+.. seealso:: :manpage:`mount(8)`, :manpage:`fstab(5)`, :manpage:`systemd.automount(5)`
+
+
 If an overlay cannot be mounted without superuser permissions, an attempt will \
 first be made to use an Unprivileged User Namespace. This can be used to \
 create a container that has superuser privileges that are still isolated from \
 the rest of the system.
+
+.. seealso:: :manpage:`user_namespaces(7)`, :doc:`mons(1) <everest>`
 {sphinx_end}\
 """.format(
     sphinx_description="", sphinx_end=""
-)
-
-SEE_ALSO = """\
-{sphinx_seealso}\
-:manpage:`user_namespaces(7)`, :manpage:`mount(8)`, :manpage:`fstab(5)`,
-:manpage:`systemd.automount(5)`, :doc:`mons(1) <everest>`
-{sphinx_end}\
-""".format(
-    sphinx_seealso="", sphinx_end=""
 )
 
 
@@ -204,10 +201,17 @@ def setup(config, install: Install):
             + click.style(ref[-1], fg="red")
         )
 
+    # extract "seealso" directives from text
+    seealso, about = partition(
+        lambda line: line.startswith(".. seealso:: "), ABOUT.splitlines(keepends=True)
+    )
+    about = "".join(about)
+    seealso = ", ".join([line[len(".. seealso:: ") :] for line in seealso])
+
     logger.info(click.style("!!PLEASE READ!!", fg="yellow", bold=True))
     logger.info(
         "\n\n\n".join(
-            textwrap.fill(para, width=width) for para in ABOUT.split("\n\n\n")
+            textwrap.fill(para, width=width) for para in about.split("\n\n\n")
         )
         + "\n\n"
     )
@@ -219,7 +223,7 @@ def setup(config, install: Install):
             subsequent_indent="\t",
             break_long_words=False,
             break_on_hyphens=False,
-        ).fill(", ".join([style_manref(ref) for ref in SEE_ALSO.split(",")]))
+        ).fill(", ".join([style_manref(ref) for ref in seealso.split(",")]))
     )
 
     if clickExt.confirm_ext("Add an entry to /etc/fstab?", default=True):
