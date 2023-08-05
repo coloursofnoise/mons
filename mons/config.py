@@ -8,6 +8,7 @@ from dataclasses import asdict
 from dataclasses import dataclass
 from dataclasses import field
 from dataclasses import fields
+from dataclasses import is_dataclass
 from functools import update_wrapper
 
 if sys.version_info < (3, 10):
@@ -162,7 +163,7 @@ def dataclass_fromdict(data: t.Dict[str, t.Any], field_type: t.Type[T]) -> T:
     errors = 0
     for k, v in data.items():
         if k not in type_fields:
-            logger.error(f"Unknown key: {k}")
+            logger.error(f"Unknown key: '{k}'.")
             errors += 1
             continue
         # Retrieve type checkable version of generic and special types
@@ -171,20 +172,39 @@ def dataclass_fromdict(data: t.Dict[str, t.Any], field_type: t.Type[T]) -> T:
         if checkable_type is t.Union:  # Optional type
             checkable_type = t.get_args(type_fields[k])
         if not isinstance(v, checkable_type):
-            if isinstance(type_fields[k], type) and issubclass(
-                type_fields[k], object
+            if isinstance(type_fields[k], type) and is_dataclass(
+                type_fields[k]
             ):  # recursively deserialize objects
                 try:
+                    if not isinstance(v, dict):
+                        logger.error(f"Expected object for key '{k}'.")
+                        raise ExceptionCount(1)
                     data[k] = load_yaml(str(v), type_fields[k])
                 except ExceptionCount as e:
                     errors += e.count
             else:
-                logger.error(f"Invalid value for key {k}: {v}")
+                logger.error(f"Invalid value for key '{k}': '{v}'.")
                 errors += 1
     if errors:
         raise ExceptionCount(errors)
 
-    return field_type(**data)
+    try:
+        return field_type(**data)
+    except TypeError:
+        import inspect
+
+        required_args = [
+            arg
+            for arg in inspect.signature(field_type.__init__).parameters.values()
+            if arg.default == inspect.Parameter.empty
+        ]
+        for arg in required_args:
+            if arg.name != "self" and arg.name not in data:
+                logger.error(f"Missing required key: '{arg.name}'")
+                errors += 1
+        if errors > 0:
+            raise ExceptionCount(errors)
+        raise  # In case the error comes from something else
 
 
 _cache: t.Dict[str, t.Any] = dict()
@@ -223,11 +243,12 @@ def populate_cache(install: Install, data: t.Dict[str, t.Any]):
                 "hash": data["hash"],
                 "framework": data["framework"],
                 "celeste_version": data["celeste_version"],
-                "everest_version": data["everest_version"],
+                "everest_version": data.get("everest_version", None),
             }
         )
         return True
-    except KeyError:
+    except KeyError as e:
+        logger.error("KeyError populating cache: " + str(e))
         install.hash = None  # Invalidate cache
         return False
 
@@ -296,7 +317,10 @@ class UserInfo(AbstractContextManager):  # pyright: ignore[reportMissingTypeArgu
         return self
 
     def __exit__(self, *exec_details):
-        if self._installs is not None and len(self._installs) == 0:
+        if self._installs is None:
+            return
+
+        if len(self._installs) == 0:
             # clear install and cache files
             if os.path.exists(INSTALLS_FILE):
                 with open(INSTALLS_FILE, "w"):

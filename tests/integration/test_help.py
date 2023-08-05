@@ -22,12 +22,16 @@ def test_option_help(command: "click.Command"):
             assert (
                 param.help
             ), f"Option '{param.name}' for command '{command.name}' is missing help text"
+            assert param.help.strip().endswith(
+                "."
+            ), f"The help text for option '{param.name}' for command '{command.name}' does not end with a '.'"
 
 
 def test_no_args_is_help(command: "click.Command"):
     if command.hidden:
         return
-    # Note: commands with only a clickExt.OptionalArg required do *not* fail this test. When an optional arg is applied 'no_args_is_help' is disabled.
+    # Note: commands with only a clickExt.OptionalArg required do *not* fail this test.
+    # When an optional arg is applied 'no_args_is_help' is disabled.
 
     if command.no_args_is_help:
         assert any(

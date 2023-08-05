@@ -235,3 +235,28 @@ class TestCommandExt:
 
         result = runner.invoke(cmd, standalone_mode=False)
         assert exception is None or isinstance(result.exception, exception)
+
+    def test_help(self, runner):
+        @click.command(
+            cls=clickExt.CommandExt,
+            usages=[
+                ["PRIMARY", "USAGE"],
+                ["SECONDARY", "USAGE"],
+            ],
+            meta_options={
+                "Option Category": [
+                    (
+                        "--special-option",
+                        "Special option description.",
+                    ),
+                ]
+            },
+        )
+        @click.option("--flag-metavar", metavar="FLAG_METAVAR", is_flag=True)
+        def cli():
+            """Standard help message."""
+
+        result = runner.invoke(cli, "--help")
+        assert ("SECONDARY USAGE") in result.output
+        assert ("--special-option") in result.output
+        assert ("FLAG_METAVAR") in result.output
