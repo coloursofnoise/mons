@@ -12,7 +12,12 @@ from mons.version import Version
         pytest.param(None, None, id="None = None"),
         pytest.param("NoVersion", NOVERSION(), id='"NoVersion" = NOVERSION'),
         pytest.param("1.2.3.4", Version(1, 2, 3, 4), id='"1.2.3.4" = 1.2.3.4'),
-        pytest.param("1.2.3-pre", Version(1, 2, 3), id='"1.2.3-pre" = 1.2.3'),
+        pytest.param(
+            "1.2.3-pre", Version(1, 2, 3, Tag="pre"), id='"1.2.3-pre" = 1.2.3-pre'
+        ),
+        pytest.param(
+            "1.2.3+meta", Version(1, 2, 3, Tag="meta"), id='"1.2.3+meta" = 1.2.3+meta'
+        ),
     ],
 )
 def test_version_parse(version, expect):

@@ -8,6 +8,7 @@ class Version:
     Minor: int
     Build: int = -1
     Revision: int = -1
+    Tag: str = ""
 
     @t.overload
     @classmethod
@@ -30,13 +31,18 @@ class Version:
         if version.isdigit():
             return cls(int(version), 0)
 
-        # discard semver prerelease version
-        strArr = version.split("-", maxsplit=1)[0].split(".")
+        # separate semver prerelease version and/or build metadata
+        part = version.partition("-")
+        if "+" in part[0]:
+            part = "".join(part).partition("+")
+        version, _, tag = part
+
+        strArr = version.split(".")
         if 4 > len(strArr) < 2 or not all(n.isdigit() for n in strArr):
             raise ValueError("%s is not a valid Version string." % version)
         arr = list(map(int, strArr))
         arr += [-1] * (4 - len(arr))
-        return cls(*arr)
+        return cls(*arr, tag)  # type: ignore
 
     @classmethod
     def is_valid(cls, version: str):
@@ -88,6 +94,8 @@ class Version:
             out += ".{}".format(self.Build)
             if self.Revision != -1:
                 out += ".{}".format(self.Revision)
+        if self.Tag:
+            out += "-{}".format(self.Tag)
         return out
 
     def __gt__(self, other: "Version"):

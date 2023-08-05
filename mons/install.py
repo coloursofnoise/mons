@@ -57,7 +57,7 @@ class Install:
 
     @property
     def everest_version(self) -> t.Optional[Version]:
-        version: t.Optional[Version] = self._cache.get("everest_version", None)
+        version: t.Optional[str] = self._cache.get("everest_version", None)
         return Version.parse(version) if version else None
 
     @everest_version.setter
