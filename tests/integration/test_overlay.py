@@ -18,6 +18,7 @@ def test_in_namespace(monkeypatch: pytest.MonkeyPatch):
         assert overlayfs.in_namespace()
 
 
+@pytest.mark.xfail(reason="Fails if run from within a namespace", raises=AssertionError)
 def test_not_in_namespace():
     assert not overlayfs.in_namespace()
 
