@@ -19,8 +19,8 @@ from mons.config import get_default_install
 from mons.config import UserInfo
 from mons.errors import TTYError
 from mons.formatting import format_rst_inline
+from mons.install import find_celeste_asm
 from mons.install import Install as T_Install
-from mons.utils import find_celeste_asm
 
 
 logger = logging.getLogger(__name__)

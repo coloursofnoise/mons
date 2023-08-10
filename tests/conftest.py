@@ -7,7 +7,7 @@ from contextlib import contextmanager
 
 import pytest
 
-from mons.utils import find_celeste_asm
+from mons.install import find_celeste_asm
 from mons.version import Version
 
 PLATFORM_MARKS = set("darwin linux win32".split())

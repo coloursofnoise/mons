@@ -48,7 +48,9 @@ def test_install_path(pytestconfig: pytest.Config, cache: pytest.Cache):
 def test_install(runner, test_name, test_install_path, monkeypatch):
     # use a stable version number for default branch detection
     monkeypatch.setattr(
-        mons.install, "parseExeInfo", lambda *args: (Version(1, 4030, 0), "FNA")
+        mons.install,
+        "parse_exe",
+        lambda *args: (Version(1, 4, 0, 0), Version(1, 4030, 0), "FNA"),
     )
 
     install_name = f"_pytest_{test_name}"

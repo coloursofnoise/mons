@@ -23,13 +23,13 @@ from mons.downloading import URLResponse
 from mons.errors import TTYError
 from mons.formatting import format_columns
 from mons.formatting import format_name_ver
+from mons.install import find_celeste_asm
 from mons.install import Install
 from mons.mons import cli
 from mons.platforms import assert_platform
 from mons.platforms import is_os_64bit
 from mons.platforms import is_platform
 from mons.spec import VERSIONSPEC
-from mons.utils import find_celeste_asm
 from mons.utils import unpack
 from mons.version import Version
 

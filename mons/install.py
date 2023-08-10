@@ -1,4 +1,3 @@
-import os
 import typing as t
 from dataclasses import asdict
 from dataclasses import dataclass
@@ -6,10 +5,9 @@ from dataclasses import field
 from string import Formatter
 
 from mons import fs
-from mons.utils import find_celeste_asm
+from mons._install_impl import find_celeste_asm
+from mons._install_impl import parse_exe
 from mons.utils import getMD5Hash
-from mons.utils import parseExeInfo
-from mons.utils import VANILLA_HASH
 from mons.version import NOVERSION
 from mons.version import Version
 
@@ -67,12 +65,10 @@ class Install:
     @property
     def framework(self):
         framework = str(self._cache.get("framework", "").upper())
-        if framework == "FNA" or framework == "XNA":
-            return framework
-        return None
+        return framework or None
 
     @framework.setter
-    def framework(self, value: t.Optional[t.Literal["FNA", "XNA"]]):
+    def framework(self, value: t.Optional[str]):
         self._set_cache_value("framework", value)
 
     _cache_loader: t.Optional[t.Callable[["Install"], bool]] = field(default=None)
@@ -82,7 +78,7 @@ class Install:
 
         version_str = str(self.celeste_version) or "unknown"
         if self.framework:
-            version_str += f"-{self.framework.upper()}"
+            version_str += f"-{self.framework}"
 
         if isinstance(self.everest_version, NOVERSION):
             version_str += " + Everest(unknown version)"
@@ -114,32 +110,8 @@ class Install:
         if self._cache_loader and self._cache_loader(self) and self.hash == hash:
             return
 
-        # If updating the cache gets interrupted, don't leave it partially populated.
-        new_data = self._cache.copy()
-
-        new_data.update(
-            {"hash": hash, "celeste_version": None, "everest_version": None}
-        )
-        has_everest = False
-
-        version = VANILLA_HASH.get(hash, None)
-        if version:
-            new_data["celeste_version"], new_data["framework"] = version
-            new_data["everest_version"] = None
-        else:
-            orig_path = os.path.join(self.path, "orig", "Celeste.exe")
-            if fs.isfile(orig_path):
-                orig_hash = getMD5Hash(orig_path)
-                new_data["celeste_version"], new_data["framework"] = VANILLA_HASH.get(
-                    orig_hash, (None, None)
-                )
-                has_everest = True
-
-        if read_exe and has_everest:
-            new_data["everest_version"], new_data["framework"] = parseExeInfo(self.asm)
-
-        for attr, val in new_data.items():
-            self._set_cache_value(attr, val and str(val))
+        self.celeste_version, self.everest_version, self.framework = parse_exe(self.asm)
+        self.hash = hash
 
     def __str__(self) -> str:
         return f"{self.name} {self.version_string()}"
