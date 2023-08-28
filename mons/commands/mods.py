@@ -440,7 +440,6 @@ def resolve_mods(ctx, mods: t.Sequence[str]):
         if (
             parsed_url.scheme in ("http", "https")
             and parsed_url.netloc == "gamebanana.com"
-            and parsed_url.path.startswith("/mods")
             and parsed_url.path.split("/")[-1].isdigit()
         ):
             mod_id = int(parsed_url.path.split("/")[-1])
