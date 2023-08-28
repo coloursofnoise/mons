@@ -389,7 +389,7 @@ def copy_source_artifacts(
         )
 
     logger.info(f"Copying files for configuration '{configuration}'...")
-    changed_files = 0
+    copied_files = 0
     for proj in os.listdir(srcdir):
         if not (
             fs.isfile(os.path.join(srcdir, proj, proj + ".csproj"))
@@ -417,13 +417,20 @@ def copy_source_artifacts(
                 return (file for file in filenames if not file == "publish")
             return filenames
 
-        changed_files += fs.copy_changed_files(
+        def copy_count(src, dest):
+            nonlocal copied_files
+            shutil.copy2(src, dest)
+            copied_files += 1
+
+        shutil.copytree(
             artifact_dir,
             dest,
-            filter=skip_published,
+            ignore=skip_published,
+            copy_function=copy_count,
+            dirs_exist_ok=True,
         )
 
-    return changed_files
+    return copied_files
 
 
 def fetch_artifact_source(ctx: click.Context, source: t.Union[str, Version, None]):
