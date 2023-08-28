@@ -30,7 +30,6 @@ from mons.platforms import is_os_64bit
 from mons.platforms import is_platform
 from mons.spec import VERSIONSPEC
 from mons.utils import find_celeste_asm
-from mons.utils import unpack
 from mons.version import Version
 
 logger = logging.getLogger(__name__)
@@ -528,9 +527,9 @@ def extract_artifact(install: Install, artifact: t.IO[bytes]):
                 "olympus-build/build.zip"
             )  # Throws KeyError if not present
             with ZipFile(entry) as nested:
-                unpack(nested, dest)
+                fs.extract_with_progress(nested, dest)
         except KeyError:
-            unpack(wrapper, dest, "main/")
+            fs.extract_with_progress(wrapper, dest, "main/")
 
 
 def run_installer(install: Install):

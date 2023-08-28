@@ -1,10 +1,14 @@
 import atexit
+import hashlib
 import os
 import shutil
 import sys
 import tempfile
 import typing as t
 from contextlib import contextmanager
+from zipfile import ZipFile
+
+from mons.logging import ProgressBar
 
 if sys.version_info < (3, 10):
     import typing_extensions as te
@@ -70,6 +74,26 @@ def dirname(path: File):
     return Directory(os.path.dirname(path))
 
 
+def extract_with_progress(zip: ZipFile, dest: Directory, prefix="", label="Extracting"):
+    totalSize = 0
+    for zipinfo in zip.infolist():
+        if not prefix or zipinfo.filename.startswith(prefix):
+            totalSize += zipinfo.file_size
+
+    with ProgressBar(total=totalSize, desc=label, leave=False) as bar:
+        for zipinfo in zip.infolist():
+            if not zipinfo.filename or zipinfo.filename.endswith("/"):
+                continue
+
+            if prefix:
+                if not zipinfo.filename.startswith(prefix):
+                    continue
+                zipinfo.filename = zipinfo.filename[len(prefix) :]
+
+            zip.extract(zipinfo, dest)
+            bar.update(zipinfo.file_size)
+
+
 def folder_size(path: Directory):
     """Compute the size of a folder on disk as reported by :func:`os.stat`."""
     total_size = 0
@@ -81,6 +105,16 @@ def folder_size(path: Directory):
                 total_size += os.path.getsize(fp)
 
     return total_size
+
+
+def md5_hash(path: File):
+    with open(path, "rb") as f:
+        file_hash = hashlib.md5()
+        chunk = f.read(8129)
+        while chunk:
+            file_hash.update(chunk)
+            chunk = f.read(8129)
+    return file_hash.hexdigest()
 
 
 def is_unchanged(src: Path, dest: str):

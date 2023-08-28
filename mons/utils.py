@@ -1,9 +1,7 @@
 import errno
-import hashlib
 import logging
 import os
 import typing as t
-import zipfile
 
 import dnfile  # https://github.com/malwarefrank/dnfile
 from pefile import (  # pyright:ignore[reportMissingTypeStubs]
@@ -47,36 +45,6 @@ def find_celeste_asm(path: fs.Path):
     raise FileNotFoundError(
         errno.ENOENT, "'Celeste.exe' or 'Celeste.dll' could not be found", path
     )
-
-
-def getMD5Hash(path: fs.File):
-    with open(path, "rb") as f:
-        file_hash = hashlib.md5()
-        chunk = f.read(8129)
-        while chunk:
-            file_hash.update(chunk)
-            chunk = f.read(8129)
-    return file_hash.hexdigest()
-
-
-def unpack(zip: zipfile.ZipFile, root: fs.Directory, prefix="", label="Extracting"):
-    totalSize = 0
-    for zipinfo in zip.infolist():
-        if not prefix or zipinfo.filename.startswith(prefix):
-            totalSize += zipinfo.file_size
-
-    with ProgressBar(total=totalSize, desc=label, leave=False) as bar:
-        for zipinfo in zip.infolist():
-            if not zipinfo.filename or zipinfo.filename.endswith("/"):
-                continue
-
-            if prefix:
-                if not zipinfo.filename.startswith(prefix):
-                    continue
-                zipinfo.filename = zipinfo.filename[len(prefix) :]
-
-            zip.extract(zipinfo, root)
-            bar.update(zipinfo.file_size)
 
 
 def parseExeInfo(path: fs.File):

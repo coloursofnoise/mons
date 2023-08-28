@@ -7,7 +7,6 @@ from string import Formatter
 
 from mons import fs
 from mons.utils import find_celeste_asm
-from mons.utils import getMD5Hash
 from mons.utils import parseExeInfo
 from mons.utils import VANILLA_HASH
 from mons.version import NOVERSION
@@ -106,7 +105,7 @@ class Install:
             for attr, val in data.items():
                 self._set_cache_value(attr, val)
 
-        hash = getMD5Hash(self.asm)
+        hash = fs.md5_hash(self.asm)
         if self.hash == hash:
             # Cache is up to date
             return
@@ -129,7 +128,7 @@ class Install:
         else:
             orig_path = os.path.join(self.path, "orig", "Celeste.exe")
             if fs.isfile(orig_path):
-                orig_hash = getMD5Hash(orig_path)
+                orig_hash = fs.md5_hash(orig_path)
                 new_data["celeste_version"], new_data["framework"] = VANILLA_HASH.get(
                     orig_hash, (None, None)
                 )
