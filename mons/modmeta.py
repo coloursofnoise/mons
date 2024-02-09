@@ -24,7 +24,7 @@ class ModMeta_Base:
 
     @classmethod
     def _from_dict(cls, data: t.Dict[str, t.Any]):
-        return cls(str(data["Name"]), str(data.get("Version", NOVERSION)))
+        return cls(str(data["Name"]), str(data.get("Version", NOVERSION())))
 
     def __repr__(self) -> str:
         return f"{self.Name}: {self.Version}"

@@ -56,6 +56,8 @@ class Version:
         # Special case: Always True if version == 0.0.*
         if self.Major == 0 and self.Minor == 0:
             return True
+        if required.Major == 0 and required.Minor == 0:
+            return True
 
         # Major version, breaking changes, must match.
         if self.Major != required.Major:

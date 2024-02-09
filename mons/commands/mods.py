@@ -1117,7 +1117,7 @@ def resolve(
         "{resolve_count} dependency missing",
         "{resolve_count} dependencies missing",
         len(deps_missing) + len(deps_outdated),
-    ).format(len(deps_missing) + len(deps_outdated))
+    ).format(resolve_count=len(deps_missing) + len(deps_outdated))
     if deps_outdated:
         msg += " or outdated"
     echo(msg)
